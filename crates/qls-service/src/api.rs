@@ -20,7 +20,7 @@ use axum::{
 use futures_util::stream::Stream;
 use qls_core::{
     catalog,
-    config::{AppConfig, GpuBackend, KREA2_PROFILE_ID, OFFICIAL_PROFILE_ID, USER_PROFILE_ID},
+    config::{AppConfig, EXTRA_CATALOG_PROFILES, GpuBackend, KREA2_PROFILE_ID, MOSS_PROFILE_ID, OFFICIAL_PROFILE_ID, USER_PROFILE_ID},
     diagnostics,
     engine::{APP_VERSION, JobView, LoraPatch},
     error::{AppError, ErrorCode},
@@ -368,8 +368,8 @@ struct InstallBody {
     apply: bool,
     /// Card (index in `/setup/hardware` `gpus`) to run on once the engine is installed.
     gpu: Option<usize>,
-    /// Which files: "official" (the preset's, made active when done), "krea2" (the Krea 2
-    /// Turbo files for the preset, made active when done) or "user" (the engine and what the
+    /// Which files: "official" (the preset's, made active when done), "krea2" or "moss" (the
+    /// Krea 2 Turbo or MOSS-Image files for the preset, made active when done) or "user" (the engine and what the
     /// user's own profile still needs). Default: "official" when `apply`, else the active
     /// profile's (an engine update never downloads models a user doesn't use).
     target: Option<String>,
@@ -388,14 +388,16 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
     #[derive(Clone, Copy, PartialEq)]
     enum Target {
         Official,
-        Krea2,
+        /// A catalog model besides Qwen (`EXTRA_CATALOG_PROFILES`): Krea 2, MOSS-Image.
+        Extra(&'static str),
         User,
     }
+    let extra = |t: &str| EXTRA_CATALOG_PROFILES.iter().copied().find(|id| *id == t || (t == "krea2" && *id == KREA2_PROFILE_ID) || (t == "moss" && *id == MOSS_PROFILE_ID));
     let target = match b.target.as_deref() {
         Some("user") => Target::User,
         Some("official") => Target::Official,
-        Some("krea2") => Target::Krea2,
-        None if !b.apply && cfg.profile().is_krea2() => Target::Krea2,
+        Some(t) if extra(t).is_some() => Target::Extra(extra(t).unwrap()),
+        None if !b.apply && extra(&cfg.active_profile).is_some() => Target::Extra(extra(&cfg.active_profile).unwrap()),
         None if !b.apply && !cfg.profile().from_catalog() => Target::User,
         None => Target::Official,
         Some(t) => return Err(AppError::invalid(format!("Unknown install target {t}.")).into()),
@@ -405,7 +407,7 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
             let u = cfg.user_profile().ok_or_else(|| AppError::invalid("Choose your model files first."))?;
             catalog::downloads_for_profile(u, backend)
         }
-        Target::Krea2 => catalog::downloads_for_profile(&qls_core::config::ModelProfile::krea2(&cfg.sdcpp_dir, preset), backend),
+        Target::Extra(id) => catalog::downloads_for_profile(&qls_core::config::ModelProfile::extra_catalog(id, &cfg.sdcpp_dir, preset).expect("a catalog profile"), backend),
         Target::Official => catalog::downloads_for(preset, backend, &cfg.sdcpp_dir),
     };
     // A running server keeps its DLLs open; the engine zip may need to replace them.
@@ -430,7 +432,7 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
         c.apply_preset(preset);
         match target {
             Target::Official => c.use_official(),
-            Target::Krea2 => c.use_krea2(),
+            Target::Extra(id) => c.use_extra_catalog(id),
             Target::User => {}
         }
         c.gpu_backend = backend;
@@ -454,7 +456,7 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
     let _ = tokio::task::spawn_blocking(move || e.place_bundled_upscaler()).await;
     let label = match target {
         Target::User => format!("user:{}", preset.id),
-        Target::Krea2 => format!("krea2:{}", preset.id),
+        Target::Extra(id) => format!("{id}:{}", preset.id),
         Target::Official => preset.id.to_string(),
     };
     s.engine.installer.start(cfg.sdcpp_dir.clone(), &label, downloads, on_finish)?;
@@ -1537,7 +1539,9 @@ async fn models_status(State(s): St) -> ApiResult<Json<Value>> {
             .collect();
         let downloadable: Vec<&str> = catalog::profile_model_downloads(p).iter().map(|d| d.label).collect();
         let official_installed = cfg.profiles.iter().find(|q| q.id == OFFICIAL_PROFILE_ID).is_some_and(|q| q.files().iter().all(|(_, f, _)| f.is_file()));
-        let krea2_installed = cfg.profiles.iter().find(|q| q.id == KREA2_PROFILE_ID).is_some_and(|q| q.files().iter().all(|(_, f, _)| f.is_file()));
+        let installed = |id: &str| cfg.profiles.iter().find(|q| q.id == id).is_some_and(|q| q.files().iter().all(|(_, f, _)| f.is_file()));
+        let krea2_installed = installed(KREA2_PROFILE_ID);
+        let catalog_installed: serde_json::Map<String, Value> = EXTRA_CATALOG_PROFILES.iter().map(|id| (id.to_string(), Value::Bool(installed(id)))).collect();
         json!({
             "active": { "id": p.id, "display_name": p.display_name, "source": p.source, "model": p.model },
             "slots": slots,
@@ -1553,6 +1557,8 @@ async fn models_status(State(s): St) -> ApiResult<Json<Value>> {
             "official_installed": official_installed,
             // Fork: every Krea 2 Turbo file of the preset is there.
             "krea2_installed": krea2_installed,
+            // Fork: every file of each extra catalog model (Krea 2, MOSS-Image), by profile id.
+            "catalog_installed": catalog_installed,
             "default_download_dir": catalog::join_rel(&cfg.sdcpp_dir, catalog::MODEL_SUBDIR),
             // The texture-fix VAE (#21): in use, or what switching to it downloads.
             "vae": {
@@ -1644,7 +1650,7 @@ async fn models_set_user(State(s): St, Json(b): Json<UserFilesBody>) -> ApiResul
 
 #[derive(Deserialize)]
 struct UseBody {
-    /// "official", "krea2" or "user".
+    /// "official", "krea2", "moss" or "user".
     profile: String,
 }
 
@@ -1654,6 +1660,7 @@ async fn models_use(State(s): St, Json(b): Json<UseBody>) -> ApiResult<Json<Valu
     match b.profile.as_str() {
         "official" => cfg.use_official(),
         "krea2" => cfg.use_krea2(),
+        "moss" => cfg.use_extra_catalog(MOSS_PROFILE_ID),
         "user" if cfg.user_profile().is_some() => cfg.active_profile = USER_PROFILE_ID.into(),
         "user" => return Err(AppError::invalid("Choose your model files first.").into()),
         other => return Err(AppError::invalid(format!("Unknown profile {other}.")).into()),

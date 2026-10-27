@@ -39,6 +39,11 @@ pub fn build_server_args(cfg: &AppConfig, profile: &ModelProfile) -> Vec<String>
         a.push("--llm_vision".into());
         a.push(p(v));
     }
+    // MOSS-Image's Qwen3.5 vocabulary is not the tokenizer the engine embeds.
+    if let Some(t) = &profile.tokenizer {
+        a.push("--tokenizer".into());
+        a.push(p(t));
+    }
     let dev = cfg.effective_device();
     let metal = cfg.gpu_backend == crate::config::GpuBackend::Metal;
     let mut placement = cfg.text_encoder_placement;
@@ -87,9 +92,9 @@ pub fn build_server_args(cfg: &AppConfig, profile: &ModelProfile) -> Vec<String>
             "0.125".into(),
         ]);
     }
-    // Qwen-Image 2.1's prompt prefix cache; Krea 2 has no such model argument.
+    // Qwen-Image 2.1's prompt prefix cache; other models have no such model argument.
     match cfg.prefix_cache_type.as_str() {
-        _ if profile.is_krea2() => {}
+        _ if !profile.is_qwen() => {}
         "auto" => {}
         "off" => a.extend(["--model-args".into(), "qwen_image_2_1_prefix_cache=false".into()]),
         t => a.extend(["--model-args".into(), format!("qwen_image_2_1_prefix_cache_type={t}")]),

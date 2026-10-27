@@ -903,7 +903,7 @@ fn ref_canvas(src: Size, max_canvas_area: u64, rec: &RecommendedSettings) -> Wor
     }
 }
 
-/// The model of the active profile cannot edit from reference images (Krea 2 Turbo).
+/// The model of the active profile cannot edit from reference images (Krea 2, MOSS-Image).
 fn no_reference_edits() -> AppError {
     AppError::invalid("This model makes new images from text only: it can't edit a whole photo or combine images.")
         .suggest("Brush the area to change (or use Expand), or switch to Qwen-Image 2.1 in Settings → Models for edits and combines.")
@@ -935,8 +935,8 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
     }
     let mut notes = Vec::new();
     let quality = req.quality;
-    // Turbo models: their fixed distilled schedule without CFG (model cards).
-    let cfg = 1.0;
+    // The model's own guidance: 1 (off) for the distilled Turbo models, 3 for MOSS-Image.
+    let cfg = rec.cfg_scale.max(1.0);
     let budget_tokens = planning_token_budget(inputs.vram_total_mib, inputs.unified_memory);
     let budget_area = budget_tokens * PIXELS_PER_TOKEN;
     let tier_area = resolution_area(req.resolution, quality, rec);
@@ -1223,7 +1223,7 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
         None => estimated_seconds,
     };
     let negative_prompt = req.negative_prompt.clone().unwrap_or_default();
-    if !negative_prompt.trim().is_empty() && !quick_upscale {
+    if !negative_prompt.trim().is_empty() && !quick_upscale && cfg <= 1.0 {
         notes.push("The negative prompt is ignored: Turbo runs without CFG.".into());
     }
     Ok(Plan {

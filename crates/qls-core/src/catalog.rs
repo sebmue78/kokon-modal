@@ -648,6 +648,118 @@ pub fn krea2_files(p: &Preset) -> (Download, Download) {
     (dit, te)
 }
 
+// ---------------------------------------------------------------------------------------
+// MOSS-Image SFT (fork): the files sd.cpp's docs/moss_image.md points to, pinned from the
+// Hugging Face API on 2026-10-27. Apache-2.0 (model and GGUF); Qwen3.5 under its own license.
+// ---------------------------------------------------------------------------------------
+
+/// Folder under the stable-diffusion.cpp folder that holds the MOSS-Image weights.
+pub const MOSS_SUBDIR: &str = "models/moss-image";
+const MOSS_GGUFS: &str = "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/tree/main";
+const MOSS_TE: &str = "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/tree/main";
+
+/// MOSS-Image SFT, 4-bit (leejet's GGUF, made with stable-diffusion.cpp). 5B parameters.
+pub const MOSS_SFT_Q4_K: Download = Download {
+    id: "moss_sft_q4_k",
+    label: "MOSS-Image SFT Q4_K",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/main/MOSS-Image-SFT-Q4_K.gguf",
+    fallback_urls: &[],
+    page: MOSS_GGUFS,
+    size: 3_327_400_800,
+    sha256: "902dbb0364d8b313cd91792b3cfe7c87b987386f0c5414986f3f1027b82b2225",
+    dest: "models/moss-image/MOSS-Image-SFT-Q4_K.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// MOSS-Image SFT, 8-bit: for 16 GB cards and up (5.7 GB, smaller than Krea 2's 4-bit file).
+pub const MOSS_SFT_Q8_0: Download = Download {
+    id: "moss_sft_q8_0",
+    label: "MOSS-Image SFT Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/main/MOSS-Image-SFT-Q8_0.gguf",
+    fallback_urls: &[],
+    page: MOSS_GGUFS,
+    size: 5_705_571_168,
+    sha256: "740040af6492ae5f951d5b7a8cb56927c1a02e64696f4bd4bd124bb798ce5635",
+    dest: "models/moss-image/MOSS-Image-SFT-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// MOSS-Image's text encoder, Qwen3.5 9B, 4-bit (Unsloth's GGUF, as in sd.cpp's docs).
+pub const MOSS_TEXT_ENCODER_Q4_K_M: Download = Download {
+    id: "moss_text_encoder_q4_k_m",
+    label: "Qwen3.5 9B text encoder Q4_K_M",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf",
+    fallback_urls: &[],
+    page: MOSS_TE,
+    size: 5_680_522_464,
+    sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+    dest: "models/moss-image/Qwen3.5-9B-Q4_K_M.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// The 8-bit text encoder, for the 32 GB+ preset (as the Qwen files there).
+pub const MOSS_TEXT_ENCODER_Q8_0: Download = Download {
+    id: "moss_text_encoder_q8_0",
+    label: "Qwen3.5 9B text encoder Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q8_0.gguf",
+    fallback_urls: &[],
+    page: MOSS_TE,
+    size: 9_527_502_048,
+    sha256: "809626574d0cb43d4becfa56169980da2bb448f2299270f7be443cb89d0a6ae4",
+    dest: "models/moss-image/Qwen3.5-9B-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// MOSS-Image's VAE: the FLUX.2 VAE (Comfy-Org's MOSS-Image package).
+pub const MOSS_VAE: Download = Download {
+    id: "moss_vae",
+    label: "FLUX.2 VAE (MOSS-Image)",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae.safetensors",
+    fallback_urls: &[],
+    page: "https://huggingface.co/Comfy-Org/MOSS-Image/tree/main/vae",
+    size: 336_211_292,
+    sha256: "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3",
+    dest: "models/moss-image/flux2-vae.safetensors",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Qwen3.5's tokenizer, passed with `--tokenizer`: its vocabulary differs from the Qwen
+/// tokenizer the engine embeds (sd.cpp's docs/moss_image.md).
+pub const MOSS_TOKENIZER: Download = Download {
+    id: "moss_tokenizer",
+    label: "Qwen3.5 tokenizer (MOSS-Image)",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/resolve/main/tokenizer/tokenizer.json",
+    fallback_urls: &["https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/main/tokenizer/tokenizer.json"],
+    page: "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/tree/main/tokenizer",
+    size: 19_989_325,
+    sha256: "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+    dest: "models/moss-image/tokenizer.json",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// MOSS-Image SFT's image model and text encoder for a hardware preset. Not measured on real
+/// hardware yet: derived from the file sizes with the text encoder in system RAM as for Qwen.
+pub fn moss_files(p: &Preset) -> (Download, Download) {
+    let dit = if p.min_vram_mib >= 14 * 1024 { MOSS_SFT_Q8_0 } else { MOSS_SFT_Q4_K };
+    let te = if p.min_vram_mib >= 28 * 1024 { MOSS_TEXT_ENCODER_Q8_0 } else { MOSS_TEXT_ENCODER_Q4_K_M };
+    (dit, te)
+}
+
+/// Every MOSS-Image file the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const MOSS_DOWNLOADS: &[Download] = &[MOSS_SFT_Q4_K, MOSS_SFT_Q8_0, MOSS_TEXT_ENCODER_Q4_K_M, MOSS_TEXT_ENCODER_Q8_0, MOSS_VAE, MOSS_TOKENIZER];
+
 /// Every Krea 2 file the catalog knows (found by file name in [`profile_model_downloads`]).
 pub const KREA2_DOWNLOADS: &[Download] = &[KREA2_TURBO_Q4_K_M, KREA2_TURBO_Q8_0, KREA2_TEXT_ENCODER_Q8_0, KREA2_TEXT_ENCODER_Q4_K_M, KREA2_VAE];
 
@@ -864,7 +976,7 @@ pub fn downloads_for(p: &Preset, backend: GpuBackend, sdcpp_dir: &Path) -> Vec<D
 /// saved where the profile expects it. Existing files are never replaced, whatever their name.
 pub fn profile_model_downloads(profile: &crate::config::ModelProfile) -> Vec<Download> {
     let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
-    let official: Vec<Download> = qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).collect();
+    let official: Vec<Download> = qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).collect();
     profile
         .files()
         .into_iter()

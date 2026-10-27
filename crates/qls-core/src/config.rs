@@ -54,6 +54,15 @@ pub const QWEN_IMAGE_21: &str = "qwen-image-2.1";
 pub const KREA2_TURBO: &str = "krea-2-turbo";
 /// Profile id of the Krea 2 Turbo files from the catalog (always listed, downloaded on demand).
 pub const KREA2_PROFILE_ID: &str = "krea-2-turbo";
+/// MOSS-Image SFT (OpenMOSS-Team/MOSS-Image-SFT, Apache-2.0): a 5B text-to-image DiT with
+/// Qwen3.5 9B as text encoder (plus its own `tokenizer.json`) and the FLUX.2 VAE, supported by
+/// stable-diffusion.cpp (docs/moss_image.md). Not distilled: 20 steps at CFG 3. Text to image
+/// only, like Krea 2.
+pub const MOSS_IMAGE_SFT: &str = "moss-image-sft";
+/// Profile id of the MOSS-Image SFT files from the catalog (always listed, downloaded on demand).
+pub const MOSS_PROFILE_ID: &str = "moss-image-sft";
+/// Models from the catalog besides Qwen-Image 2.1, in the order Settings lists them.
+pub const EXTRA_CATALOG_PROFILES: &[&str] = &[KREA2_PROFILE_ID, MOSS_PROFILE_ID];
 
 /// Where the text encoder's weights live. Compute always runs on the selected GPU except
 /// for `Cpu`, which also computes on the CPU (slow for image editing, measured ~35×).
@@ -167,6 +176,9 @@ pub struct RecommendedSettings {
     /// Without it, brushed edits and Expand are plain masked inpainting and whole-image edits,
     /// combines and new images from references are not available.
     pub reference_edits: bool,
+    /// Classifier-free guidance; 1 = off (distilled Turbo models). Above 1 the negative prompt
+    /// is used.
+    pub cfg_scale: f32,
 }
 
 impl Default for RecommendedSettings {
@@ -185,6 +197,7 @@ impl Default for RecommendedSettings {
             steps: 8,
             turbo_sigmas: true,
             reference_edits: true,
+            cfg_scale: 1.0,
         }
     }
 }
@@ -206,6 +219,26 @@ impl RecommendedSettings {
             steps: 8,
             turbo_sigmas: false,
             reference_edits: false,
+            cfg_scale: 1.0,
+        }
+    }
+
+    /// MOSS-Image SFT (sd.cpp's docs/moss_image.md and server defaults): 20 steps at CFG 3,
+    /// Euler, the server's discrete schedule with time shift 5, sizes a multiple of 16, trained
+    /// at ~1 MP. The larger tiers are not measured yet: 1.25K and 1.5K rather than Qwen's 2K.
+    pub fn moss_image() -> Self {
+        Self {
+            sampler: "euler".into(),
+            area_fast: 1024 * 1024,
+            area_balanced: 1280 * 1280,
+            area_quality: 1536 * 1536,
+            align: 16,
+            max_side: 2048,
+            max_references: 1,
+            steps: 20,
+            turbo_sigmas: false,
+            reference_edits: false,
+            cfg_scale: 3.0,
         }
     }
 }
@@ -233,6 +266,11 @@ impl ProfileCapabilities {
     /// no transparent output (that prompt format is Qwen-Image 2.1's).
     pub fn krea2_turbo() -> Self {
         Self { text_to_image: true, edit: false, multi_reference: false, inpaint: true, outpaint: true, alpha: false }
+    }
+
+    /// MOSS-Image: the same as Krea 2 (text to image, masked inpainting and Expand).
+    pub fn moss_image() -> Self {
+        Self::krea2_turbo()
     }
 }
 
@@ -262,6 +300,9 @@ pub struct ModelProfile {
     pub vae: PathBuf,
     pub text_encoder: PathBuf,
     pub vision_projector: Option<PathBuf>,
+    /// External tokenizer (`--tokenizer`), for text encoders whose vocabulary the engine does
+    /// not embed (MOSS-Image's Qwen3.5).
+    pub tokenizer: Option<PathBuf>,
     /// Extra sd-server arguments specific to this model.
     pub backend_args: Vec<String>,
     pub recommended_settings: RecommendedSettings,
@@ -291,6 +332,7 @@ impl ModelProfile {
             vae: official_vae(sdcpp_dir).path(sdcpp_dir),
             text_encoder: preset.text_encoder.path(sdcpp_dir),
             vision_projector: Some(VISION_PROJECTOR.path(sdcpp_dir)),
+            tokenizer: None,
             backend_args: vec![],
             recommended_settings: RecommendedSettings::default(),
             capabilities: ProfileCapabilities::default(),
@@ -313,10 +355,49 @@ impl ModelProfile {
             vae: crate::catalog::KREA2_VAE.path(sdcpp_dir),
             text_encoder: text_encoder.path(sdcpp_dir),
             vision_projector: None,
+            tokenizer: None,
             backend_args: vec![],
             recommended_settings: RecommendedSettings::krea2_turbo(),
             capabilities: ProfileCapabilities::krea2_turbo(),
         }
+    }
+
+    /// The MOSS-Image SFT files for a hardware preset (`catalog::moss_files`): leejet's GGUF of
+    /// OpenMOSS-Team/MOSS-Image-SFT, Unsloth's Qwen3.5 9B GGUF, its `tokenizer.json` and the
+    /// FLUX.2 VAE. No vision projector: MOSS-Image takes no reference images.
+    pub fn moss(sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Self {
+        let (diffusion, text_encoder) = crate::catalog::moss_files(preset);
+        let quant = diffusion.dest.rsplit('-').next().unwrap_or("").trim_end_matches(".gguf");
+        Self {
+            id: MOSS_PROFILE_ID.into(),
+            display_name: format!("MOSS-Image SFT {quant} (text to image)"),
+            model: MOSS_IMAGE_SFT.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: diffusion.path(sdcpp_dir),
+            vae: crate::catalog::MOSS_VAE.path(sdcpp_dir),
+            text_encoder: text_encoder.path(sdcpp_dir),
+            vision_projector: None,
+            tokenizer: Some(crate::catalog::MOSS_TOKENIZER.path(sdcpp_dir)),
+            backend_args: vec![],
+            recommended_settings: RecommendedSettings::moss_image(),
+            capabilities: ProfileCapabilities::moss_image(),
+        }
+    }
+
+    /// The catalog profile `id` other than the official Qwen files ([`EXTRA_CATALOG_PROFILES`]).
+    pub fn extra_catalog(id: &str, sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Option<Self> {
+        match id {
+            KREA2_PROFILE_ID => Some(Self::krea2(sdcpp_dir, preset)),
+            MOSS_PROFILE_ID => Some(Self::moss(sdcpp_dir, preset)),
+            _ => None,
+        }
+    }
+
+    /// The files are Qwen-Image 2.1's (the official ones or the user's own): the model Kokon's
+    /// edits, prompt cache, Mac engine and LoRA library are built for.
+    pub fn is_qwen(&self) -> bool {
+        self.model == QWEN_IMAGE_21
     }
 
     /// The files are Krea 2's.
@@ -333,6 +414,9 @@ impl ModelProfile {
         ];
         if let Some(p) = &self.vision_projector {
             v.push(("Vision projector (mmproj)", p.as_path(), true));
+        }
+        if let Some(p) = &self.tokenizer {
+            v.push(("Tokenizer (tokenizer.json)", p.as_path(), true));
         }
         v
     }
@@ -364,7 +448,7 @@ impl ModelProfile {
     }
 
     fn same_files(&self, o: &ModelProfile) -> bool {
-        (&self.diffusion_model, &self.vae, &self.text_encoder, &self.vision_projector) == (&o.diffusion_model, &o.vae, &o.text_encoder, &o.vision_projector)
+        (&self.diffusion_model, &self.vae, &self.text_encoder, &self.vision_projector, &self.tokenizer) == (&o.diffusion_model, &o.vae, &o.text_encoder, &o.vision_projector, &o.tokenizer)
     }
 
     pub fn model_name(&self) -> String {
@@ -467,7 +551,7 @@ impl Default for AppConfig {
             schema_version: SCHEMA_VERSION,
             profiles: {
                 let preset = crate::catalog::preset(crate::catalog::DEFAULT_PRESET).unwrap();
-                vec![ModelProfile::official(&sdcpp, preset), ModelProfile::krea2(&sdcpp, preset)]
+                vec![ModelProfile::official(&sdcpp, preset), ModelProfile::krea2(&sdcpp, preset), ModelProfile::moss(&sdcpp, preset)]
             },
             active_profile: OFFICIAL_PROFILE_ID.into(),
             sdcpp_dir: sdcpp,
@@ -731,7 +815,7 @@ impl AppConfig {
             }
         }
         for p in &mut self.profiles {
-            p.source = if p.id == OFFICIAL_PROFILE_ID || p.id == KREA2_PROFILE_ID { ProfileSource::Official } else { ProfileSource::User };
+            p.source = if p.id == OFFICIAL_PROFILE_ID || EXTRA_CATALOG_PROFILES.contains(&p.id.as_str()) { ProfileSource::Official } else { ProfileSource::User };
             if p.model.trim().is_empty() {
                 p.model = QWEN_IMAGE_21.into();
             }
@@ -746,13 +830,15 @@ impl AppConfig {
             }
             None => self.profiles.insert(0, official),
         }
-        // Krea 2 Turbo: always offered next to the official files; only its extra server
-        // arguments are the user's.
-        let mut krea = ModelProfile::krea2(&self.sdcpp_dir, self.preset());
-        if let Some(i) = self.profiles.iter().position(|p| p.id == KREA2_PROFILE_ID) {
-            krea.backend_args = self.profiles.remove(i).backend_args;
+        // Krea 2 Turbo and MOSS-Image: always offered right after the official files; only their
+        // extra server arguments are the user's.
+        for (i, id) in EXTRA_CATALOG_PROFILES.iter().enumerate() {
+            let mut extra = ModelProfile::extra_catalog(id, &self.sdcpp_dir, self.preset()).expect("a catalog profile");
+            if let Some(at) = self.profiles.iter().position(|p| p.id == *id) {
+                extra.backend_args = self.profiles.remove(at).backend_args;
+            }
+            self.profiles.insert(1 + i, extra);
         }
-        self.profiles.insert(1, krea);
         if !self.profiles.iter().any(|p| p.id == self.active_profile) {
             self.active_profile = OFFICIAL_PROFILE_ID.into();
         }
@@ -828,8 +914,16 @@ impl AppConfig {
 
     /// Makes the Krea 2 Turbo files the active model (they may still need downloading).
     pub fn use_krea2(&mut self) {
+        self.use_extra_catalog(KREA2_PROFILE_ID);
+    }
+
+    /// Makes the catalog profile `id` ([`EXTRA_CATALOG_PROFILES`]) the active model (its files
+    /// may still need downloading).
+    pub fn use_extra_catalog(&mut self, id: &str) {
         self.normalize();
-        self.active_profile = KREA2_PROFILE_ID.into();
+        if EXTRA_CATALOG_PROFILES.contains(&id) {
+            self.active_profile = id.into();
+        }
     }
 
     /// Model files of the active profile that are not there (label, path).
@@ -883,7 +977,7 @@ impl AppConfig {
             for f in [&mut p.diffusion_model, &mut p.vae, &mut p.text_encoder] {
                 relocate(f, old, new);
             }
-            if let Some(v) = p.vision_projector.as_mut() {
+            for v in [p.vision_projector.as_mut(), p.tokenizer.as_mut()].into_iter().flatten() {
                 relocate(v, old, new);
             }
         }
@@ -932,9 +1026,9 @@ impl AppConfig {
 
     /// Kokon's Mac engine runs instead of sd-server: chosen in Settings, on the Metal backend only.
     pub fn uses_mac_engine(&self) -> bool {
-        // Kokon's Mac engine runs Qwen-Image 2.1 only; Krea 2 always runs on sd-server.
-        let krea = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(ModelProfile::is_krea2);
-        self.mac_engine && self.gpu_backend == GpuBackend::Metal && !krea
+        // Kokon's Mac engine runs Qwen-Image 2.1 only; other models always run on sd-server.
+        let other = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(|p| !p.is_qwen());
+        self.mac_engine && self.gpu_backend == GpuBackend::Metal && !other
     }
 
     /// The configured device when it belongs to the active engine, else its first GPU.
@@ -1146,7 +1240,7 @@ mod tests {
         std::fs::remove_file(&mine.vae).unwrap();
         old.save_to(&path).unwrap();
         let c = AppConfig::load_from(&path);
-        assert_eq!((c.active_profile.as_str(), c.profiles.len()), (OFFICIAL_PROFILE_ID, 2), "the official and Krea 2 profiles");
+        assert_eq!((c.active_profile.as_str(), c.profiles.len()), (OFFICIAL_PROFILE_ID, 3), "the official, Krea 2 and MOSS-Image profiles");
         assert!(c.profile().same_files(&ModelProfile::official(&sd, c.preset())));
     }
 
@@ -1167,7 +1261,7 @@ mod tests {
         // Choosing files again keeps the tuning; switching to the official files keeps them.
         c.set_user_files(own_files(dir.path()));
         assert_eq!(c.profile().recommended_settings.area_fast, 768 * 768);
-        assert_eq!(c.profiles.len(), 3);
+        assert_eq!(c.profiles.len(), 4);
         c.use_official();
         assert_eq!(c.active_profile, OFFICIAL_PROFILE_ID);
         assert!(c.user_profile().is_some(), "the user's profile is never deleted");
@@ -1287,7 +1381,7 @@ mod tests {
         assert_eq!(off.diffusion_model, sd("qwen-image-2.1-turbo-Q4_K_M.gguf"));
         // Saved again, nothing is added twice.
         c.save_to(&p).unwrap();
-        assert_eq!(AppConfig::load_from(&p).profiles.len(), 3);
+        assert_eq!(AppConfig::load_from(&p).profiles.len(), 4);
         // A file without profiles uses its own folder and preset.
         std::fs::write(&p, r#"{"sdcppDir":"D:\\sd","hardwarePreset":"24gb"}"#).unwrap();
         let c = AppConfig::load_from(&p);
@@ -1314,7 +1408,7 @@ mod tests {
         c.relocate_paths(&old, &new);
         assert_eq!(c.sdcpp_dir, new.join("sdcpp"));
         assert!(c.profile().diffusion_model.starts_with(new.join("sdcpp")));
-        assert_eq!(c.profiles[2].diffusion_model, PathBuf::from(r"C:\AI\sdcpp\x.gguf"));
+        assert_eq!(c.profiles[3].diffusion_model, PathBuf::from(r"C:\AI\sdcpp\x.gguf"));
     }
 
     #[test]
@@ -1328,7 +1422,7 @@ mod tests {
         assert!(p.text_encoder.ends_with("Qwen3VL-8B-Instruct-Q8_0.gguf"));
         assert_eq!(p.display_name, "Qwen-Image 2.1 Turbo Q4_K_M (official)");
         assert_eq!(p.recommended_settings.area_fast, 768 * 768);
-        assert_eq!((c.hardware_preset.as_str(), c.profiles.len()), ("32gb", 2));
+        assert_eq!((c.hardware_preset.as_str(), c.profiles.len()), ("32gb", 3));
         c.vram_override_mib = 12_288;
         assert_eq!(c.planning_vram_mib(Some(16303)), Some(12_288));
         assert!(c.validate().is_ok());
@@ -1434,7 +1528,7 @@ mod tests {
         std::fs::write(&path, r#"{"serverPort": 41000}"#).unwrap();
         let p = AppConfig::load_from(&path);
         assert_eq!(p.server_port, 41000);
-        assert_eq!(p.profiles.len(), 2, "the official and Krea 2 profiles");
+        assert_eq!(p.profiles.len(), 3, "the official, Krea 2 and MOSS-Image profiles");
         std::fs::write(&path, "\u{feff}{\"serverPort\": 42000}").unwrap();
         assert_eq!(AppConfig::load_from(&path).server_port, 42000, "UTF-8 BOM accepted");
         std::fs::write(&path, "{ broken").unwrap();

@@ -28,3 +28,5 @@ pub mod wic;
 
 #[cfg(test)]
 mod krea2_tests;
+#[cfg(test)]
+mod moss_tests;

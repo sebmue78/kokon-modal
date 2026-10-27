@@ -1350,9 +1350,9 @@ impl Engine {
     /// The LoRAs job `id` uses (see `lora::resolve`); skipped ones are noted on the job.
     fn job_loras(&self, id: &str, cfg: &AppConfig, request: &GenerationRequest, caps: &Capabilities) -> Vec<AppliedLora> {
         let (loras, notes) = lora::resolve(cfg, request.loras.as_deref());
-        let (loras, notes) = if !loras.is_empty() && cfg.profile().is_krea2() {
+        let (loras, notes) = if !loras.is_empty() && !cfg.profile().is_qwen() {
             // Kokon's LoRA library is checked against Qwen-Image 2.1's layers.
-            (Vec::new(), vec!["Your LoRAs are for Qwen-Image 2.1, not Krea 2; made without them.".to_string()])
+            (Vec::new(), vec!["Your LoRAs are for Qwen-Image 2.1, not this model; made without them.".to_string()])
         } else if !loras.is_empty() && !caps.img_feature("lora") {
             (Vec::new(), vec!["This inference engine can't use LoRAs (update it in Setup); made without them.".to_string()])
         } else {

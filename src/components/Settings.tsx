@@ -12,8 +12,11 @@ import { RemoteAccess } from "./RemoteAccess";
 import { UpscalerControls } from "./Upscalers";
 import { WHATS_NEW_VERSION } from "./WhatsNew";
 
-/** Fork: profile id of Krea 2 Turbo (qls-core `KREA2_PROFILE_ID`). */
-const KREA2_PROFILE_ID = "krea-2-turbo";
+/** Fork: catalog models besides Qwen, by profile id (qls-core `EXTRA_CATALOG_PROFILES`). */
+const EXTRA_MODELS: Record<string, { name: string; about: string; target: "krea2" | "moss" }> = {
+  "krea-2-turbo": { name: "Krea 2 Turbo", about: "Krea's 12.9B model, 8 steps, up to 2K (Krea 2 Community License).", target: "krea2" },
+  "moss-image-sft": { name: "MOSS-Image SFT", about: "OpenMOSS's 5B model, 20 steps with CFG, negative prompts work (Apache-2.0).", target: "moss" },
+};
 import type { AppConfig, Check, InstallStatus, MacBenchState, ModelProfile, ModelsStatus, SetupReport, TextEncoderPlacement } from "../lib/types";
 import { IconButton, Seg, Switch } from "./ui";
 import { autoCheckEnabled, checkForUpdate } from "../lib/updates";
@@ -564,29 +567,30 @@ export function Settings() {
               ) : (
                 <span className="muted">Model: {profile.displayName}</span>
               )}
-              {profile.id === KREA2_PROFILE_ID ? (
-                // Fork: Krea 2 Turbo from the catalog, downloaded on demand into its own folder.
+              {EXTRA_MODELS[profile.id] ? (
+                // Fork: a catalog model besides Qwen (Krea 2, MOSS-Image), downloaded on demand into its own folder.
                 <div className="setting-card">
                   <div className="setting-card-text">
-                    <strong>Krea 2 Turbo</strong>
+                    <strong>{EXTRA_MODELS[profile.id].name}</strong>
                     <span className="muted">
-                      Text to image, plus brushed changes and Expand as plain inpainting. Whole-photo edits and combining images need
-                      Qwen-Image 2.1. {ms?.krea2_installed ? "Downloaded." : "Not downloaded yet (about 12 GB)."}
+                      {EXTRA_MODELS[profile.id].about} Text to image, plus brushed changes and Expand as plain inpainting.
+                      Whole-photo edits and combining images need Qwen-Image 2.1.{" "}
+                      {ms?.catalog_installed?.[profile.id] ? "Downloaded." : "Not downloaded yet."}
                     </span>
                     <details className="model-files">
                       <summary>Files</summary>
-                      {[profile.diffusionModel, profile.vae, profile.textEncoder].map((p) => (
+                      {[profile.diffusionModel, profile.vae, profile.textEncoder, profile.tokenizer].filter(Boolean).map((p) => (
                         <span key={p}>{p}</span>
                       ))}
                     </details>
                   </div>
-                  {ms && !ms.krea2_installed && (
+                  {ms && !ms.catalog_installed?.[profile.id] && (
                     <button
                       className="btn primary"
                       onClick={async () => {
-                        if (dirty && !window.confirm("Discard the unsaved changes and download Krea 2 Turbo?")) return;
+                        if (dirty && !window.confirm(`Discard the unsaved changes and download ${EXTRA_MODELS[profile.id].name}?`)) return;
                         try {
-                          await api.install(cfg.hardwarePreset, cfg.gpuBackend, true, undefined, "krea2");
+                          await api.install(cfg.hardwarePreset, cfg.gpuBackend, true, undefined, EXTRA_MODELS[profile.id].target);
                           openModelSetup(null);
                         } catch (e) {
                           toastError(e);

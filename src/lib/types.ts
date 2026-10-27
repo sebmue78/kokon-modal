@@ -265,6 +265,8 @@ export interface ModelProfile {
   vae: string;
   textEncoder: string;
   visionProjector: string | null;
+  /** Fork: external tokenizer (MOSS-Image's Qwen3.5), passed with `--tokenizer`. */
+  tokenizer?: string | null;
   backendArgs: string[];
   recommendedSettings: Record<string, unknown>;
   capabilities: Record<string, boolean>;
@@ -404,6 +406,8 @@ export interface ModelsStatus {
   official_installed: boolean;
   /** Fork: every Krea 2 Turbo file of the preset is there. */
   krea2_installed?: boolean;
+  /** Fork: every file of each extra catalog model (Krea 2, MOSS-Image), by profile id. */
+  catalog_installed?: Record<string, boolean>;
   default_download_dir: string;
   /** The texture-fix VAE (#21): in use, or what switching to it downloads. */
   vae: { improved: boolean; download_bytes: number; page: string };
