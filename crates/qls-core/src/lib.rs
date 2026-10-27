@@ -25,3 +25,6 @@ pub mod sdcpp;
 pub mod speed;
 pub mod store;
 pub mod wic;
+
+#[cfg(test)]
+mod krea2_tests;

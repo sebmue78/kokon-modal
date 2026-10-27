@@ -552,6 +552,105 @@ pub const VISION_PROJECTOR: Download = Download {
     engine_tag: None,
 };
 
+// ---------------------------------------------------------------------------------------
+// Krea 2 Turbo (fork): the files sd.cpp's docs/krea2.md points to, pinned from the Hugging
+// Face API on 2026-10-27. Krea 2 needs stable-diffusion.cpp master-721 or later; Kokon's engine
+// (kokon-1013, upstream master-1013) has it.
+// ---------------------------------------------------------------------------------------
+
+/// Folder under the stable-diffusion.cpp folder that holds the Krea 2 weights.
+pub const KREA2_SUBDIR: &str = "models/krea2";
+const KREA2_GGUFS: &str = "https://huggingface.co/realrebelai/KREA-2_GGUFs/tree/main/TURBO";
+const KREA2_TE: &str = "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/tree/main";
+
+/// Krea 2 Turbo, 4-bit (realrebelai's GGUF of krea/Krea-2-Turbo, Krea 2 Community License; the
+/// file Unsloth Studio runs end to end on sd.cpp). 12.9B parameters: ~3 GB more than Qwen's Q4_K_M.
+pub const KREA2_TURBO_Q4_K_M: Download = Download {
+    id: "krea2_turbo_q4_k_m",
+    label: "Krea 2 Turbo Q4_K_M",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/realrebelai/KREA-2_GGUFs/resolve/main/TURBO/Krea-2-Turbo-Q4_K_M.gguf",
+    fallback_urls: &[],
+    page: KREA2_GGUFS,
+    size: 7_216_993_376,
+    sha256: "273a98be1afe317bc7228403b6434647eaf866cebe6aff1980c401b950473807",
+    dest: "models/krea2/Krea-2-Turbo-Q4_K_M.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Krea 2 Turbo, 8-bit: for 24 GB cards and up.
+pub const KREA2_TURBO_Q8_0: Download = Download {
+    id: "krea2_turbo_q8_0",
+    label: "Krea 2 Turbo Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/realrebelai/KREA-2_GGUFs/resolve/main/TURBO/Krea-2-Turbo-Q8_0.gguf",
+    fallback_urls: &[],
+    page: KREA2_GGUFS,
+    size: 13_625_717_856,
+    sha256: "b98b339068e1e26a9bd01f987d9dcae3f4a4913b8c0d571f5ddb068194e8e500",
+    dest: "models/krea2/Krea-2-Turbo-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Krea 2's text encoder, Qwen3-VL 4B, from Qwen's own GGUF repository (sd.cpp's docs).
+pub const KREA2_TEXT_ENCODER_Q8_0: Download = Download {
+    id: "krea2_text_encoder_q8_0",
+    label: "Qwen3-VL 4B text encoder Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3VL-4B-Instruct-Q8_0.gguf",
+    fallback_urls: &[],
+    page: KREA2_TE,
+    size: 4_280_406_144,
+    sha256: "054721f478bc5fa6beffb7f38eae575d45298f88cbb8d2f83ef675a727863eb1",
+    dest: "models/krea2/Qwen3VL-4B-Instruct-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// The 4-bit text encoder, for the 8 GB preset (system RAM is often short there too).
+pub const KREA2_TEXT_ENCODER_Q4_K_M: Download = Download {
+    id: "krea2_text_encoder_q4_k_m",
+    label: "Qwen3-VL 4B text encoder Q4_K_M",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+    fallback_urls: &[],
+    page: KREA2_TE,
+    size: 2_497_281_664,
+    sha256: "66358cb18bb6b3b1b6675aa412c7a88ef01d228f481184d13668e5201c730a0a",
+    dest: "models/krea2/Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Krea 2's VAE: the Wan 2.1 VAE named in sd.cpp's docs/krea2.md (not Qwen-Image 2.1's VAE).
+pub const KREA2_VAE: Download = Download {
+    id: "krea2_vae",
+    label: "Wan 2.1 VAE (Krea 2)",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+    fallback_urls: &[],
+    page: "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/tree/main/split_files/vae",
+    size: 253_815_318,
+    sha256: "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+    dest: "models/krea2/wan_2.1_vae.safetensors",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Krea 2 Turbo's image model and text encoder for a hardware preset. Not measured on real
+/// hardware yet: derived from the file sizes (Q4_K_M 7.2 GB, Q8_0 13.6 GB) with the text encoder
+/// in system RAM as for Qwen; below 24 GB the 4-bit file, which sd.cpp partly offloads on 8 GB.
+pub fn krea2_files(p: &Preset) -> (Download, Download) {
+    let dit = if p.min_vram_mib >= 20 * 1024 { KREA2_TURBO_Q8_0 } else { KREA2_TURBO_Q4_K_M };
+    let te = if p.id == "8gb" { KREA2_TEXT_ENCODER_Q4_K_M } else { KREA2_TEXT_ENCODER_Q8_0 };
+    (dit, te)
+}
+
+/// Every Krea 2 file the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const KREA2_DOWNLOADS: &[Download] = &[KREA2_TURBO_Q4_K_M, KREA2_TURBO_Q8_0, KREA2_TEXT_ENCODER_Q8_0, KREA2_TEXT_ENCODER_Q4_K_M, KREA2_VAE];
+
 /// Name sd-server knows the upscaler by (its file stem in `--hires-upscalers-dir`).
 pub const UPSCALER_NAME: &str = "4xNomos2_hq_mosr";
 /// Folder of the upscaler, relative to the stable-diffusion.cpp folder.
@@ -764,7 +863,8 @@ pub fn downloads_for(p: &Preset, backend: GpuBackend, sdcpp_dir: &Path) -> Vec<D
 /// (a piece the user chose to download, or an official file deleted from their folder), each
 /// saved where the profile expects it. Existing files are never replaced, whatever their name.
 pub fn profile_model_downloads(profile: &crate::config::ModelProfile) -> Vec<Download> {
-    let official = [TURBO_Q4_K_M, TURBO_Q4_K, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
+    let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
+    let official: Vec<Download> = qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).collect();
     profile
         .files()
         .into_iter()

@@ -1157,7 +1157,8 @@ impl Engine {
             if request.enhance && enhancer::applies(plan.mode) {
                 enhanced = self.enhance_prompt(id, &client, &caps, &cfg, plan.mode, &request.prompt, &sd_req.ref_images, seed).await?;
                 if let Some(text) = &enhanced {
-                    sd_req.prompt = pipeline::enhanced_prompt(&request.prompt, text);
+                    // The RGBA wording is Qwen-Image 2.1's; text-to-image models take the text as is.
+                    sd_req.prompt = if plan.reference_edits { pipeline::enhanced_prompt(&request.prompt, text) } else { text.trim().to_string() };
                 }
             }
             // Prompt+ review: the prompt is the result; the user's next job makes the image.
@@ -1349,7 +1350,10 @@ impl Engine {
     /// The LoRAs job `id` uses (see `lora::resolve`); skipped ones are noted on the job.
     fn job_loras(&self, id: &str, cfg: &AppConfig, request: &GenerationRequest, caps: &Capabilities) -> Vec<AppliedLora> {
         let (loras, notes) = lora::resolve(cfg, request.loras.as_deref());
-        let (loras, notes) = if !loras.is_empty() && !caps.img_feature("lora") {
+        let (loras, notes) = if !loras.is_empty() && cfg.profile().is_krea2() {
+            // Kokon's LoRA library is checked against Qwen-Image 2.1's layers.
+            (Vec::new(), vec!["Your LoRAs are for Qwen-Image 2.1, not Krea 2; made without them.".to_string()])
+        } else if !loras.is_empty() && !caps.img_feature("lora") {
             (Vec::new(), vec!["This inference engine can't use LoRAs (update it in Setup); made without them.".to_string()])
         } else {
             (loras, notes)

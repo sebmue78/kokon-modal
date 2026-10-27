@@ -369,6 +369,14 @@ pub struct Plan {
     /// Decode tile (width, height in pixels) sent with the job; None = the server's own.
     #[serde(default)]
     pub vae_tile: Option<(u32, u32)>,
+    /// The model edits from reference images ([`RecommendedSettings::reference_edits`]);
+    /// without it inpaint and outpaint are plain masked inpainting. True in older records.
+    #[serde(default = "yes")]
+    pub reference_edits: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// Facts about inputs and the environment, measured before planning.
@@ -895,15 +903,27 @@ fn ref_canvas(src: Size, max_canvas_area: u64, rec: &RecommendedSettings) -> Wor
     }
 }
 
+/// The model of the active profile cannot edit from reference images (Krea 2 Turbo).
+fn no_reference_edits() -> AppError {
+    AppError::invalid("This model makes new images from text only: it can't edit a whole photo or combine images.")
+        .suggest("Brush the area to change (or use Expand), or switch to Qwen-Image 2.1 in Settings → Models for edits and combines.")
+}
+
 /// Produces the generation plan. `rec` comes from the active model profile.
 pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSettings) -> Result<Plan, AppError> {
     if req.prompt.len() > 8000 {
         return Err(AppError::invalid("The prompt is too long (8000 characters max)."));
     }
+    if !rec.reference_edits && inputs.image_sizes.len() > 1 {
+        return Err(no_reference_edits());
+    }
     if inputs.image_sizes.len() > rec.max_references as usize {
         return Err(AppError::invalid(format!("Use at most {} reference images.", rec.max_references)));
     }
     let (mode, auto_mode, mode_reason) = detect_mode(req, inputs)?;
+    if !rec.reference_edits && matches!(mode, ResolvedMode::Edit | ResolvedMode::MultiReference | ResolvedMode::Compose) {
+        return Err(no_reference_edits());
+    }
     if req.enhance_only && !(req.enhance && crate::enhancer::applies(mode)) {
         return Err(AppError::invalid("Prompt+ writes prompts for new images, edits and combines only."));
     }
@@ -915,13 +935,13 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
     }
     let mut notes = Vec::new();
     let quality = req.quality;
-    // Turbo: its fixed 8-step schedule without CFG (model card).
+    // Turbo models: their fixed distilled schedule without CFG (model cards).
     let cfg = 1.0;
     let budget_tokens = planning_token_budget(inputs.vram_total_mib, inputs.unified_memory);
     let budget_area = budget_tokens * PIXELS_PER_TOKEN;
     let tier_area = resolution_area(req.resolution, quality, rec);
     let adv = &req.advanced;
-    let mut steps = TURBO_STEPS;
+    let mut steps = rec.steps.max(1);
     let batch_count = if mode == ResolvedMode::Upscale { 1 } else { adv.batch_count.unwrap_or(1).clamp(1, 8) };
     let mut optimized = false;
     // Diffusion always runs in one pass; larger outputs are enlarged with the upscaler
@@ -1235,7 +1255,8 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
         upscaler: inputs.upscaler.clone(),
         upscale_tile: if inputs.upscale_tile > 0 { inputs.upscale_tile } else { LARGE_UPSCALE_TILE },
         upscale,
-        custom_sigmas: if quick_upscale { Vec::new() } else { TURBO_SIGMAS.to_vec() },
+        custom_sigmas: if quick_upscale || !rec.turbo_sigmas { Vec::new() } else { TURBO_SIGMAS.to_vec() },
+        reference_edits: rec.reference_edits,
         vae_tile,
         reference_detail: matches!(mode, ResolvedMode::Edit | ResolvedMode::MultiReference | ResolvedMode::Compose | ResolvedMode::Inpaint).then(|| adv.reference_detail.unwrap_or_default()),
     })

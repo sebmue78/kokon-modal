@@ -11,6 +11,9 @@ import { LoraSettings } from "./LoraSettings";
 import { RemoteAccess } from "./RemoteAccess";
 import { UpscalerControls } from "./Upscalers";
 import { WHATS_NEW_VERSION } from "./WhatsNew";
+
+/** Fork: profile id of Krea 2 Turbo (qls-core `KREA2_PROFILE_ID`). */
+const KREA2_PROFILE_ID = "krea-2-turbo";
 import type { AppConfig, Check, InstallStatus, MacBenchState, ModelProfile, ModelsStatus, SetupReport, TextEncoderPlacement } from "../lib/types";
 import { IconButton, Seg, Switch } from "./ui";
 import { autoCheckEnabled, checkForUpdate } from "../lib/updates";
@@ -561,7 +564,40 @@ export function Settings() {
               ) : (
                 <span className="muted">Model: {profile.displayName}</span>
               )}
-              {profile.source === "official" ? (
+              {profile.id === KREA2_PROFILE_ID ? (
+                // Fork: Krea 2 Turbo from the catalog, downloaded on demand into its own folder.
+                <div className="setting-card">
+                  <div className="setting-card-text">
+                    <strong>Krea 2 Turbo</strong>
+                    <span className="muted">
+                      Text to image, plus brushed changes and Expand as plain inpainting. Whole-photo edits and combining images need
+                      Qwen-Image 2.1. {ms?.krea2_installed ? "Downloaded." : "Not downloaded yet (about 12 GB)."}
+                    </span>
+                    <details className="model-files">
+                      <summary>Files</summary>
+                      {[profile.diffusionModel, profile.vae, profile.textEncoder].map((p) => (
+                        <span key={p}>{p}</span>
+                      ))}
+                    </details>
+                  </div>
+                  {ms && !ms.krea2_installed && (
+                    <button
+                      className="btn primary"
+                      onClick={async () => {
+                        if (dirty && !window.confirm("Discard the unsaved changes and download Krea 2 Turbo?")) return;
+                        try {
+                          await api.install(cfg.hardwarePreset, cfg.gpuBackend, true, undefined, "krea2");
+                          openModelSetup(null);
+                        } catch (e) {
+                          toastError(e);
+                        }
+                      }}
+                    >
+                      <Download size={15} /> Download…
+                    </button>
+                  )}
+                </div>
+              ) : profile.source === "official" ? (
                 // The official files follow the install folder and preset; own files get their own profile.
                 <div className="setting-card">
                   <div className="setting-card-text">

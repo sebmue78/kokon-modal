@@ -87,7 +87,9 @@ pub fn build_server_args(cfg: &AppConfig, profile: &ModelProfile) -> Vec<String>
             "0.125".into(),
         ]);
     }
+    // Qwen-Image 2.1's prompt prefix cache; Krea 2 has no such model argument.
     match cfg.prefix_cache_type.as_str() {
+        _ if profile.is_krea2() => {}
         "auto" => {}
         "off" => a.extend(["--model-args".into(), "qwen_image_2_1_prefix_cache=false".into()]),
         t => a.extend(["--model-args".into(), format!("qwen_image_2_1_prefix_cache_type={t}")]),

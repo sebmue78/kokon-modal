@@ -163,8 +163,8 @@ export function Setup() {
       setBackend(h.backend);
       setReport(r);
       setInst(i);
-      // A running install of the user's own files is labelled "user:<preset>".
-      setPreset((p) => p ?? (i.running && i.preset ? i.preset.replace(/^user:/, "") : h.recommended));
+      // A running install of the user's own files is labelled "user:<preset>", of Krea 2 "krea2:<preset>".
+      setPreset((p) => p ?? (i.running && i.preset ? i.preset.replace(/^(user|krea2):/, "") : h.recommended));
     } catch (e) {
       toastError(e);
     } finally {
@@ -288,13 +288,13 @@ export function Setup() {
     window.setTimeout(() => document.getElementById("own-models")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
-  const download = (target: "official" | "user") => {
+  const download = (target: "official" | "user" | "krea2") => {
     if (!preset) return;
-    setMode(target === "official" ? "official" : "own");
+    setMode(target === "user" ? "own" : "official");
     api.install(preset, backend ?? hw?.backend ?? "cuda", true, undefined, target).then(setInst, toastError);
   };
 
-  const switchTo = async (profile: "official" | "user") => {
+  const switchTo = async (profile: "official" | "user" | "krea2") => {
     setRepairBusy(profile === "user" ? "Switching to your files…" : "Switching to the official model…");
     try {
       setModels(await api.useModels(profile));
@@ -334,7 +334,9 @@ export function Setup() {
   const ownActive = own && hw?.active_source === "user" && !!hw.user_files;
   // While (or after) installing this preset, show the live list; otherwise what is on disk.
   const installKey = own ? `user:${preset}` : preset;
-  const live = !!inst && inst.preset === installKey && inst.items.length > 0 && (running || inst.items.some((i) => i.state !== "pending" && i.state !== "present"));
+  // Fork: a Krea 2 download (started from Settings or below) shows its own live list.
+  const kreaInstall = !!inst && inst.preset === `krea2:${preset}`;
+  const live = !!inst && (inst.preset === installKey || kreaInstall) && inst.items.length > 0 && (running || inst.items.some((i) => i.state !== "pending" && i.state !== "present"));
   const items = live ? inst!.items : own ? (ownActive ? hw!.user_files!.files : []) : chosen?.files ?? [];
   const missing = items.filter((i) => i.state !== "present" && i.state !== "done");
   const failed = items.filter((i) => i.state === "failed");
@@ -352,6 +354,10 @@ export function Setup() {
   const repairOptions: RepairOption[] = [];
   if (models) {
     const userActive = models.active.source === "user";
+    // Fork: Krea 2 Turbo is active and some of its files are missing.
+    if (models.active.id === "krea-2-turbo") {
+      repairOptions.push({ icon: <Download size={16} />, title: "Download Krea 2 Turbo", detail: `${models.downloadable.join(", ")}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("krea2") });
+    }
     if (!inBrowser) {
       repairOptions.push({ icon: <FolderOpen size={16} />, title: "Find them in another folder", detail: "If you moved your models: Kokon looks for the same files there.", run: searchElsewhere });
       repairOptions.push({ icon: <FileSearch size={16} />, title: "Choose other files", detail: "Pick the files yourself, below.", run: showOwn });

@@ -402,6 +402,8 @@ export interface ModelsStatus {
   /** Every file of the user's own profile is there. */
   user_installed: boolean;
   official_installed: boolean;
+  /** Fork: every Krea 2 Turbo file of the preset is there. */
+  krea2_installed?: boolean;
   default_download_dir: string;
   /** The texture-fix VAE (#21): in use, or what switching to it downloads. */
   vae: { improved: boolean; download_bytes: number; page: string };

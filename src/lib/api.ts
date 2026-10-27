@@ -94,7 +94,7 @@ export const api = {
   },
   /** `apply = false`: only download (an engine update), keeping the configured preset and settings.
    * `gpu`: card to run on once installed (index in `hardware().gpus`). */
-  install: (preset: string, backend: GpuBackend, apply = true, gpu?: number, target?: "official" | "user") =>
+  install: (preset: string, backend: GpuBackend, apply = true, gpu?: number, target?: "official" | "user" | "krea2") =>
     call<InstallStatus>("/setup/install", { method: "POST", body: json({ preset, backend, apply, gpu, target }) }),
   /** The active model's files and what is missing. */
   models: () => call<ModelsStatus>("/models"),
@@ -104,7 +104,7 @@ export const api = {
   /** Saves the user's own files (checked) as the active model; `vision_projector` null = not needed. */
   setUserModels: (b: { diffusion_model: ModelSlot; vae: ModelSlot; text_encoder: ModelSlot; vision_projector: ModelSlot | null; scan_dir: string | null }) =>
     call<ModelsStatus>("/models/user", { method: "POST", body: json(b) }),
-  useModels: (profile: "official" | "user") => call<ModelsStatus>("/models/use", { method: "POST", body: json({ profile }) }),
+  useModels: (profile: "official" | "user" | "krea2") => call<ModelsStatus>("/models/use", { method: "POST", body: json({ profile }) }),
   /** Downloads the texture-fix VAE and switches the active model to it (progress in installStatus). */
   improveVae: () => call<InstallStatus>("/models/vae", { method: "POST" }),
   newImageModel: () => call<InstallStatus>("/models/dit", { method: "POST" }),
