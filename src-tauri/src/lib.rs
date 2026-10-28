@@ -37,15 +37,13 @@ fn client_id() -> String {
     format!("ui-{}", std::process::id())
 }
 
-/// The service's data folder. Until the service has moved the folder of the app's old name
-/// (QwenLocalStudio, renamed Kokon on 2026-10-08) to KokonData, the old one is read.
+/// The service's data folder (`qls_core::config::DATA_DIR_NAME`). Fork: Kokon Modal's own,
+/// never Kokon's KokonData.
 fn data_dir() -> PathBuf {
     if let Ok(p) = std::env::var("QLS_DATA_DIR") {
         return PathBuf::from(p);
     }
-    let base = dirs::data_local_dir().unwrap_or_else(std::env::temp_dir);
-    let (new, old) = (base.join("KokonData"), base.join("QwenLocalStudio"));
-    if !new.exists() && old.is_dir() { old } else { new }
+    dirs::data_local_dir().unwrap_or_else(std::env::temp_dir).join("KokonModalData")
 }
 
 fn http() -> reqwest::blocking::Client {
@@ -88,7 +86,7 @@ fn spawn_service() -> Result<(), String> {
         // CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP: survives independently of this window.
         cmd.creation_flags(0x0800_0000 | 0x0000_0200);
     }
-    cmd.spawn().map_err(|e| format!("Could not start the Kokon service: {e}"))?;
+    cmd.spawn().map_err(|e| format!("Could not start the Kokon Modal service: {e}"))?;
     Ok(())
 }
 
@@ -129,7 +127,7 @@ fn ensure_service(shared: &Shared) -> Result<ServiceInfo, String> {
             return Ok(i);
         }
     }
-    Err(format!("The Kokon service did not start. See {}.", data_dir().join("logs").join("service.log").display()))
+    Err(format!("The Kokon Modal service did not start. See {}.", data_dir().join("logs").join("service.log").display()))
 }
 
 fn heartbeat(info: &ServiceInfo) -> bool {
@@ -214,7 +212,7 @@ async fn prepare_update(state: tauri::State<'_, Arc<Shared>>) -> Result<(), Stri
     tauri::async_runtime::spawn_blocking(move || {
         let info = shared.info.lock().unwrap().clone().or_else(read_info);
         match info {
-            Some(i) if ping(i.port) && !stop_service(&i) => Err("The Kokon service did not stop. Close Kokon and try again.".to_string()),
+            Some(i) if ping(i.port) && !stop_service(&i) => Err("The Kokon Modal service did not stop. Close Kokon Modal and try again.".to_string()),
             _ => Ok(()),
         }
     })
@@ -309,7 +307,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![connect, copy_image, read_clipboard_image, reveal, open_folder, open_link, data_folder, prepare_update])
         .build(tauri::generate_context!())
-        .expect("error while building Kokon");
+        .expect("error while building Kokon Modal");
     app.run(move |_handle, event| {
         if let RunEvent::Exit = event {
             release(&shared);

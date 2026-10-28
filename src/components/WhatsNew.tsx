@@ -1,4 +1,4 @@
-import { CircleAlert, Copy, Cpu, Expand, Image, MousePointerClick } from "lucide-react";
+import { AppWindow, CircleAlert, Copy, Cpu, Expand, Image, Layers, MousePointerClick } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { formatBytes, installProgress, installStep, installTimeLeft, modelChoiceUi, modelOfferDue, whatsNewDue as due } from "../lib/logic";
@@ -18,9 +18,19 @@ const MAC_NEWS = {
 
 const NEWS = [
   {
+    icon: Layers,
+    title: "Three more models: FLUX.3, Krea 2 and MOSS-Image",
+    text: "Kokon Modal adds FLUX.3 Image Klein, Krea 2 Turbo and MOSS-Image SFT next to Qwen-Image 2.1: pick one in the model menu at the top, which also downloads it the first time. FLUX.3 edits and combines photos like Qwen; Krea 2 and MOSS make new images from text and do brushed changes and Expand.",
+  },
+  {
+    icon: AppWindow,
+    title: "Its own app, based on Kokon",
+    text: "Kokon Modal installs next to Kokon with its own folders, models and settings, so both can run at the same time. It is built on Kokon by Gabriele Lozupone.",
+  },
+  {
     icon: Image,
-    title: "A new copy of the image model",
-    text: "New installs get unsloth's Q4_K_M of Qwen-Image 2.1 Turbo: the same model in the same 4-bit size, better supported and slightly better. If you have the earlier file, Kokon asks before changing it.",
+    title: "A new copy of the Qwen model",
+    text: "New installs get unsloth's Q4_K_M of Qwen-Image 2.1 Turbo: the same model in the same 4-bit size, better supported and slightly better. If you have the earlier file, Kokon Modal asks before changing it.",
   },
   {
     icon: Expand,
@@ -173,9 +183,9 @@ export function WhatsNew() {
 
   return (
     <div className="modal-scrim">
-      <div className="welcome" role="dialog" aria-label={`What's new in Kokon ${WHATS_NEW_VERSION}`}>
+      <div className="welcome" role="dialog" aria-label={`What's new in Kokon Modal ${WHATS_NEW_VERSION}`}>
         <KokonMark size={44} />
-        <h1>What's new in Kokon {WHATS_NEW_VERSION}</h1>
+        <h1>What's new in Kokon Modal {WHATS_NEW_VERSION}</h1>
         <div className="welcome-grid">
           {(macEngine ? [MAC_NEWS, ...NEWS] : NEWS).map(({ icon: Icon, title, text }) => (
             <div className="welcome-item" key={title}>
@@ -198,15 +208,15 @@ export function WhatsNew() {
                   </strong>
                   <span>
                     {ownModel
-                      ? "Your image model is the Q4_K file Kokon used before. Kokon now uses unsloth's Q4_K_M: better supported, slightly better, the same 4-bit size. Kokon can download it into its own folder and use it; your file stays where it is, untouched."
-                      : "Kokon now uses unsloth's Q4_K_M of Qwen-Image 2.1 Turbo: better supported, slightly better, the same 4-bit size. The old file is deleted once the new one is downloaded and checked."}{" "}
+                      ? "Your image model is the Q4_K file Kokon Modal used before. Kokon Modal now uses unsloth's Q4_K_M: better supported, slightly better, the same 4-bit size. Kokon Modal can download it into its own folder and use it; your file stays where it is, untouched."
+                      : "Kokon Modal now uses unsloth's Q4_K_M of Qwen-Image 2.1 Turbo: better supported, slightly better, the same 4-bit size. The old file is deleted once the new one is downloaded and checked."}{" "}
                     You can also switch later in Settings → Models.
                   </span>
                   <details className="model-files">
                     <summary>Why change it?</summary>
                     <span className="update-detail">
                       Both are 4-bit copies of Qwen's Turbo model and look much the same. The Q4_K_M comes from unsloth, one of the most used sources of
-                      GGUF models, and it is the file Kokon's tests and its Mac engine are checked against. Same license as the model.
+                      GGUF models, and it is the file Kokon Modal's tests and its Mac engine are checked against. Same license as the model.
                     </span>
                   </details>
                 </div>
@@ -218,8 +228,8 @@ export function WhatsNew() {
                 <div>
                   <strong>New image decoder{vaeBytes ? ` · ${formatBytes(vaeBytes)}` : ""}</strong>
                   <span>
-                    For the cleaner images above, Kokon needs to replace the decoder it installed. The old file is deleted once the new one is in place.
-                    {ms?.active.source === "user" && " Your own VAE file stays where it is: Kokon uses its own copy."} If you keep the current one, you can switch any time in
+                    For the cleaner images above, Kokon Modal needs to replace the decoder it installed. The old file is deleted once the new one is in place.
+                    {ms?.active.source === "user" && " Your own VAE file stays where it is: Kokon Modal uses its own copy."} If you keep the current one, you can switch any time in
                     Settings → Models.
                   </span>
                   <details className="model-files">

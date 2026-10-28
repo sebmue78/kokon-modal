@@ -219,7 +219,7 @@ function Library() {
         <div className="lib-title-row">
           <h1>
             <KokonMark size={22} />
-            Kokon
+            Kokon Modal
           </h1>
           {!images && projects.length > 0 && (
             <button className="lib-text-btn" onClick={() => setPicked(selecting ? null : new Set())}>

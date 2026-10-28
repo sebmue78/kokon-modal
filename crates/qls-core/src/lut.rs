@@ -336,7 +336,7 @@ impl LutLibrary {
     pub fn import(&self, src: &Path) -> AppResult<LutEntry> {
         let meta = std::fs::metadata(src).map_err(|e| AppError::io("read the LUT", src, e))?;
         if !meta.is_file() || meta.len() > MAX_FILE {
-            return Err(invalid("That file is not a .cube LUT Kokon can read."));
+            return Err(invalid("That file is not a .cube LUT Kokon Modal can read."));
         }
         let bytes = std::fs::read(src).map_err(|e| AppError::io("read the LUT", src, e))?;
         let text = String::from_utf8_lossy(&bytes);
@@ -366,7 +366,7 @@ impl LutLibrary {
             return Ok(Lut::from_fn(p.title, PRESET_SIZE, p.look));
         }
         let p = self.path(name)?;
-        let text = std::fs::read_to_string(&p).map_err(|_| AppError::new(ErrorCode::NotFound, format!("The LUT \"{name}\" is no longer in Kokon's LUT list.")))?;
+        let text = std::fs::read_to_string(&p).map_err(|_| AppError::new(ErrorCode::NotFound, format!("The LUT \"{name}\" is no longer in Kokon Modal's LUT list.")))?;
         Lut::parse(&text).map_err(|why| invalid(format!("This LUT can't be used: {why}.")))
     }
 
@@ -381,7 +381,7 @@ impl LutLibrary {
 
     pub fn remove(&self, name: &str) -> AppResult<()> {
         if preset(name).is_some() {
-            return Err(invalid("Kokon's own LUTs can't be removed."));
+            return Err(invalid("Kokon Modal's own LUTs can't be removed."));
         }
         let p = self.path(name)?;
         match std::fs::remove_file(&p) {

@@ -1,3 +1,4 @@
+import { BasedOnKokon } from "./BasedOn";
 import { ArrowLeft, ArrowLeftRight, Bug, Check, ChevronDown, CircleAlert, Download, ExternalLink, FileSearch, FolderOpen, Loader2, Pause, Play, RefreshCw, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
@@ -67,11 +68,13 @@ function Failure({ it, issuesUrl }: { it: InstallItem; issuesUrl: string }) {
   );
 }
 
+/** The files of an install. Each row's state is the class "is-<state>": a bare "pending" would
+ * also match the image placeholder's `.pending` style (centered, shadowed, collapsed rows). */
 function FileList({ items }: { items: InstallItem[] }) {
   return (
     <div className="setup-files">
       {items.map((it) => (
-        <div className={`setup-file ${it.state}`} key={it.id}>
+        <div className={`setup-file is-${it.state}`} key={it.id}>
           <ItemIcon it={it} />
           <span className="name">{it.label}</span>
           <span className="state">{installItemShort(it)}</span>
@@ -97,7 +100,7 @@ function Repair(props: { models: ModelsStatus; busy: string | null; note: string
   const n = models.missing.length;
   return (
     <div className="setup-note setup-repair">
-      <strong>{n === 1 ? "Kokon can't find a model file" : `Kokon can't find ${n} model files`}</strong>
+      <strong>{n === 1 ? "Kokon Modal can't find a model file" : `Kokon Modal can't find ${n} model files`}</strong>
       {models.missing.map((m) => (
         <div className="missing" key={m.path}>
           {m.label}: {m.path}
@@ -105,7 +108,7 @@ function Repair(props: { models: ModelsStatus; busy: string | null; note: string
       ))}
       <span>
         If they are on a drive that is not connected, connect it first.
-        {models.scan_dir ? ` Kokon checks again and also looks for them in ${models.scan_dir}, in case they were moved.` : ""}
+        {models.scan_dir ? ` Kokon Modal checks again and also looks for them in ${models.scan_dir}, in case they were moved.` : ""}
       </span>
       <div className="actions">
         <button className="btn primary" onClick={props.onLookAgain} disabled={!!props.busy}>
@@ -163,8 +166,9 @@ export function Setup() {
       setBackend(h.backend);
       setReport(r);
       setInst(i);
-      // A running install of the user's own files is labelled "user:<preset>".
-      setPreset((p) => p ?? (i.running && i.preset ? i.preset.replace(/^user:/, "") : h.recommended));
+      // A running install of the user's own files is labelled "user:<preset>", of a catalog model
+      // besides Qwen "<profile id>:<preset>".
+      setPreset((p) => p ?? (i.running && i.preset ? i.preset.replace(/^(user|flux-3-image-klein|krea-2-turbo|moss-image-sft):/, "") : h.recommended));
     } catch (e) {
       toastError(e);
     } finally {
@@ -288,13 +292,13 @@ export function Setup() {
     window.setTimeout(() => document.getElementById("own-models")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
-  const download = (target: "official" | "user") => {
+  const download = (target: "official" | "user" | "flux3" | "krea2" | "moss") => {
     if (!preset) return;
-    setMode(target === "official" ? "official" : "own");
+    setMode(target === "user" ? "own" : "official");
     api.install(preset, backend ?? hw?.backend ?? "cuda", true, undefined, target).then(setInst, toastError);
   };
 
-  const switchTo = async (profile: "official" | "user") => {
+  const switchTo = async (profile: string) => {
     setRepairBusy(profile === "user" ? "Switching to your files…" : "Switching to the official model…");
     try {
       setModels(await api.useModels(profile));
@@ -334,7 +338,9 @@ export function Setup() {
   const ownActive = own && hw?.active_source === "user" && !!hw.user_files;
   // While (or after) installing this preset, show the live list; otherwise what is on disk.
   const installKey = own ? `user:${preset}` : preset;
-  const live = !!inst && inst.preset === installKey && inst.items.length > 0 && (running || inst.items.some((i) => i.state !== "pending" && i.state !== "present"));
+  // Fork: a Krea 2 download (started from Settings or below) shows its own live list.
+  const kreaInstall = !!inst && ["flux-3-image-klein", "krea-2-turbo", "moss-image-sft"].some((id) => inst.preset === `${id}:${preset}`);
+  const live = !!inst && (inst.preset === installKey || kreaInstall) && inst.items.length > 0 && (running || inst.items.some((i) => i.state !== "pending" && i.state !== "present"));
   const items = live ? inst!.items : own ? (ownActive ? hw!.user_files!.files : []) : chosen?.files ?? [];
   const missing = items.filter((i) => i.state !== "present" && i.state !== "done");
   const failed = items.filter((i) => i.state === "failed");
@@ -352,8 +358,18 @@ export function Setup() {
   const repairOptions: RepairOption[] = [];
   if (models) {
     const userActive = models.active.source === "user";
+    // Fork: Krea 2 Turbo or MOSS-Image is active and some of its files are missing.
+    if (models.active.id === "krea-2-turbo") {
+      repairOptions.push({ icon: <Download size={16} />, title: "Download Krea 2 Turbo", detail: `${models.downloadable.join(", ")}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("krea2") });
+    }
+    if (models.active.id === "flux-3-image-klein") {
+      repairOptions.push({ icon: <Download size={16} />, title: "Download FLUX.3 Image Klein", detail: `${models.downloadable.join(", ")}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("flux3") });
+    }
+    if (models.active.id === "moss-image-sft") {
+      repairOptions.push({ icon: <Download size={16} />, title: "Download MOSS-Image", detail: `${models.downloadable.join(", ")}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("moss") });
+    }
     if (!inBrowser) {
-      repairOptions.push({ icon: <FolderOpen size={16} />, title: "Find them in another folder", detail: "If you moved your models: Kokon looks for the same files there.", run: searchElsewhere });
+      repairOptions.push({ icon: <FolderOpen size={16} />, title: "Find them in another folder", detail: "If you moved your models: Kokon Modal looks for the same files there.", run: searchElsewhere });
       repairOptions.push({ icon: <FileSearch size={16} />, title: "Choose other files", detail: "Pick the files yourself, below.", run: showOwn });
     }
     if (userActive && models.downloadable.length > 0) {
@@ -363,7 +379,7 @@ export function Setup() {
       repairOptions.push(
         models.official_installed
           ? { icon: <ArrowLeftRight size={16} />, title: "Use the official model", detail: "Already downloaded: switch to it. Your files stay set up.", run: () => switchTo("official") }
-          : { icon: <Download size={16} />, title: "Download the official model", detail: `${formatBytes(modelBytes)}, tested with Kokon, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("official") },
+          : { icon: <Download size={16} />, title: "Download the official model", detail: `${formatBytes(modelBytes)}, tested with Kokon Modal, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("official") },
       );
     } else {
       repairOptions.push({ icon: <Download size={16} />, title: "Download the official model", detail: `${formatBytes(modelBytes)}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("official") });
@@ -381,11 +397,12 @@ export function Setup() {
     <div className="setup">
       <div className="setup-inner">
         <div>
-          <h1>{setupDone ? "Models" : "Welcome to Kokon"}</h1>
+          <h1>{setupDone ? "Models" : "Welcome to Kokon Modal"}</h1>
+          {!setupDone && <BasedOnKokon />}
           <p className="setup-lead">
             {own
               ? "Everything runs on this PC. Use the Qwen-Image 2.1 files you already have, for example from ComfyUI: Setup only downloads the engine and what you don't have."
-              : `Everything runs on this PC. Setup downloads the image model once (${chosen ? formatBytes(chosen.files.reduce((a, f) => a + f.size, 0)) : "about 12 GB"}); after that, nothing leaves your computer.`}
+              : "Everything runs on this PC. Setup downloads the image model once; after that, nothing leaves your computer. FLUX.3, Krea 2 and MOSS-Image can be added later from the model menu at the top."}
           </p>
         </div>
 
@@ -395,7 +412,7 @@ export function Setup() {
 
         {setupDone && engineUpdate?.update_needed && engineMissing.length > 0 && !running && (
           <div className="setup-note">
-            This version of Kokon brings Prompt+, which needs Kokon&apos;s updated engine: press Install to download it (
+            This version of Kokon Modal brings Prompt+, which needs Kokon Modal&apos;s updated engine: press Install to download it (
             {formatBytes(engineMissing.reduce((a, i) => a + Math.max(0, i.size - i.received), 0))}). Until then, everything else works as before and Prompt+ stays hidden.
           </div>
         )}
@@ -416,13 +433,13 @@ export function Setup() {
             </div>
             {!hw.gpu && (
               <div className="setup-note">
-                Kokon needs a graphics card with at least 12 GB of VRAM: NVIDIA (RTX 20 series or newer), or AMD / Intel through Vulkan (beta), or a Mac with Apple Silicon. Make sure its driver is installed.
+                Kokon Modal needs a graphics card with at least 12 GB of VRAM: NVIDIA (RTX 20 series or newer), or AMD / Intel through Vulkan (beta), or a Mac with Apple Silicon. Make sure its driver is installed.
               </div>
             )}
             {hw.gpu?.unified ? (
               hw.gpu.memory_total_mib < 23 * 1024 ? (
                 <div className="setup-note">
-                  With {gb(hw.gpu.memory_total_mib)} of unified memory Kokon works, but slowly: model weights are read from disk as needed and images are made at about 1 megapixel, which takes about 4 to 5 minutes on an M2 Pro. 32 GB or more and a Pro, Max or Ultra chip are recommended. Close other apps while generating.
+                  With {gb(hw.gpu.memory_total_mib)} of unified memory Kokon Modal works, but slowly: model weights are read from disk as needed and images are made at about 1 megapixel, which takes about 4 to 5 minutes on an M2 Pro. 32 GB or more and a Pro, Max or Ultra chip are recommended. Close other apps while generating.
                 </div>
               ) : (
                 hw.gpu.memory_total_mib < 31 * 1024 && (
@@ -433,7 +450,7 @@ export function Setup() {
               )
             ) : (
               <>
-                {vram !== null && vram < 7 * 1024 && <div className="setup-note">Your GPU has {gb(vram)} of VRAM. 8 GB is the smallest size Kokon runs on (in beta); it may fail or run slowly.</div>}
+                {vram !== null && vram < 7 * 1024 && <div className="setup-note">Your GPU has {gb(vram)} of VRAM. 8 GB is the smallest size Kokon Modal runs on (in beta); it may fail or run slowly.</div>}
                 {vram !== null && vram >= 7 * 1024 && vram < 10 * 1024 && (
                   <div className="setup-note">
                     8 GB graphics cards are in beta: images are made at about 1 megapixel, and an edit takes 1–2 minutes on an RTX 5050 Laptop. Tell us how it runs on yours.
@@ -457,7 +474,7 @@ export function Setup() {
                       <Download size={20} />
                       <div>
                         <strong>Download the model</strong>
-                        <span>Qwen-Image 2.1 Turbo, tested with Kokon{modelBytes ? ` · ${formatBytes(modelBytes)}` : ""}</span>
+                        <span>Qwen-Image 2.1 Turbo, the model for every kind of edit{modelBytes ? ` · ${formatBytes(modelBytes)}` : ""}</span>
                       </div>
                     </button>
                     {!inBrowser && (
@@ -465,7 +482,7 @@ export function Setup() {
                         <FolderOpen size={20} />
                         <div>
                           <strong>Use models I already have</strong>
-                          <span>From ComfyUI or another folder; only the engine is downloaded</span>
+                          <span>Qwen-Image 2.1 files from ComfyUI or another folder; only the engine is downloaded</span>
                         </div>
                       </button>
                     )}
@@ -509,7 +526,7 @@ export function Setup() {
                         </option>
                       ))}
                     </select>
-                    <span className="muted">Kokon runs on one card. The preset is sized for the card you pick; you can change it later in Settings → Performance.</span>
+                    <span className="muted">Kokon Modal runs on one card. The preset is sized for the card you pick; you can change it later in Settings → Performance.</span>
                   </label>
                 )}
                 {hw.gpu && (
@@ -529,7 +546,7 @@ export function Setup() {
                 <div className="field">
                   <span>{hw.gpu?.unified ? "Preset for your Mac's memory" : "Preset for your graphics card"}</span>
                   <Seg<string> value={preset ?? hw.recommended} options={hw.presets.map((p) => ({ value: p.id, label: p.label }))} onChange={setPreset} />
-                  {chosen && own && <span className="muted">How Kokon runs the model on your card: memory use and image sizes. Your files are kept.</span>}
+                  {chosen && own && <span className="muted">How Kokon Modal runs the model on your card: memory use and image sizes. Your files are kept.</span>}
                   {chosen && !own && (
                     <span className="muted">
                       {chosen.summary}.{chosen.id === hw.recommended ? " Recommended for your GPU." : ""}
@@ -672,7 +689,7 @@ export function Setup() {
             while own files are still being chosen, and not twice with the missing-files card. */}
         {report && !report.ready && !running && !paused && presetInstalled && !repair && !checking && (
           <div className="setup-note">
-            <div style={{ marginBottom: 6 }}>Kokon can't start yet:</div>
+            <div style={{ marginBottom: 6 }}>Kokon Modal can't start yet:</div>
             {report.checks
               .filter((c) => !c.ok)
               .map((c, i) => (
@@ -683,8 +700,13 @@ export function Setup() {
           </div>
         )}
         <p className="muted setup-foot">
-          Qwen-Image 2.1 Turbo is released by Alibaba's Qwen team under the Qwen Research License: research and evaluation only, no commercial use. By downloading it you accept that license. The upscalers are Superscale-SP by Nmkd
-          (WTFPL) and the experimental 4xNomos2_hq_mosr by Philip Hofmann (CC BY 4.0). Downloads come only from GitHub (stable-diffusion.cpp, upscaler) and Hugging Face, and every file is verified with its SHA-256 checksum.
+          Each model has its own license, and you accept it when you download that model. Qwen-Image 2.1 Turbo (downloaded here) is released by
+          Alibaba&apos;s Qwen team under the Qwen Research License: research and evaluation only, no commercial use. The other models are downloaded only
+          when you choose them in the model menu at the top: FLUX.3 Image Klein by Black Forest Labs under the FLUX Kommunity License
+          (non-commercial; commercial use of images only for qualifying users), Krea 2 Turbo by Krea under the Krea 2 Community License, and MOSS-Image
+          SFT by the OpenMOSS team under Apache-2.0 (commercial use allowed). Read a model&apos;s license on its Hugging Face page before using its
+          images commercially. The upscalers are Superscale-SP by Nmkd (WTFPL) and the experimental 4xNomos2_hq_mosr by Philip Hofmann (CC BY 4.0).
+          Downloads come only from GitHub (stable-diffusion.cpp, upscaler) and Hugging Face, and every file is verified with its SHA-256 checksum.
         </p>
       </div>
     </div>

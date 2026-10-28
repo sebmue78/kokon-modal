@@ -552,6 +552,284 @@ pub const VISION_PROJECTOR: Download = Download {
     engine_tag: None,
 };
 
+// ---------------------------------------------------------------------------------------
+// Krea 2 Turbo (fork): the files sd.cpp's docs/krea2.md points to, pinned from the Hugging
+// Face API on 2026-10-27. Krea 2 needs stable-diffusion.cpp master-721 or later; Kokon's engine
+// (kokon-1013, upstream master-1013) has it.
+// ---------------------------------------------------------------------------------------
+
+/// Folder under the stable-diffusion.cpp folder that holds the Krea 2 weights.
+pub const KREA2_SUBDIR: &str = "models/krea2";
+const KREA2_GGUFS: &str = "https://huggingface.co/realrebelai/KREA-2_GGUFs/tree/main/TURBO";
+const KREA2_TE: &str = "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/tree/main";
+
+/// Krea 2 Turbo, 4-bit (realrebelai's GGUF of krea/Krea-2-Turbo, Krea 2 Community License; the
+/// file Unsloth Studio runs end to end on sd.cpp). 12.9B parameters: ~3 GB more than Qwen's Q4_K_M.
+pub const KREA2_TURBO_Q4_K_M: Download = Download {
+    id: "krea2_turbo_q4_k_m",
+    label: "Krea 2 Turbo Q4_K_M",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/realrebelai/KREA-2_GGUFs/resolve/main/TURBO/Krea-2-Turbo-Q4_K_M.gguf",
+    fallback_urls: &[],
+    page: KREA2_GGUFS,
+    size: 7_216_993_376,
+    sha256: "273a98be1afe317bc7228403b6434647eaf866cebe6aff1980c401b950473807",
+    dest: "models/krea2/Krea-2-Turbo-Q4_K_M.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Krea 2 Turbo, 8-bit: for 24 GB cards and up.
+pub const KREA2_TURBO_Q8_0: Download = Download {
+    id: "krea2_turbo_q8_0",
+    label: "Krea 2 Turbo Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/realrebelai/KREA-2_GGUFs/resolve/main/TURBO/Krea-2-Turbo-Q8_0.gguf",
+    fallback_urls: &[],
+    page: KREA2_GGUFS,
+    size: 13_625_717_856,
+    sha256: "b98b339068e1e26a9bd01f987d9dcae3f4a4913b8c0d571f5ddb068194e8e500",
+    dest: "models/krea2/Krea-2-Turbo-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Krea 2's text encoder, Qwen3-VL 4B, from Qwen's own GGUF repository (sd.cpp's docs).
+pub const KREA2_TEXT_ENCODER_Q8_0: Download = Download {
+    id: "krea2_text_encoder_q8_0",
+    label: "Qwen3-VL 4B text encoder Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3VL-4B-Instruct-Q8_0.gguf",
+    fallback_urls: &[],
+    page: KREA2_TE,
+    size: 4_280_406_144,
+    sha256: "054721f478bc5fa6beffb7f38eae575d45298f88cbb8d2f83ef675a727863eb1",
+    dest: "models/krea2/Qwen3VL-4B-Instruct-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// The 4-bit text encoder, for the 8 GB preset (system RAM is often short there too).
+pub const KREA2_TEXT_ENCODER_Q4_K_M: Download = Download {
+    id: "krea2_text_encoder_q4_k_m",
+    label: "Qwen3-VL 4B text encoder Q4_K_M",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+    fallback_urls: &[],
+    page: KREA2_TE,
+    size: 2_497_281_664,
+    sha256: "66358cb18bb6b3b1b6675aa412c7a88ef01d228f481184d13668e5201c730a0a",
+    dest: "models/krea2/Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Krea 2's VAE: the Wan 2.1 VAE named in sd.cpp's docs/krea2.md (not Qwen-Image 2.1's VAE).
+pub const KREA2_VAE: Download = Download {
+    id: "krea2_vae",
+    label: "Wan 2.1 VAE (Krea 2)",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+    fallback_urls: &[],
+    page: "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/tree/main/split_files/vae",
+    size: 253_815_318,
+    sha256: "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+    dest: "models/krea2/wan_2.1_vae.safetensors",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Krea 2 Turbo's image model and text encoder for a hardware preset. Not measured on real
+/// hardware yet: derived from the file sizes (Q4_K_M 7.2 GB, Q8_0 13.6 GB) with the text encoder
+/// in system RAM as for Qwen; below 24 GB the 4-bit file, which sd.cpp partly offloads on 8 GB.
+pub fn krea2_files(p: &Preset) -> (Download, Download) {
+    let dit = if p.min_vram_mib >= 20 * 1024 { KREA2_TURBO_Q8_0 } else { KREA2_TURBO_Q4_K_M };
+    let te = if p.id == "8gb" { KREA2_TEXT_ENCODER_Q4_K_M } else { KREA2_TEXT_ENCODER_Q8_0 };
+    (dit, te)
+}
+
+// ---------------------------------------------------------------------------------------
+// MOSS-Image SFT (fork): the files sd.cpp's docs/moss_image.md points to, pinned from the
+// Hugging Face API on 2026-10-27. Apache-2.0 (model and GGUF); Qwen3.5 under its own license.
+// ---------------------------------------------------------------------------------------
+
+/// Folder under the stable-diffusion.cpp folder that holds the MOSS-Image weights.
+pub const MOSS_SUBDIR: &str = "models/moss-image";
+const MOSS_GGUFS: &str = "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/tree/main";
+const MOSS_TE: &str = "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/tree/main";
+
+/// MOSS-Image SFT, 4-bit (leejet's GGUF, made with stable-diffusion.cpp). 5B parameters.
+pub const MOSS_SFT_Q4_K: Download = Download {
+    id: "moss_sft_q4_k",
+    label: "MOSS-Image SFT Q4_K",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/main/MOSS-Image-SFT-Q4_K.gguf",
+    fallback_urls: &[],
+    page: MOSS_GGUFS,
+    size: 3_327_400_800,
+    sha256: "902dbb0364d8b313cd91792b3cfe7c87b987386f0c5414986f3f1027b82b2225",
+    dest: "models/moss-image/MOSS-Image-SFT-Q4_K.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// MOSS-Image SFT, 8-bit: for 16 GB cards and up (5.7 GB, smaller than Krea 2's 4-bit file).
+pub const MOSS_SFT_Q8_0: Download = Download {
+    id: "moss_sft_q8_0",
+    label: "MOSS-Image SFT Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/leejet/MOSS-Image-SFT-GGUF/resolve/main/MOSS-Image-SFT-Q8_0.gguf",
+    fallback_urls: &[],
+    page: MOSS_GGUFS,
+    size: 5_705_571_168,
+    sha256: "740040af6492ae5f951d5b7a8cb56927c1a02e64696f4bd4bd124bb798ce5635",
+    dest: "models/moss-image/MOSS-Image-SFT-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// MOSS-Image's text encoder, Qwen3.5 9B, 4-bit (Unsloth's GGUF, as in sd.cpp's docs).
+pub const MOSS_TEXT_ENCODER_Q4_K_M: Download = Download {
+    id: "moss_text_encoder_q4_k_m",
+    label: "Qwen3.5 9B text encoder Q4_K_M",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf",
+    fallback_urls: &[],
+    page: MOSS_TE,
+    size: 5_680_522_464,
+    sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+    dest: "models/moss-image/Qwen3.5-9B-Q4_K_M.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// The 8-bit text encoder, for the 32 GB+ preset (as the Qwen files there).
+pub const MOSS_TEXT_ENCODER_Q8_0: Download = Download {
+    id: "moss_text_encoder_q8_0",
+    label: "Qwen3.5 9B text encoder Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q8_0.gguf",
+    fallback_urls: &[],
+    page: MOSS_TE,
+    size: 9_527_502_048,
+    sha256: "809626574d0cb43d4becfa56169980da2bb448f2299270f7be443cb89d0a6ae4",
+    dest: "models/moss-image/Qwen3.5-9B-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// MOSS-Image's VAE: the FLUX.2 VAE (Comfy-Org's MOSS-Image package).
+pub const MOSS_VAE: Download = Download {
+    id: "moss_vae",
+    label: "FLUX.2 VAE (MOSS-Image)",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae.safetensors",
+    fallback_urls: &[],
+    page: "https://huggingface.co/Comfy-Org/MOSS-Image/tree/main/vae",
+    size: 336_211_292,
+    sha256: "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3",
+    dest: "models/moss-image/flux2-vae.safetensors",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Qwen3.5's tokenizer, passed with `--tokenizer`: its vocabulary differs from the Qwen
+/// tokenizer the engine embeds (sd.cpp's docs/moss_image.md).
+pub const MOSS_TOKENIZER: Download = Download {
+    id: "moss_tokenizer",
+    label: "Qwen3.5 tokenizer (MOSS-Image)",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/resolve/main/tokenizer/tokenizer.json",
+    fallback_urls: &["https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/main/tokenizer/tokenizer.json"],
+    page: "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/tree/main/tokenizer",
+    size: 19_989_325,
+    sha256: "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+    dest: "models/moss-image/tokenizer.json",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// MOSS-Image SFT's image model and text encoder for a hardware preset. Not measured on real
+/// hardware yet: derived from the file sizes with the text encoder in system RAM as for Qwen.
+pub fn moss_files(p: &Preset) -> (Download, Download) {
+    let dit = if p.min_vram_mib >= 14 * 1024 { MOSS_SFT_Q8_0 } else { MOSS_SFT_Q4_K };
+    let te = if p.min_vram_mib >= 28 * 1024 { MOSS_TEXT_ENCODER_Q8_0 } else { MOSS_TEXT_ENCODER_Q4_K_M };
+    (dit, te)
+}
+
+/// Every MOSS-Image file the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const MOSS_DOWNLOADS: &[Download] = &[MOSS_SFT_Q4_K, MOSS_SFT_Q8_0, MOSS_TEXT_ENCODER_Q4_K_M, MOSS_TEXT_ENCODER_Q8_0, MOSS_VAE, MOSS_TOKENIZER];
+
+// ---------------------------------------------------------------------------------------
+// FLUX.3 Image Klein (fork): sd.cpp's docs/flux3.md, pinned from the Hugging Face API on
+// 2026-10-28. FLUX Kommunity License (non-commercial; commercial outputs for qualifying users).
+// Its text encoder is Krea 2's Qwen3-VL 4B file and its VAE MOSS-Image's FLUX.2 file (the same
+// files, downloaded once whichever model comes first).
+// ---------------------------------------------------------------------------------------
+
+/// Folder under the stable-diffusion.cpp folder that holds the FLUX.3 weights.
+pub const FLUX3_SUBDIR: &str = "models/flux3";
+const FLUX3_GGUFS: &str = "https://huggingface.co/leejet/flux-3-image-klein-GGUF/tree/main";
+
+/// FLUX.3 Image Klein, 4-bit (leejet's GGUF, made with stable-diffusion.cpp). 5.6B parameters.
+pub const FLUX3_KLEIN_Q4_K: Download = Download {
+    id: "flux3_klein_q4_k",
+    label: "FLUX.3 Image Klein Q4_K",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/leejet/flux-3-image-klein-GGUF/resolve/main/flux3-image-klein-Q4_K.gguf",
+    fallback_urls: &[],
+    page: FLUX3_GGUFS,
+    size: 3_514_023_104,
+    sha256: "19ddbfbed61da4bb16ebf169aaf48e9e5db43aba557be1ee537e9f00f586092e",
+    dest: "models/flux3/flux3-image-klein-Q4_K.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// FLUX.3 Image Klein, 8-bit: for 16 GB cards and up.
+pub const FLUX3_KLEIN_Q8_0: Download = Download {
+    id: "flux3_klein_q8_0",
+    label: "FLUX.3 Image Klein Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/leejet/flux-3-image-klein-GGUF/resolve/main/flux3-image-klein-Q8_0.gguf",
+    fallback_urls: &[],
+    page: FLUX3_GGUFS,
+    size: 6_151_716_032,
+    sha256: "8b71ffd749bcacbd50cc0acca4f2d31a044c94412743e1e780db99bf13f89752",
+    dest: "models/flux3/flux3-image-klein-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Qwen3-VL 4B's vision projector (Qwen's GGUF): lets Prompt+ look at FLUX.3's reference images.
+/// The image model itself takes the references as latents, without it.
+pub const QWEN3VL_4B_VISION: Download = Download {
+    id: "qwen3vl_4b_vision",
+    label: "Qwen3-VL 4B vision projector",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-4B-Instruct-F16.gguf",
+    fallback_urls: &[],
+    page: KREA2_TE,
+    size: 836_180_256,
+    sha256: "256f3a43bd4205ffef48d6b92715e1e70b5b0e9aef06522584967513a9985331",
+    dest: "models/flux3/mmproj-Qwen3VL-4B-Instruct-F16.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// FLUX.3 Image Klein's image model and (shared) text encoder for a hardware preset. Not measured
+/// on real hardware yet: derived from the file sizes with the text encoder in system RAM.
+pub fn flux3_files(p: &Preset) -> (Download, Download) {
+    let dit = if p.min_vram_mib >= 14 * 1024 { FLUX3_KLEIN_Q8_0 } else { FLUX3_KLEIN_Q4_K };
+    (dit, krea2_files(p).1)
+}
+
+/// The FLUX.3-only files the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const FLUX3_DOWNLOADS: &[Download] = &[FLUX3_KLEIN_Q4_K, FLUX3_KLEIN_Q8_0, QWEN3VL_4B_VISION];
+
+/// Every Krea 2 file the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const KREA2_DOWNLOADS: &[Download] = &[KREA2_TURBO_Q4_K_M, KREA2_TURBO_Q8_0, KREA2_TEXT_ENCODER_Q8_0, KREA2_TEXT_ENCODER_Q4_K_M, KREA2_VAE];
+
 /// Name sd-server knows the upscaler by (its file stem in `--hires-upscalers-dir`).
 pub const UPSCALER_NAME: &str = "4xNomos2_hq_mosr";
 /// Folder of the upscaler, relative to the stable-diffusion.cpp folder.
@@ -764,7 +1042,9 @@ pub fn downloads_for(p: &Preset, backend: GpuBackend, sdcpp_dir: &Path) -> Vec<D
 /// (a piece the user chose to download, or an official file deleted from their folder), each
 /// saved where the profile expects it. Existing files are never replaced, whatever their name.
 pub fn profile_model_downloads(profile: &crate::config::ModelProfile) -> Vec<Download> {
-    let official = [TURBO_Q4_K_M, TURBO_Q4_K, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
+    let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
+    let official: Vec<Download> =
+        qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).collect();
     profile
         .files()
         .into_iter()

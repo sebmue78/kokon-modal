@@ -20,7 +20,7 @@ use axum::{
 use futures_util::stream::Stream;
 use qls_core::{
     catalog,
-    config::{AppConfig, GpuBackend, OFFICIAL_PROFILE_ID, USER_PROFILE_ID},
+    config::{AppConfig, EXTRA_CATALOG_PROFILES, FLUX3_PROFILE_ID, GpuBackend, KREA2_PROFILE_ID, MOSS_PROFILE_ID, OFFICIAL_PROFILE_ID, USER_PROFILE_ID},
     diagnostics,
     engine::{APP_VERSION, JobView, LoraPatch},
     error::{AppError, ErrorCode},
@@ -263,7 +263,12 @@ async fn status(State(s): St) -> Json<Value> {
         },
         "upscaler": { "model": cfg.upscaler().map(|u| u.0).unwrap_or_else(|| cfg.upscaler_model.clone()), "available": cfg.upscaler_file().is_some() },
         "engine": { "release": catalog::engine_tag(), "update_needed": engine_update },
-        "profile": { "id": cfg.profile().id, "display_name": cfg.profile().display_name, "source": cfg.profile().source },
+        "profile": { "id": cfg.profile().id, "display_name": cfg.profile().display_name, "source": cfg.profile().source, "model": cfg.profile().model },
+        // Fork: every model to choose from (top bar picker), and whether its files are all there.
+        "profiles": cfg.profiles.iter().map(|p| json!({
+            "id": p.id, "display_name": p.display_name, "model": p.model, "source": p.source,
+            "installed": p.files().iter().all(|(_, f, required)| !required || f.is_file()),
+        })).collect::<Vec<_>>(),
         "gpu": gpu,
         "active_job": s.engine.active_job(),
         "queue": { "queued": queued, "jobs": jobs.iter().filter(|j| !j.status.is_terminal()).collect::<Vec<_>>() },
@@ -368,9 +373,10 @@ struct InstallBody {
     apply: bool,
     /// Card (index in `/setup/hardware` `gpus`) to run on once the engine is installed.
     gpu: Option<usize>,
-    /// Which files: "official" (the preset's, made active when done) or "user" (the engine
-    /// and what the user's own profile still needs). Default: "official" when `apply`, else
-    /// the active profile's (an engine update never downloads models a user doesn't use).
+    /// Which files: "official" (the preset's, made active when done), "krea2" or "moss" (the
+    /// Krea 2 Turbo or MOSS-Image files for the preset, made active when done) or "user" (the engine and what the
+    /// user's own profile still needs). Default: "official" when `apply`, else the active
+    /// profile's (an engine update never downloads models a user doesn't use).
     target: Option<String>,
 }
 
@@ -384,17 +390,30 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
     let preset = catalog::preset(&b.preset).ok_or_else(|| AppError::invalid(format!("Unknown preset {}.", b.preset)))?;
     let cfg = s.engine.config();
     let backend = b.backend.unwrap_or(cfg.gpu_backend);
-    let user = match b.target.as_deref() {
-        Some("user") => true,
-        Some("official") => false,
-        None => !b.apply && !cfg.profile().is_official(),
+    #[derive(Clone, Copy, PartialEq)]
+    enum Target {
+        Official,
+        /// A catalog model besides Qwen (`EXTRA_CATALOG_PROFILES`): Krea 2, MOSS-Image.
+        Extra(&'static str),
+        User,
+    }
+    let extra = |t: &str| EXTRA_CATALOG_PROFILES.iter().copied().find(|id| *id == t || (t == "krea2" && *id == KREA2_PROFILE_ID) || (t == "moss" && *id == MOSS_PROFILE_ID) || (t == "flux3" && *id == FLUX3_PROFILE_ID));
+    let target = match b.target.as_deref() {
+        Some("user") => Target::User,
+        Some("official") => Target::Official,
+        Some(t) if extra(t).is_some() => Target::Extra(extra(t).unwrap()),
+        None if !b.apply && extra(&cfg.active_profile).is_some() => Target::Extra(extra(&cfg.active_profile).unwrap()),
+        None if !b.apply && !cfg.profile().from_catalog() => Target::User,
+        None => Target::Official,
         Some(t) => return Err(AppError::invalid(format!("Unknown install target {t}.")).into()),
     };
-    let downloads = if user {
-        let u = cfg.user_profile().ok_or_else(|| AppError::invalid("Choose your model files first."))?;
-        catalog::downloads_for_profile(u, backend)
-    } else {
-        catalog::downloads_for(preset, backend, &cfg.sdcpp_dir)
+    let downloads = match target {
+        Target::User => {
+            let u = cfg.user_profile().ok_or_else(|| AppError::invalid("Choose your model files first."))?;
+            catalog::downloads_for_profile(u, backend)
+        }
+        Target::Extra(id) => catalog::downloads_for_profile(&qls_core::config::ModelProfile::extra_catalog(id, &cfg.sdcpp_dir, preset).expect("a catalog profile"), backend),
+        Target::Official => catalog::downloads_for(preset, backend, &cfg.sdcpp_dir),
     };
     // A running server keeps its DLLs open; the engine zip may need to replace them.
     let st = s.engine.server.status();
@@ -416,8 +435,10 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
         }
         let mut c = engine.config();
         c.apply_preset(preset);
-        if !user {
-            c.use_official();
+        match target {
+            Target::Official => c.use_official(),
+            Target::Extra(id) => c.use_extra_catalog(id),
+            Target::User => {}
         }
         c.gpu_backend = backend;
         if backend == GpuBackend::Metal && small_unified {
@@ -438,7 +459,11 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
     // The bundled upscaler first, so it is not downloaded again.
     let e = s.engine.clone();
     let _ = tokio::task::spawn_blocking(move || e.place_bundled_upscaler()).await;
-    let label = if user { format!("user:{}", preset.id) } else { preset.id.to_string() };
+    let label = match target {
+        Target::User => format!("user:{}", preset.id),
+        Target::Extra(id) => format!("{id}:{}", preset.id),
+        Target::Official => preset.id.to_string(),
+    };
     s.engine.installer.start(cfg.sdcpp_dir.clone(), &label, downloads, on_finish)?;
     Ok(Json(serde_json::to_value(s.engine.installer.status()).unwrap()))
 }
@@ -601,7 +626,7 @@ async fn diagnostics_json(State(s): St) -> ApiResult<Json<Value>> {
         let args = qls_core::process::build_server_args(&cfg, cfg.profile());
         let mut text = String::new();
         use std::fmt::Write;
-        let _ = writeln!(text, "Kokon {APP_VERSION} — diagnostics ({})", qls_core::store::now_rfc3339());
+        let _ = writeln!(text, "Kokon Modal {APP_VERSION} — diagnostics ({})", qls_core::store::now_rfc3339());
         let _ = writeln!(text, "\n[GPU]");
         match &gpus {
             Some(g) => {
@@ -638,7 +663,7 @@ async fn diagnostics_json(State(s): St) -> ApiResult<Json<Value>> {
         let _ = writeln!(text, "\n[Configuration]");
         let _ = writeln!(text, "sdcpp dir: {}", cfg.sdcpp_dir.display());
         let official = cfg.profile().is_official();
-        let _ = writeln!(text, "Preset: {}, profile: {} ({})", cfg.hardware_preset, cfg.profile().display_name, if official { "official files" } else { "the user's own files, not tested by Kokon" });
+        let _ = writeln!(text, "Preset: {}, profile: {} ({})", cfg.hardware_preset, cfg.profile().display_name, if official { "official files" } else { "the user's own files, not tested by Kokon Modal" });
         if cfg.vram_override_mib > 0 {
             let _ = writeln!(text, "Simulated VRAM for planning: {} MiB", cfg.vram_override_mib);
         }
@@ -1519,6 +1544,9 @@ async fn models_status(State(s): St) -> ApiResult<Json<Value>> {
             .collect();
         let downloadable: Vec<&str> = catalog::profile_model_downloads(p).iter().map(|d| d.label).collect();
         let official_installed = cfg.profiles.iter().find(|q| q.id == OFFICIAL_PROFILE_ID).is_some_and(|q| q.files().iter().all(|(_, f, _)| f.is_file()));
+        let installed = |id: &str| cfg.profiles.iter().find(|q| q.id == id).is_some_and(|q| q.files().iter().all(|(_, f, _)| f.is_file()));
+        let krea2_installed = installed(KREA2_PROFILE_ID);
+        let catalog_installed: serde_json::Map<String, Value> = EXTRA_CATALOG_PROFILES.iter().map(|id| (id.to_string(), Value::Bool(installed(id)))).collect();
         json!({
             "active": { "id": p.id, "display_name": p.display_name, "source": p.source, "model": p.model },
             "slots": slots,
@@ -1532,6 +1560,10 @@ async fn models_status(State(s): St) -> ApiResult<Json<Value>> {
             "has_user_profile": cfg.user_profile().is_some(),
             "user_installed": cfg.user_profile().is_some_and(|u| u.files().iter().all(|(_, f, _)| f.is_file())),
             "official_installed": official_installed,
+            // Fork: every Krea 2 Turbo file of the preset is there.
+            "krea2_installed": krea2_installed,
+            // Fork: every file of each extra catalog model (Krea 2, MOSS-Image), by profile id.
+            "catalog_installed": catalog_installed,
             "default_download_dir": catalog::join_rel(&cfg.sdcpp_dir, catalog::MODEL_SUBDIR),
             // The texture-fix VAE (#21): in use, or what switching to it downloads.
             "vae": {
@@ -1623,7 +1655,7 @@ async fn models_set_user(State(s): St, Json(b): Json<UserFilesBody>) -> ApiResul
 
 #[derive(Deserialize)]
 struct UseBody {
-    /// "official" or "user".
+    /// "official", "krea2", "moss" or "user".
     profile: String,
 }
 
@@ -1632,6 +1664,13 @@ async fn models_use(State(s): St, Json(b): Json<UseBody>) -> ApiResult<Json<Valu
     let mut cfg = s.engine.config();
     match b.profile.as_str() {
         "official" => cfg.use_official(),
+        "krea2" => cfg.use_krea2(),
+        "moss" => cfg.use_extra_catalog(MOSS_PROFILE_ID),
+        "flux3" => cfg.use_extra_catalog(FLUX3_PROFILE_ID),
+        // Fork: any profile by its id (the top bar picker).
+        id if EXTRA_CATALOG_PROFILES.contains(&id) => cfg.use_extra_catalog(id),
+        OFFICIAL_PROFILE_ID => cfg.use_official(),
+        USER_PROFILE_ID if cfg.user_profile().is_some() => cfg.active_profile = USER_PROFILE_ID.into(),
         "user" if cfg.user_profile().is_some() => cfg.active_profile = USER_PROFILE_ID.into(),
         "user" => return Err(AppError::invalid("Choose your model files first.").into()),
         other => return Err(AppError::invalid(format!("Unknown profile {other}.")).into()),

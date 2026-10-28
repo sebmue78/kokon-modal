@@ -27,7 +27,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
       await api.login(password);
       onSignedIn();
     } catch (err) {
-      setError(err instanceof ApiError ? err.body.message : "Kokon is not reachable.");
+      setError(err instanceof ApiError ? err.body.message : "Kokon Modal is not reachable.");
       setPassword("");
       input.current?.focus();
     } finally {
@@ -38,12 +38,12 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <form className="login" onSubmit={submit}>
       <KokonMark size={48} />
-      <strong>Sign in to Kokon</strong>
+      <strong>Sign in to Kokon Modal</strong>
       {noPassword ? (
-        <span className="muted">No password is set yet. On the computer running Kokon, open Settings → Other devices and set one.</span>
+        <span className="muted">No password is set yet. On the computer running Kokon Modal, open Settings → Other devices and set one.</span>
       ) : (
         <>
-          <span className="muted">Enter the password set on the computer running Kokon. This browser stays signed in.</span>
+          <span className="muted">Enter the password set on the computer running Kokon Modal. This browser stays signed in.</span>
           <input
             ref={input}
             className="input"

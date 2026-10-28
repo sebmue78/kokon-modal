@@ -134,7 +134,7 @@ const BASE_21_FILES: &[(u64, &str)] = &[
 ];
 const FINGERPRINT_BYTES: u64 = 64 << 10;
 
-const BASE_MODEL_WARNING: &str = "This looks like the base Qwen-Image 2.1 model, not Turbo. Kokon always runs 8 steps, which is made for Turbo: with the base model, images come out soft and unfinished. Download the official Turbo file, or choose a Qwen-Image 2.1 Turbo file.";
+const BASE_MODEL_WARNING: &str = "This looks like the base Qwen-Image 2.1 model, not Turbo. Kokon Modal always runs 8 steps, which is made for Turbo: with the base model, images come out soft and unfinished. Download the official Turbo file, or choose a Qwen-Image 2.1 Turbo file.";
 
 /// The first 32 hex digits of the SHA-256 of 64 KiB in the middle of the file.
 fn fingerprint(path: &Path, size: u64) -> std::io::Result<String> {
@@ -204,7 +204,7 @@ fn inspect_with(path: &Path, base_files: &[(u64, &str)]) -> std::io::Result<File
             read_safetensors(path)
         }
         "ckpt" | "pt" | "pth" | "bin" => {
-            info.problem = Some("Kokon only reads .gguf and .safetensors model files (.ckpt, .pt and .bin files can run code when loaded).".into());
+            info.problem = Some("Kokon Modal only reads .gguf and .safetensors model files (.ckpt, .pt and .bin files can run code when loaded).".into());
             return Ok(info);
         }
         _ => {
@@ -262,7 +262,7 @@ fn classify(t: &[Tensor], meta: &HashMap<String, String>, file_name: &str, info:
     }
     if contains("transformer_blocks.") && ends("img_in.weight") {
         info.role = Some(Role::Diffusion);
-        info.problem = Some("This is an older Qwen-Image model, not Qwen-Image 2.1. Kokon needs Qwen-Image 2.1 (Turbo).".into());
+        info.problem = Some("This is an older Qwen-Image model, not Qwen-Image 2.1. Kokon Modal needs Qwen-Image 2.1 (Turbo).".into());
         return;
     }
     if ["double_blocks.", "single_blocks.", "joint_blocks.", "input_blocks.", "transformer_blocks.", "single_transformer_blocks."].iter().any(|s| contains(s)) {
@@ -280,7 +280,7 @@ fn classify(t: &[Tensor], meta: &HashMap<String, String>, file_name: &str, info:
         });
         match post.and_then(|x| x.shape.first().copied()) {
             Some(VAE_LATENT) => info.compatible = true,
-            Some(z) => info.problem = Some(format!("This VAE belongs to another model (latent size {z}). Kokon needs the Qwen-Image 2.1 VAE.")),
+            Some(z) => info.problem = Some(format!("This VAE belongs to another model (latent size {z}). Kokon Modal needs the Qwen-Image 2.1 VAE.")),
             None => info.problem = Some("Not recognized as the Qwen-Image 2.1 VAE.".into()),
         }
         return;
@@ -308,7 +308,7 @@ fn classify(t: &[Tensor], meta: &HashMap<String, String>, file_name: &str, info:
                     info.problem = Some(format!("This is {what}, not the Qwen3-VL 8B text encoder that Qwen-Image 2.1 needs."));
                 }
                 _ if !says_vl => {
-                    info.problem = Some("Kokon can't tell this file from Qwen3 8B, the text-only model used by Flux.2 Klein and by prompt enhancers, which looks the same inside. Qwen-Image 2.1 needs Qwen3-VL 8B: choose a file with \"VL\" in its name, or download the official one.".into());
+                    info.problem = Some("Kokon Modal can't tell this file from Qwen3 8B, the text-only model used by Flux.2 Klein and by prompt enhancers, which looks the same inside. Qwen-Image 2.1 needs Qwen3-VL 8B: choose a file with \"VL\" in its name, or download the official one.".into());
                 }
                 _ => info.compatible = true,
             }

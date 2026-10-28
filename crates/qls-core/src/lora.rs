@@ -96,7 +96,7 @@ struct StFile {
 }
 
 fn read_header(path: &Path) -> AppResult<StFile> {
-    let unreadable = |why: &str| AppError::invalid(format!("This file isn't a LoRA Kokon can read ({why}). Choose a .safetensors LoRA file."));
+    let unreadable = |why: &str| AppError::invalid(format!("This file isn't a LoRA Kokon Modal can read ({why}). Choose a .safetensors LoRA file."));
     let mut f = File::open(path).map_err(|e| AppError::io("open", path, e))?;
     let len = f.metadata().map_err(|e| AppError::io("read", path, e))?.len();
     let mut b = [0u8; 8];
@@ -157,21 +157,43 @@ pub struct LoraCheck {
     pub warning: Option<String>,
 }
 
-/// Checks a LoRA against the diffusion model's tensor shapes (`modelfile::diffusion_tensor_shapes`).
-/// Errors explain why Kokon can't use the file.
+/// Fork: the model a LoRA is checked against and kept for (`ModelProfile::model`), and its name.
+#[derive(Debug, Clone, Copy)]
+pub struct LoraModel<'a> {
+    pub model: &'a str,
+    pub name: &'a str,
+}
+
+impl LoraModel<'_> {
+    /// Qwen-Image 2.1: the layout Kokon's checks and fixes were made for.
+    pub const QWEN: LoraModel<'static> = LoraModel { model: crate::config::QWEN_IMAGE_21, name: "Qwen-Image 2.1" };
+    fn is_qwen(&self) -> bool {
+        self.model == crate::config::QWEN_IMAGE_21
+    }
+}
+
+/// Checks a Qwen-Image 2.1 LoRA against the diffusion model's tensor shapes
+/// (`modelfile::diffusion_tensor_shapes`). Errors explain why Kokon can't use the file.
 pub fn check(lora: &Path, model: &HashMap<String, Vec<u64>>) -> AppResult<LoraCheck> {
+    check_for(lora, model, LoraModel::QWEN)
+}
+
+/// [`check`] for any model. For models other than Qwen-Image 2.1 a LoRA whose layer names don't
+/// match the GGUF's is kept with a warning: the engine converts the common naming schemes
+/// (diffusers, ai-toolkit, kohya) itself when it applies the LoRA, which this check does not.
+pub fn check_for(lora: &Path, model: &HashMap<String, Vec<u64>>, target: LoraModel) -> AppResult<LoraCheck> {
     let ext = lora.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if ext != "safetensors" {
-        return Err(AppError::invalid("Kokon only loads LoRAs in .safetensors files (.ckpt, .pt and .bin files can run code when loaded)."));
+        return Err(AppError::invalid("Kokon Modal only loads LoRAs in .safetensors files (.ckpt, .pt and .bin files can run code when loaded)."));
     }
     let st = read_header(lora)?;
-    check_header(&st, model)
+    check_header(&st, model, target)
 }
 
 /// Down shape, up shape, and whether the module has other (LyCORIS / diff) parts.
 type ModuleParts<'a> = (Option<&'a [u64]>, Option<&'a [u64]>, bool);
 
-fn check_header(st: &StFile, model: &HashMap<String, Vec<u64>>) -> AppResult<LoraCheck> {
+fn check_header(st: &StFile, model: &HashMap<String, Vec<u64>>, target_model: LoraModel) -> AppResult<LoraCheck> {
     let mut modules: HashMap<&str, ModuleParts> = HashMap::new();
     let mut text_encoder = 0usize;
     for t in &st.tensors {
@@ -190,7 +212,7 @@ fn check_header(st: &StFile, model: &HashMap<String, Vec<u64>>) -> AppResult<Lor
     }
     if modules.is_empty() {
         return Err(if text_encoder > 0 {
-            AppError::invalid("This LoRA only changes the text encoder, which Kokon doesn't support. Use a LoRA for the image model.")
+            AppError::invalid("This LoRA only changes the text encoder, which Kokon Modal doesn't support. Use a LoRA for the image model.")
         } else {
             AppError::invalid("No LoRA weights found in this file. Is it a LoRA? Full models and other files go in Settings → Models.")
         });
@@ -242,15 +264,23 @@ fn check_header(st: &StFile, model: &HashMap<String, Vec<u64>>) -> AppResult<Lor
     }
     check.rank = ranks.into_iter().max_by_key(|(r, n)| (*n, *r)).map(|(r, _)| r);
     check.peft_alpha = peft_only_alpha(st);
-    if check.matched == 0 {
-        let why = if wrong_shape > 0 {
-            "This LoRA was made for another model (its layers have other sizes, e.g. Qwen-Image 1.x, 2512 or Edit). On Qwen-Image 2.1 it would do nothing."
-        } else {
-            "None of this LoRA's layers exist in the model Kokon runs (Qwen-Image 2.1), so it would do nothing. It was made for another model."
-        };
-        return Err(AppError::invalid(why));
+    let name = target_model.name;
+    if check.matched == 0 && wrong_shape > 0 {
+        let examples = if target_model.is_qwen() { ", e.g. Qwen-Image 1.x, 2512 or Edit" } else { "" };
+        return Err(AppError::invalid(format!(
+            "This LoRA was made for another model (its layers have other sizes{examples}). On {name} it would do nothing. To load a LoRA for another model, choose that model in the model menu at the top first."
+        )));
     }
-    if check.matched * 10 < check.modules * 9 {
+    if check.matched == 0 && target_model.is_qwen() {
+        return Err(AppError::invalid(
+            "None of this LoRA's layers exist in Qwen-Image 2.1, so it would do nothing. It was made for another model: choose that model in the model menu at the top, then load the LoRA again.",
+        ));
+    }
+    if check.matched == 0 {
+        check.warning = Some(format!(
+            "Kokon Modal can't match this LoRA's layer names to {name}; the engine converts the usual naming schemes itself, so it may still work. Compare images with it on and off; if nothing changes, it was made for another model."
+        ));
+    } else if check.matched * 10 < check.modules * 9 {
         check.warning = Some(format!("Only {} of its {} layers fit the model; its effect may be weaker than intended.", check.matched, check.modules));
     }
     if text_encoder > 0 {
@@ -368,11 +398,15 @@ pub fn new_id(stem: &str, taken: &HashSet<String>, dir: &Path) -> String {
 /// Checks `src` against the active model, writes the copy and returns the new entry (not yet in
 /// the config). `existing` replaces an entry for the same file, keeping its settings.
 pub fn import(cfg: &AppConfig, src: &Path, existing: Option<&LoraEntry>) -> AppResult<LoraEntry> {
-    let model_path = &cfg.profile().diffusion_model;
+    let profile = cfg.profile();
+    let model_path = &profile.diffusion_model;
     let model = crate::modelfile::diffusion_tensor_shapes(model_path).map_err(|e| {
-        AppError::new(ErrorCode::InvalidInput, "Kokon needs its image model to check a LoRA, and couldn't read it.").detail(format!("{}: {e}", model_path.display())).suggest("Finish the setup in Settings → Models first.")
+        AppError::new(ErrorCode::InvalidInput, "Kokon Modal needs the image model in use to check a LoRA, and couldn't read it.")
+            .detail(format!("{}: {e}", model_path.display()))
+            .suggest("Download the model in use first (model menu at the top, or Settings → Models).")
     })?;
-    let checked = check(src, &model)?;
+    let target = LoraModel { model: &profile.model, name: &crate::config::model_name(&profile.model) };
+    let checked = check_for(src, &model, target)?;
     let dir = cfg.lora_dir();
     std::fs::create_dir_all(&dir).map_err(|e| AppError::io("create the LoRA folder", &dir, e))?;
     let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -381,7 +415,14 @@ pub fn import(cfg: &AppConfig, src: &Path, existing: Option<&LoraEntry>) -> AppR
         None => new_id(&stem, &cfg.loras.iter().map(|l| l.id.clone()).collect(), &dir),
     };
     let dest = dir.join(format!("{id}.safetensors"));
-    prepare(src, &dest)?;
+    // The fused gate+up split is Qwen-Image 2.1's layout; other models get a plain copy.
+    if target.is_qwen() {
+        prepare(src, &dest)?;
+    } else {
+        let tmp = dest.with_extension("safetensors.part");
+        std::fs::copy(src, &tmp).map_err(|e| AppError::io("copy the LoRA to", &tmp, e))?;
+        std::fs::rename(&tmp, &dest).map_err(|e| AppError::io("save the LoRA as", &dest, e))?;
+    }
     let mut notes = Vec::new();
     if checked.fused > 0 {
         notes.push(format!("{} fused MLP layers split so the engine applies all of them.", checked.fused));
@@ -394,6 +435,7 @@ pub fn import(cfg: &AppConfig, src: &Path, existing: Option<&LoraEntry>) -> AppR
     Ok(LoraEntry {
         id,
         source: src.to_path_buf(),
+        model: profile.model.clone(),
         size,
         warning: checked.warning,
         notes,
@@ -436,10 +478,18 @@ pub fn resolve(cfg: &AppConfig, requested: Option<&[String]>) -> (Vec<AppliedLor
         }
     };
     let dir = cfg.lora_dir();
+    let active = cfg.profile().model.clone();
     let mut applied = Vec::new();
     for l in chosen {
-        if !dir.join(l.file_name()).is_file() {
-            notes.push(format!("The LoRA \"{}\" is missing from Kokon's LoRA folder; load it again in Settings → LoRA.", l.name));
+        if l.model_or_qwen() != active {
+            notes.push(format!(
+                "The LoRA \"{}\" is for {}, not the model in use ({}); made without it.",
+                l.name,
+                crate::config::model_name(l.model_or_qwen()),
+                crate::config::model_name(&active)
+            ));
+        } else if !dir.join(l.file_name()).is_file() {
+            notes.push(format!("The LoRA \"{}\" is missing from Kokon Modal's LoRA folder; load it again in Settings → LoRA.", l.name));
         } else if applied.len() == MAX_ACTIVE {
             notes.push(format!("At most {MAX_ACTIVE} LoRAs at once; made without \"{}\".", l.name));
         } else if l.weight != 0.0 {
@@ -630,6 +680,48 @@ mod tests {
         assert_eq!(notes, ["The LoRA \"nope\" isn't loaded in Settings → LoRA; made without it."]);
         assert!(resolve(&cfg, Some(&[])).0.is_empty());
         assert_eq!(request_entries(&on)[1], crate::sdcpp::LoraParam { path: "film.safetensors".into(), multiplier: 0.7 });
+    }
+
+    #[test]
+    fn other_models_keep_unmatched_names_with_a_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        // Diffusers names the check can't map onto the GGUF: Qwen refuses, other models keep it.
+        let src = dir.path().join("flux.safetensors");
+        write_lora(&src, &[("transformer.single_blocks.0.linear1.lora_A.weight", &[4, 8]), ("transformer.single_blocks.0.linear1.lora_B.weight", &[8, 4])], serde_json::json!({}));
+        assert!(check(&src, &model()).is_err());
+        let flux = LoraModel { model: crate::config::FLUX3_KLEIN, name: "FLUX.3 Image Klein" };
+        let c = check_for(&src, &model(), flux).unwrap();
+        assert!(c.warning.unwrap().contains("can't match this LoRA's layer names to FLUX.3 Image Klein"));
+        // Wrong sizes stay an error for every model, with that model's name.
+        let old = dir.path().join("old.safetensors");
+        write_lora(&old, &[("transformer_blocks.0.attn.to_q.lora_A.weight", &[4, 6]), ("transformer_blocks.0.attn.to_q.lora_B.weight", &[6, 4])], serde_json::json!({}));
+        let e = check_for(&old, &model(), flux).unwrap_err().message;
+        assert!(e.contains("On FLUX.3 Image Klein it would do nothing") && !e.contains("Qwen-Image 1.x"), "{e}");
+        // A text-encoder-only file is refused whatever the model.
+        let te = dir.path().join("te.safetensors");
+        write_lora(&te, &[("lora_te_layer.lora_down.weight", &[4, 8]), ("lora_te_layer.lora_up.weight", &[8, 4])], serde_json::json!({}));
+        assert!(check_for(&te, &model(), flux).unwrap_err().message.contains("text encoder"));
+    }
+
+    #[test]
+    fn only_the_active_models_loras_are_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut cfg = AppConfig { sdcpp_dir: dir.path().to_path_buf(), ..AppConfig::default() };
+        let flux = LoraEntry { model: crate::config::FLUX3_KLEIN.into(), ..entry("klein-style", true, 1.0, "") };
+        // An entry from before models had their own LoRAs: Qwen-Image 2.1's.
+        cfg.loras = vec![entry("qwen-style", true, 1.0, ""), flux];
+        std::fs::create_dir_all(cfg.lora_dir()).unwrap();
+        for id in ["qwen-style", "klein-style"] {
+            std::fs::write(cfg.lora_dir().join(format!("{id}.safetensors")), b"x").unwrap();
+        }
+        let both = ["qwen-style".to_string(), "klein-style".to_string()];
+        let (on, notes) = resolve(&cfg, Some(&both));
+        assert_eq!(on.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(), ["qwen-style"]);
+        assert!(notes[0].contains("\"KLEIN-STYLE\" is for FLUX.3 Image Klein, not the model in use (Qwen-Image 2.1)"), "{notes:?}");
+        cfg.use_extra_catalog(crate::config::FLUX3_PROFILE_ID);
+        let (on, notes) = resolve(&cfg, Some(&both));
+        assert_eq!(on.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(), ["klein-style"]);
+        assert!(notes[0].contains("is for Qwen-Image 2.1"), "{notes:?}");
     }
 
     #[test]

@@ -688,7 +688,7 @@ pub fn bundle_dir() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
     let lib = dir.join("..").join("lib");
-    [dir.join("bundled"), dir.join("..").join("Resources").join("bundled"), lib.join("Kokon").join("bundled"), lib.join("kokon").join("bundled")].into_iter().find(|p| p.is_dir())
+    [dir.join("bundled"), dir.join("..").join("Resources").join("bundled"), lib.join("Kokon Modal").join("bundled"), lib.join("kokon-modal").join("bundled")].into_iter().find(|p| p.is_dir())
 }
 
 /// Copies `d` from the app's bundle into the stable-diffusion.cpp folder when it is missing

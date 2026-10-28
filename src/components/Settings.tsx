@@ -11,28 +11,56 @@ import { LoraSettings } from "./LoraSettings";
 import { RemoteAccess } from "./RemoteAccess";
 import { UpscalerControls } from "./Upscalers";
 import { WHATS_NEW_VERSION } from "./WhatsNew";
+import { FORK_REPO_URL, UPSTREAM_AUTHOR, UPSTREAM_REPO_URL } from "../lib/fork";
+
+/** Fork: catalog models besides Qwen, by profile id (qls-core `EXTRA_CATALOG_PROFILES`). */
+const TEXT_ONLY = "Text to image, plus brushed changes and Expand as plain inpainting. Whole-photo edits and combining images need Qwen-Image 2.1 or FLUX.3.";
+const EXTRA_MODELS: Record<string, { name: string; about: string; target: "flux3" | "krea2" | "moss" }> = {
+  "flux-3-image-klein": {
+    name: "FLUX.3 Image Klein",
+    about:
+      "Black Forest Labs' 5.6B model, 16 steps: new images, edits of a whole photo and combining up to 10 images; brushed changes are plain inpainting. Turn on Prompt+ for best results. FLUX Kommunity License: non-commercial use, commercial outputs only for qualifying users.",
+    target: "flux3",
+  },
+  "krea-2-turbo": { name: "Krea 2 Turbo", about: `Krea's 12.9B model, 8 steps, up to 2K (Krea 2 Community License). ${TEXT_ONLY}`, target: "krea2" },
+  "moss-image-sft": { name: "MOSS-Image SFT", about: `OpenMOSS's 5B model, 20 steps with CFG, negative prompts work (Apache-2.0). ${TEXT_ONLY}`, target: "moss" },
+};
 import type { AppConfig, Check, InstallStatus, MacBenchState, ModelProfile, ModelsStatus, SetupReport, TextEncoderPlacement } from "../lib/types";
 import { IconButton, Seg, Switch } from "./ui";
 import { autoCheckEnabled, checkForUpdate } from "../lib/updates";
 
-const REPO_URL = "https://github.com/GabrieleLozupone/kokon";
+const REPO_URL = FORK_REPO_URL;
 const SUPPORT_URL = "https://kokon.app/support/";
 /** Where testers paste their Mac engine bench report. */
 const BENCH_DISCUSSION_URL = "https://github.com/GabrieleLozupone/kokon/discussions/43";
 
-/** Top of Settings → General: where Kokon lives. */
+/** Top of Settings → General: where Kokon Modal lives, and the original it is based on. */
 export function RepoCard() {
   return (
-    <div className="repo-card">
-      <GitHubMark />
-      <div className="body">
-        <strong>Kokon is open source</strong>
-        <span className="muted">Code, issues and discussions are on GitHub. A star helps other people find it.</span>
+    <>
+      <div className="repo-card">
+        <GitHubMark />
+        <div className="body">
+          <strong>Kokon Modal is open source</strong>
+          <span className="muted">A fork of Kokon that adds FLUX.3 Image Klein, Krea 2 and MOSS-Image. Code and issues are on GitHub.</span>
+        </div>
+        <button className="btn primary" onClick={() => native.openLink(REPO_URL).catch(toastError)}>
+          Open GitHub
+        </button>
       </div>
-      <button className="btn primary" onClick={() => native.openLink(REPO_URL).catch(toastError)}>
-        Open GitHub
-      </button>
-    </div>
+      <div className="repo-card">
+        <GitHubMark />
+        <div className="body">
+          <strong>Based on Kokon</strong>
+          <span className="muted">
+            Kokon by {UPSTREAM_AUTHOR} is the original app this one is built on (AGPL-3.0). Its own releases, guides and discussions are on its GitHub page.
+          </span>
+        </div>
+        <button className="btn" onClick={() => native.openLink(UPSTREAM_REPO_URL).catch(toastError)}>
+          Open Kokon
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -43,7 +71,7 @@ export function SupportCard() {
       <Heart size={22} className="support-mark" aria-hidden />
       <div className="body">
         <strong>Support Kokon</strong>
-        <span className="muted">Kokon is free and made by one person. If it's useful to you, a tip helps keep it that way.</span>
+        <span className="muted">Kokon, the app Kokon Modal is built on, is free and made by one person, {UPSTREAM_AUTHOR}. If it's useful to you, a tip helps keep it that way.</span>
       </div>
       <button className="btn" onClick={() => native.openLink(SUPPORT_URL).catch(toastError)}>
         Support
@@ -73,7 +101,7 @@ function PathField(props: { label: string; value: string; onChange: (v: string) 
     return (
       <div className="field">
         <span>{props.label}</span>
-        <span className="muted">{props.value || "—"} (on the computer running Kokon)</span>
+        <span className="muted">{props.value || "—"} (on the computer running Kokon Modal)</span>
       </div>
     );
   }
@@ -110,7 +138,7 @@ function EnhancerPrompt(props: { label: string; help: string; value: string; bui
         <span style={{ flex: 1 }}>
           {props.label} <span className="muted">· {custom ? "your instructions" : "built-in"}</span>
         </span>
-        <button className="btn" disabled={!custom} onClick={() => props.onChange("")} title="Go back to Kokon's built-in instructions">
+        <button className="btn" disabled={!custom} onClick={() => props.onChange("")} title="Go back to Kokon Modal's built-in instructions">
           <RotateCcw size={13} /> Restore default
         </button>
       </div>
@@ -201,7 +229,7 @@ function MacBench({ blocked }: { blocked: string | null }) {
               Share on GitHub
             </button>
           </div>
-          <span className="muted">Paste the report in the GitHub discussion: it shows which paths suit this chip. Nothing is sent by Kokon.</span>
+          <span className="muted">Paste the report in the GitHub discussion: it shows which paths suit this chip. Nothing is sent by Kokon Modal.</span>
           <pre className="diag" style={{ maxHeight: 260 }}>{report}</pre>
         </>
       )}
@@ -447,7 +475,7 @@ export function Settings() {
               <span className="muted" style={{ marginTop: -10 }}>Applies to MCP and API use without the desktop window. 0 keeps it loaded.</span>
               {inBrowser ? (
                 <div className="field-row">
-                  <span>Kokon {appVersion} on the computer running it. It updates there.</span>
+                  <span>Kokon Modal {appVersion} on the computer running it. It updates there.</span>
                   <button className="btn" onClick={() => api.logout().then(() => location.reload(), toastError)}>
                     Sign out
                   </button>
@@ -462,7 +490,7 @@ export function Settings() {
                     Only asks GitHub for the latest version number; nothing about you or your images is sent. Updates install when you click them.
                   </span>
                   <div className="field-row">
-                    <span>You have Kokon {appVersion}</span>
+                    <span>You have Kokon Modal {appVersion}</span>
                     <button className="btn" onClick={() => checkForUpdate(true)}>
                       Check now
                     </button>
@@ -470,13 +498,13 @@ export function Settings() {
                 </>
               )}
               <div className="field-row">
-                <span>What's new in Kokon {WHATS_NEW_VERSION}</span>
+                <span>What's new in Kokon Modal {WHATS_NEW_VERSION}</span>
                 <button className="btn" onClick={() => setState({ overlay: "whats-new" })}>
                   Show
                 </button>
               </div>
               <div className="field-row">
-                <span>Welcome screen: what Kokon is and how it keeps your work private</span>
+                <span>Welcome screen: what Kokon Modal is and how it keeps your work private</span>
                 <button className="btn" onClick={() => setState({ overlay: "welcome" })}>
                   Show
                 </button>
@@ -496,7 +524,7 @@ export function Settings() {
               </span>
               <div className="setting-card" style={{ alignItems: "flex-start" }}>
                 <span className="muted">
-                  Kokon was tested only with its built-in instructions. Your own can make results worse, or make the model answer with something that is not a prompt; Restore
+                  Kokon Modal was tested only with its built-in instructions. Your own can make results worse, or make the model answer with something that is not a prompt; Restore
                   default brings the built-in ones back.
                 </span>
               </div>
@@ -534,7 +562,7 @@ export function Settings() {
               <div className="setting-card">
                 <div className="setting-card-text">
                   <strong>Model setup</strong>
-                  <span className="muted">Downloads the official Qwen-Image 2.1 weights for your graphics card, uses model files you already have, or switches between the 12, 16, 24 and 32 GB presets.</span>
+                  <span className="muted">Downloads the official Qwen-Image 2.1 weights for your graphics card, uses Qwen-Image 2.1 files you already have, or switches between the 8, 12, 16, 24 and 32 GB presets. FLUX.3, Krea 2 and MOSS-Image are chosen under Model below or in the model menu at the top.</span>
                 </div>
                 <button
                   className="btn primary"
@@ -561,17 +589,50 @@ export function Settings() {
               ) : (
                 <span className="muted">Model: {profile.displayName}</span>
               )}
-              {profile.source === "official" ? (
+              {EXTRA_MODELS[profile.id] ? (
+                // Fork: a catalog model besides Qwen (Krea 2, MOSS-Image), downloaded on demand into its own folder.
+                <div className="setting-card">
+                  <div className="setting-card-text">
+                    <strong>{EXTRA_MODELS[profile.id].name}</strong>
+                    <span className="muted">
+                      {EXTRA_MODELS[profile.id].about}{" "}
+                      {ms?.catalog_installed?.[profile.id] ? "Downloaded." : "Not downloaded yet."}
+                    </span>
+                    <details className="model-files">
+                      <summary>Files</summary>
+                      {[profile.diffusionModel, profile.vae, profile.textEncoder, profile.tokenizer].filter(Boolean).map((p) => (
+                        <span key={p}>{p}</span>
+                      ))}
+                    </details>
+                  </div>
+                  {ms && !ms.catalog_installed?.[profile.id] && (
+                    <button
+                      className="btn primary"
+                      onClick={async () => {
+                        if (dirty && !window.confirm(`Discard the unsaved changes and download ${EXTRA_MODELS[profile.id].name}?`)) return;
+                        try {
+                          await api.install(cfg.hardwarePreset, cfg.gpuBackend, true, undefined, EXTRA_MODELS[profile.id].target);
+                          openModelSetup(null);
+                        } catch (e) {
+                          toastError(e);
+                        }
+                      }}
+                    >
+                      <Download size={15} /> Download…
+                    </button>
+                  )}
+                </div>
+              ) : profile.source === "official" ? (
                 // The official files follow the install folder and preset; own files get their own profile.
                 <div className="setting-card">
                   <div className="setting-card-text">
                     <strong>Official model</strong>
                     <span className="muted">
                       {ms === null
-                        ? "Qwen-Image 2.1 Turbo, tested with Kokon."
+                        ? "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial)."
                         : ms.official_installed
-                          ? "Qwen-Image 2.1 Turbo, tested with Kokon. Downloaded."
-                          : "Qwen-Image 2.1 Turbo, tested with Kokon. Not downloaded into this folder yet: Download… gets it, or use model files you already have."}
+                          ? "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial). Downloaded."
+                          : "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial). Not downloaded into this folder yet: Download… gets it, or use model files you already have."}
                     </span>
                     <details className="model-files">
                       <summary>Files</summary>
@@ -607,7 +668,7 @@ export function Settings() {
                 </div>
               ) : (
                 <>
-                  <span className="muted">Your own files: not tested by Kokon. Set up models… checks them and finds them again if they move.</span>
+                  <span className="muted">Your own files: not tested by Kokon Modal. Set up models… checks them and finds them again if they move.</span>
                   <PathField label="Diffusion model" value={profile.diffusionModel} onChange={(v) => setProfile({ diffusionModel: v })} />
                   <PathField label="VAE" value={profile.vae} onChange={(v) => setProfile({ vae: v })} />
                   <PathField label="Text encoder (Qwen3-VL)" value={profile.textEncoder} onChange={(v) => setProfile({ textEncoder: v })} />
@@ -620,8 +681,8 @@ export function Settings() {
                     <strong>Image model file</strong>
                     <span className="muted">
                       {ms.dit.update === "official"
-                        ? "Kokon now uses unsloth's Q4_K_M of the image model: better supported, slightly better, the same 4-bit size. Switching downloads it and deletes the old file from Kokon's folder."
-                        : "Your image model is the Q4_K file Kokon used before. Kokon now uses unsloth's Q4_K_M: better supported, slightly better, the same 4-bit size. Switching downloads it into Kokon's folder; your own file stays where it is."}
+                        ? "Kokon Modal now uses unsloth's Q4_K_M of the image model: better supported, slightly better, the same 4-bit size. Switching downloads it and deletes the old file from Kokon Modal's folder."
+                        : "Your image model is the Q4_K file Kokon Modal used before. Kokon Modal now uses unsloth's Q4_K_M: better supported, slightly better, the same 4-bit size. Switching downloads it into Kokon Modal's folder; your own file stays where it is."}
                     </span>
                     {ditProgress !== null && (
                       <div className="progress" style={{ marginTop: 6 }}>
@@ -641,7 +702,7 @@ export function Settings() {
                     <span className="muted">
                       {ms.vae.improved
                         ? "The new decoder: no fine grid pattern on skin, hair and smooth areas."
-                        : "A new decoder removes the fine grid pattern on skin, hair and smooth areas, with the same speed and colours. Switching downloads it and deletes the old one from Kokon's folder" +
+                        : "A new decoder removes the fine grid pattern on skin, hair and smooth areas, with the same speed and colours. Switching downloads it and deletes the old one from Kokon Modal's folder" +
                           (profile.source === "official" ? "." : "; your own VAE file stays where it is.")}
                     </span>
                     {vaeProgress !== null && (
@@ -676,7 +737,7 @@ export function Settings() {
                 <div className="setting-card">
                   <div className="setting-card-text">
                     <strong>Upscaler files not in use</strong>
-                    <span className="muted">{legacy.files.map((f) => f.split(/[\\/]/).pop()).join(", ")}: not the selected model. Only Kokon's own folder is checked.</span>
+                    <span className="muted">{legacy.files.map((f) => f.split(/[\\/]/).pop()).join(", ")}: not the selected model. Only Kokon Modal's own folder is checked.</span>
                   </div>
                   <button className="btn" onClick={removeLegacy}>
                     <Trash2 size={15} /> Delete ({formatBytes(legacy.bytes)})
@@ -697,7 +758,7 @@ export function Settings() {
                 <Switch on={!!cfg.macEngine} onChange={(v) => set({ macEngine: v })} />
               </div>
               <span className="muted" style={{ marginTop: -10 }}>
-                Kokon's own engine for Apple Silicon: the GPU, the CPU's matrix unit and the Neural Engine work together, about 4 times faster. New images, edits, brushed edits, extending and Prompt+ work on it; LoRAs and the upscaler model still need it off.
+                Kokon's own engine for Apple Silicon: the GPU, the CPU's matrix unit and the Neural Engine work together, about 4 times faster. New images, edits, brushed edits, extending and Prompt+ work on it, with Qwen-Image 2.1 only (FLUX.3, Krea 2 and MOSS-Image use the standard engine); LoRAs and the upscaler model still need it off.
               </span>
               {!inBrowser && <MacBench blocked={dirty ? "Save or discard your changes first" : !cfg.macEngine ? "Turn on Kokon's Mac engine and save first" : null} />}
               {!cfg.macEngine && (

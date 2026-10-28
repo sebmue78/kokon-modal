@@ -51,7 +51,7 @@ export async function checkForUpdate(manual = false): Promise<void> {
       pending = u;
       setState({ update: { version: u.version, notes: u.body ?? "", phase: "available", progress: null } });
     } else if (manual) {
-      toastInfo("Kokon is up to date.");
+      toastInfo("Kokon Modal is up to date.");
     }
   } catch (e) {
     // Offline, or no release published yet: silent for the automatic check.

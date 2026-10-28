@@ -24,8 +24,8 @@ export const UPSCALER_NOTES: Record<string, { key: string; label: string; text: 
     key: "mosr",
     label: "MoSR (experimental)",
     text: isMac
-      ? "Included with Kokon and the fastest AI upscaler on a Mac (about half a minute per megapixel on an M2 Pro), but on clean images enlarged less than about 3× it draws a fine grid pattern."
-      : "Included with Kokon and the fastest. Good for big enlargements (4×), but on clean images enlarged less than about 3× it draws a fine grid pattern.",
+      ? "Included with Kokon Modal and the fastest AI upscaler on a Mac (about half a minute per megapixel on an M2 Pro), but on clean images enlarged less than about 3× it draws a fine grid pattern."
+      : "Included with Kokon Modal and the fastest. Good for big enlargements (4×), but on clean images enlarged less than about 3× it draws a fine grid pattern.",
   },
   "4x-UltraSharp": {
     key: "ultrasharp",

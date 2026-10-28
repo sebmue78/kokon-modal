@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Kokon",
-  "mainBinaryName": "Kokon",
+  "productName": "Kokon Modal",
+  "mainBinaryName": "KokonModal",
   "version": "0.11.1",
-  "identifier": "app.kokon.desktop",
+  "identifier": "app.kokonmodal.desktop",
   "build": {
     "beforeDevCommand": "npm run bundled && node scripts/dev/sidecars.mjs && npm run dev",
     "devUrl": "http://localhost:1420",
@@ -15,7 +15,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Kokon",
+        "title": "Kokon Modal",
         "width": 1320,
         "height": 880,
         "minWidth": 960,
@@ -35,9 +35,9 @@
     "targets": [
       "nsis"
     ],
-    "publisher": "Kokon",
+    "publisher": "Kokon Modal",
     "shortDescription": "Create and edit images by describing them, on your own GPU",
-    "longDescription": "Kokon creates and edits images from a sentence, privately on your own GPU, with Qwen-Image 2.1 via stable-diffusion.cpp. Everything runs on this PC.",
+    "longDescription": "Kokon Modal, based on Kokon (github.com/GabrieleLozupone/kokon), creates and edits images from a sentence, privately on your own GPU, with Qwen-Image 2.1, FLUX.3 Image Klein, Krea 2 or MOSS-Image via stable-diffusion.cpp. Everything runs on this PC.",
     "category": "Graphics and Design",
     "icon": [
       "icons/32x32.png",
@@ -67,7 +67,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZEOTYyMjkyRkI1MTQzREQKUldUZFExSDdraUtXL2ZXWWcrNnhNVGZuTnp2UFFrRk1XMFR0em1IWURmcmVEUlJ2bnVscDBCaC8K",
       "endpoints": [
-        "https://github.com/GabrieleLozupone/kokon/releases/latest/download/latest.json"
+        "https://github.com/sebmue78/kokon-modal/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

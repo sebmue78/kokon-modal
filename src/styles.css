@@ -577,8 +577,8 @@ pre.diag { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font
 .setup-file:first-child { border-top: 0; }
 .setup-file .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .setup-file .state { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.setup-file.present, .setup-file.done { color: var(--text-2); }
-.setup-file.failed .state { color: var(--text); font-weight: 600; }
+.setup-file.is-present, .setup-file.is-done { color: var(--text-2); }
+.setup-file.is-failed .state { color: var(--text); font-weight: 600; }
 .setup-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .btn.big { height: 42px; padding: 0 20px; font-size: 14px; border-radius: 12px; }
 .btn.ghost { background: transparent; color: var(--text-2); }
@@ -1093,3 +1093,39 @@ kbd { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; display
   .gallery-bar { padding: 0 10px 10px; flex-wrap: wrap; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; padding: 4px 10px calc(20px + env(safe-area-inset-bottom)); }
 }
+
+/* Fork: "Based on Kokon" credit under the title of the welcome and setup screens. */
+.based-on {
+  display: block;
+  margin-top: -6px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.based-on a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.based-on a:hover {
+  color: var(--text);
+}
+.wordmark .based-on-tag {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  opacity: 0.55;
+}
+
+/* Fork: the model picker in the top bar, next to the status capsule. A native select laid over a
+   capsule, so the menu is the system's (keyboard and screen readers work as usual). */
+.model-picker { position: relative; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 11px; margin-right: 6px; border-radius: 999px; background: var(--bg); box-shadow: var(--lift); color: var(--text); font-size: 12.5px; cursor: pointer; }
+.model-picker:hover { background: var(--surface-2); }
+.model-picker:has(select:disabled) { opacity: 0.6; cursor: default; }
+.model-picker:has(select:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
+.model-picker-name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-picker select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: inherit; font-size: 13px; }
+
+/* Fork: Settings → LoRA, one group per model. */
+.lora-group { display: flex; flex-direction: column; gap: 10px; }
+.lora-group-title { font-size: 13px; font-weight: 600; color: var(--text); margin-top: 6px; }
+.lora-group-title .muted { font-weight: 400; }

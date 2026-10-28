@@ -1,5 +1,5 @@
 //! Persistent configuration and model profiles. Stored as JSON in
-//! `%APPDATA%\Kokon\config.json`; every field has a default so older or
+//! `%APPDATA%\Kokon Modal\config.json`; every field has a default so older or
 //! partial files keep loading.
 
 use std::path::{Path, PathBuf};
@@ -8,17 +8,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, ErrorCode};
 
-pub const APP_NAME: &str = "Kokon";
-/// Folder names before the app was renamed Kokon (2026-10-08); moved on first start.
-const LEGACY_CONFIG_DIR: &str = "Qwen Local Studio";
-const LEGACY_DATA_DIR: &str = "QwenLocalStudio";
-/// Distinct from the installer's program folder `%LOCALAPPDATA%\Kokon`, so uninstalling
+/// Fork: Kokon Modal is its own app next to Kokon (the original, github.com/GabrieleLozupone/kokon):
+/// its own folders and ports, so both can be installed and run at the same time.
+pub const APP_NAME: &str = "Kokon Modal";
+/// Kokon renamed its folders from Qwen Local Studio's; Kokon Modal never had other names, and it
+/// must never move Kokon's folders, so "legacy" is its own name (nothing to migrate).
+const LEGACY_CONFIG_DIR: &str = APP_NAME;
+const LEGACY_DATA_DIR: &str = DATA_DIR_NAME;
+/// Distinct from the installer's program folder `%LOCALAPPDATA%\Kokon Modal`, so uninstalling
 /// never touches the gallery or the models.
-pub const DATA_DIR_NAME: &str = "KokonData";
-pub const DEFAULT_SERVER_PORT: u16 = 39150;
-pub const DEFAULT_SERVICE_PORT: u16 = 39151;
+pub const DATA_DIR_NAME: &str = "KokonModalData";
+/// Kokon uses 39150-39152; Kokon Modal 39160-39162, so neither talks to the other's servers.
+pub const DEFAULT_SERVER_PORT: u16 = 39160;
+pub const DEFAULT_SERVICE_PORT: u16 = 39161;
 /// Port for access from other devices (`remote_access`); the token API stays on loopback.
-pub const DEFAULT_REMOTE_PORT: u16 = 39152;
+pub const DEFAULT_REMOTE_PORT: u16 = 39162;
 /// Schema 8 (2026-10-12): the upscalers folder setting is gone (always `<sdcpp>/models/upscalers`)
 /// and ESRGAN tile sizes reset to automatic.
 /// Schema 9 (2026-10-16, #14): profiles record their model and source; model paths edited by
@@ -45,9 +49,31 @@ pub const UPSCALER_EXTENSIONS: &[&str] = &["pth", "safetensors", "gguf", "pt"];
 pub const OFFICIAL_PROFILE_ID: &str = "qwen-image-2.1";
 /// Profile id of Qwen-Image 2.1 files the user already had (#14): one per model.
 pub const USER_PROFILE_ID: &str = "qwen-image-2.1-user";
-/// The model a profile's files are (`ModelProfile::model`). Today the only one; future model
-/// definitions (strategy, presets, prompts) will be looked up by this id.
+/// The model a profile's files are (`ModelProfile::model`).
 pub const QWEN_IMAGE_21: &str = "qwen-image-2.1";
+/// Krea 2 Turbo (krea/Krea-2-Turbo, Krea 2 Community License): a 12.9B text-to-image DiT with
+/// Qwen3-VL 4B as text encoder and the Wan 2.1 VAE, supported by stable-diffusion.cpp since
+/// master-721 (leejet/stable-diffusion.cpp#1705). Text to image only: it has no reference-image
+/// editing, so brushed edits and Expand run as plain masked inpainting.
+pub const KREA2_TURBO: &str = "krea-2-turbo";
+/// Profile id of the Krea 2 Turbo files from the catalog (always listed, downloaded on demand).
+pub const KREA2_PROFILE_ID: &str = "krea-2-turbo";
+/// MOSS-Image SFT (OpenMOSS-Team/MOSS-Image-SFT, Apache-2.0): a 5B text-to-image DiT with
+/// Qwen3.5 9B as text encoder (plus its own `tokenizer.json`) and the FLUX.2 VAE, supported by
+/// stable-diffusion.cpp (docs/moss_image.md). Not distilled: 20 steps at CFG 3. Text to image
+/// only, like Krea 2.
+pub const MOSS_IMAGE_SFT: &str = "moss-image-sft";
+/// Profile id of the MOSS-Image SFT files from the catalog (always listed, downloaded on demand).
+pub const MOSS_PROFILE_ID: &str = "moss-image-sft";
+/// FLUX.3 Image Klein (black-forest-labs/flux-3-image-klein, FLUX Kommunity License: non-commercial,
+/// with a commercial-output exception for qualifying users): a 5.6B distilled DiT for text to image,
+/// edits and multi-reference compositions (up to 10 references, passed to the DiT as latents), with
+/// Qwen3-VL 4B as text encoder (Krea 2's file) and the FLUX.2 VAE (MOSS-Image's file). 16 steps, no CFG.
+pub const FLUX3_KLEIN: &str = "flux-3-image-klein";
+/// Profile id of the FLUX.3 Image Klein files from the catalog (always listed, downloaded on demand).
+pub const FLUX3_PROFILE_ID: &str = "flux-3-image-klein";
+/// Models from the catalog besides Qwen-Image 2.1, in the order Settings lists them.
+pub const EXTRA_CATALOG_PROFILES: &[&str] = &[FLUX3_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
 
 /// Where the text encoder's weights live. Compute always runs on the selected GPU except
 /// for `Cpu`, which also computes on the CPU (slow for image editing, measured ~35×).
@@ -138,8 +164,9 @@ pub enum RefineMode {
     Best,
 }
 
-/// Per-model planning settings. Sampling itself is fixed by the Turbo model: its 8-step
-/// schedule (`planner::TURBO_SIGMAS`) at CFG 1.
+/// Per-model planning settings. Sampling is fixed by the model's distilled schedule at CFG 1:
+/// Qwen-Image 2.1 Turbo's saved 8 sigmas (`planner::TURBO_SIGMAS`), or the server's own
+/// schedule for models without saved sigmas (Krea 2 Turbo).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RecommendedSettings {
@@ -151,6 +178,26 @@ pub struct RecommendedSettings {
     pub align: u32,
     pub max_side: u32,
     pub max_references: u32,
+    /// Denoising steps of every diffusion job.
+    pub steps: u32,
+    /// Send Qwen-Image 2.1 Turbo's saved schedule (`planner::TURBO_SIGMAS`); otherwise the
+    /// server picks its schedule for the model (Krea 2: flow shift 1.15, its default).
+    pub turbo_sigmas: bool,
+    /// The model edits from reference images (`<image1>` prompts, Qwen-Image Edit style).
+    /// Without it, brushed edits and Expand are plain masked inpainting and whole-image edits,
+    /// combines and new images from references are not available.
+    pub reference_edits: bool,
+    /// Qwen-Image 2.1's prompt formats: brushed edits as an instruction with a marked guide image
+    /// (`<image1>`/`<image2>`), and its RGBA wording for transparency. Other models get plain
+    /// masked inpainting and the prompt as written.
+    pub qwen_prompts: bool,
+    /// Prompt+ can show the input images to the text encoder. The engine turns the text encoder's
+    /// vision part on only for some models (Qwen-Image 2.1, not FLUX.3 Image Klein or Krea 2): for
+    /// the others Prompt+ rewrites edits from the words alone (`enhancer::EDIT_BLIND_SYSTEM_PROMPT`).
+    pub prompt_vision: bool,
+    /// Classifier-free guidance; 1 = off (distilled Turbo models). Above 1 the negative prompt
+    /// is used.
+    pub cfg_scale: f32,
 }
 
 impl Default for RecommendedSettings {
@@ -158,7 +205,87 @@ impl Default for RecommendedSettings {
         // Official Qwen-Image 2.1 Turbo settings (Qwen/Qwen-Image-2.1-Turbo model card): its
         // saved 8-step schedule with flow-matching Euler, no CFG, native 2K buckets. The
         // presets differ only in size: ~1 MP, 1.5K and native 2K.
-        Self { sampler: "euler".into(), area_fast: 1024 * 1024, area_balanced: 1536 * 1536, area_quality: 2048 * 2048, align: 32, max_side: 4096, max_references: 10 }
+        Self {
+            sampler: "euler".into(),
+            area_fast: 1024 * 1024,
+            area_balanced: 1536 * 1536,
+            area_quality: 2048 * 2048,
+            align: 32,
+            max_side: 4096,
+            max_references: 10,
+            steps: 8,
+            turbo_sigmas: true,
+            reference_edits: true,
+            qwen_prompts: true,
+            prompt_vision: true,
+            cfg_scale: 1.0,
+        }
+    }
+}
+
+impl RecommendedSettings {
+    /// Krea 2 Turbo (krea/Krea-2-Turbo README and sd.cpp's server defaults): 8 steps, CFG off
+    /// (sd.cpp's cfg 1), Euler, mu 1.15 (the server's default flow shift for Krea 2), trained
+    /// for ~1K to 2K outputs with sizes a multiple of 16. One input image at most: the source of
+    /// a brushed edit or an Expand.
+    pub fn krea2_turbo() -> Self {
+        Self {
+            sampler: "euler".into(),
+            area_fast: 1024 * 1024,
+            area_balanced: 1536 * 1536,
+            area_quality: 2048 * 2048,
+            align: 16,
+            max_side: 2048,
+            max_references: 1,
+            steps: 8,
+            turbo_sigmas: false,
+            reference_edits: false,
+            qwen_prompts: false,
+            prompt_vision: false,
+            cfg_scale: 1.0,
+        }
+    }
+
+    /// MOSS-Image SFT (sd.cpp's docs/moss_image.md and server defaults): 20 steps at CFG 3,
+    /// Euler, the server's discrete schedule with time shift 5, sizes a multiple of 16, trained
+    /// at ~1 MP. The larger tiers are not measured yet: 1.25K and 1.5K rather than Qwen's 2K.
+    pub fn moss_image() -> Self {
+        Self {
+            sampler: "euler".into(),
+            area_fast: 1024 * 1024,
+            area_balanced: 1280 * 1280,
+            area_quality: 1536 * 1536,
+            align: 16,
+            max_side: 2048,
+            max_references: 1,
+            steps: 20,
+            turbo_sigmas: false,
+            reference_edits: false,
+            qwen_prompts: false,
+            prompt_vision: false,
+            cfg_scale: 3.0,
+        }
+    }
+
+    /// FLUX.3 Image Klein (its model card and sd.cpp's docs/flux3.md): distilled, 16 steps, no
+    /// guidance, Euler with the server's discrete schedule (time shift 6.93), sizes a multiple of
+    /// 16, up to 10 reference images. The larger tiers are not measured yet: 1.25K and 1.5K.
+    pub fn flux3_klein() -> Self {
+        Self {
+            sampler: "euler".into(),
+            area_fast: 1024 * 1024,
+            area_balanced: 1280 * 1280,
+            area_quality: 1536 * 1536,
+            align: 16,
+            max_side: 2048,
+            max_references: 10,
+            steps: 16,
+            turbo_sigmas: false,
+            reference_edits: true,
+            qwen_prompts: false,
+            prompt_vision: false,
+            cfg_scale: 1.0,
+        }
     }
 }
 
@@ -179,11 +306,32 @@ impl Default for ProfileCapabilities {
     }
 }
 
+impl ProfileCapabilities {
+    /// Krea 2 Turbo: text to image, and brushed edits and Expand as masked inpainting. No
+    /// whole-image edits, combines or new images from references (no reference-image input), and
+    /// no transparent output (that prompt format is Qwen-Image 2.1's).
+    pub fn krea2_turbo() -> Self {
+        Self { text_to_image: true, edit: false, multi_reference: false, inpaint: true, outpaint: true, alpha: false }
+    }
+
+    /// FLUX.3 Image Klein: everything Qwen-Image 2.1 does except transparent output.
+    pub fn flux3_klein() -> Self {
+        Self { alpha: false, ..Self::default() }
+    }
+
+    /// MOSS-Image: the same as Krea 2 (text to image, masked inpainting and Expand).
+    pub fn moss_image() -> Self {
+        Self::krea2_turbo()
+    }
+}
+
 /// Where a profile's files come from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfileSource {
     /// Downloaded by Setup from the catalog, tested with Kokon. Paths follow the folder and preset.
+    /// The official Qwen-Image 2.1 files ([`OFFICIAL_PROFILE_ID`]) and the Krea 2 Turbo files
+    /// ([`KREA2_PROFILE_ID`]).
     Official,
     /// Files the user already had (any folder, any quantization), not tested by Kokon.
     User,
@@ -203,6 +351,9 @@ pub struct ModelProfile {
     pub vae: PathBuf,
     pub text_encoder: PathBuf,
     pub vision_projector: Option<PathBuf>,
+    /// External tokenizer (`--tokenizer`), for text encoders whose vocabulary the engine does
+    /// not embed (MOSS-Image's Qwen3.5).
+    pub tokenizer: Option<PathBuf>,
     /// Extra sd-server arguments specific to this model.
     pub backend_args: Vec<String>,
     pub recommended_settings: RecommendedSettings,
@@ -232,10 +383,101 @@ impl ModelProfile {
             vae: official_vae(sdcpp_dir).path(sdcpp_dir),
             text_encoder: preset.text_encoder.path(sdcpp_dir),
             vision_projector: Some(VISION_PROJECTOR.path(sdcpp_dir)),
+            tokenizer: None,
             backend_args: vec![],
             recommended_settings: RecommendedSettings::default(),
             capabilities: ProfileCapabilities::default(),
         }
+    }
+
+    /// The Krea 2 Turbo files for a hardware preset (`catalog::krea2_files`): a GGUF of
+    /// krea/Krea-2-Turbo, Qwen's Qwen3-VL 4B GGUF and the Wan 2.1 VAE. No vision projector:
+    /// Krea 2 takes no reference images.
+    pub fn krea2(sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Self {
+        let (diffusion, text_encoder) = crate::catalog::krea2_files(preset);
+        let quant = diffusion.dest.rsplit('-').next().unwrap_or("").trim_end_matches(".gguf");
+        Self {
+            id: KREA2_PROFILE_ID.into(),
+            display_name: format!("Krea 2 Turbo {quant} (text to image)"),
+            model: KREA2_TURBO.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: diffusion.path(sdcpp_dir),
+            vae: crate::catalog::KREA2_VAE.path(sdcpp_dir),
+            text_encoder: text_encoder.path(sdcpp_dir),
+            vision_projector: None,
+            tokenizer: None,
+            backend_args: vec![],
+            recommended_settings: RecommendedSettings::krea2_turbo(),
+            capabilities: ProfileCapabilities::krea2_turbo(),
+        }
+    }
+
+    /// The MOSS-Image SFT files for a hardware preset (`catalog::moss_files`): leejet's GGUF of
+    /// OpenMOSS-Team/MOSS-Image-SFT, Unsloth's Qwen3.5 9B GGUF, its `tokenizer.json` and the
+    /// FLUX.2 VAE. No vision projector: MOSS-Image takes no reference images.
+    pub fn moss(sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Self {
+        let (diffusion, text_encoder) = crate::catalog::moss_files(preset);
+        let quant = diffusion.dest.rsplit('-').next().unwrap_or("").trim_end_matches(".gguf");
+        Self {
+            id: MOSS_PROFILE_ID.into(),
+            display_name: format!("MOSS-Image SFT {quant} (text to image)"),
+            model: MOSS_IMAGE_SFT.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: diffusion.path(sdcpp_dir),
+            vae: crate::catalog::MOSS_VAE.path(sdcpp_dir),
+            text_encoder: text_encoder.path(sdcpp_dir),
+            vision_projector: None,
+            tokenizer: Some(crate::catalog::MOSS_TOKENIZER.path(sdcpp_dir)),
+            backend_args: vec![],
+            recommended_settings: RecommendedSettings::moss_image(),
+            capabilities: ProfileCapabilities::moss_image(),
+        }
+    }
+
+    /// The FLUX.3 Image Klein files for a hardware preset (`catalog::flux3_files`): leejet's GGUF,
+    /// the Qwen3-VL 4B text encoder shared with Krea 2 (with its vision projector, so Prompt+ can
+    /// look at the references) and the FLUX.2 VAE shared with MOSS-Image.
+    pub fn flux3(sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Self {
+        let (diffusion, text_encoder) = crate::catalog::flux3_files(preset);
+        let quant = diffusion.dest.rsplit('-').next().unwrap_or("").trim_end_matches(".gguf");
+        Self {
+            id: FLUX3_PROFILE_ID.into(),
+            display_name: format!("FLUX.3 Image Klein {quant}"),
+            model: FLUX3_KLEIN.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: diffusion.path(sdcpp_dir),
+            vae: crate::catalog::MOSS_VAE.path(sdcpp_dir),
+            text_encoder: text_encoder.path(sdcpp_dir),
+            vision_projector: Some(crate::catalog::QWEN3VL_4B_VISION.path(sdcpp_dir)),
+            tokenizer: None,
+            backend_args: vec![],
+            recommended_settings: RecommendedSettings::flux3_klein(),
+            capabilities: ProfileCapabilities::flux3_klein(),
+        }
+    }
+
+    /// The catalog profile `id` other than the official Qwen files ([`EXTRA_CATALOG_PROFILES`]).
+    pub fn extra_catalog(id: &str, sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Option<Self> {
+        match id {
+            FLUX3_PROFILE_ID => Some(Self::flux3(sdcpp_dir, preset)),
+            KREA2_PROFILE_ID => Some(Self::krea2(sdcpp_dir, preset)),
+            MOSS_PROFILE_ID => Some(Self::moss(sdcpp_dir, preset)),
+            _ => None,
+        }
+    }
+
+    /// The files are Qwen-Image 2.1's (the official ones or the user's own): the model Kokon's
+    /// edits, prompt cache, Mac engine and LoRA library are built for.
+    pub fn is_qwen(&self) -> bool {
+        self.model == QWEN_IMAGE_21
+    }
+
+    /// The files are Krea 2's.
+    pub fn is_krea2(&self) -> bool {
+        self.model == KREA2_TURBO
     }
 
     /// (label, path, required) for every model file.
@@ -247,6 +489,9 @@ impl ModelProfile {
         ];
         if let Some(p) = &self.vision_projector {
             v.push(("Vision projector (mmproj)", p.as_path(), true));
+        }
+        if let Some(p) = &self.tokenizer {
+            v.push(("Tokenizer (tokenizer.json)", p.as_path(), true));
         }
         v
     }
@@ -266,12 +511,19 @@ impl ModelProfile {
         }
     }
 
+    /// The official Qwen-Image 2.1 files (the catalog's Krea 2 files are not: the Qwen update
+    /// offers and budgets don't apply to them).
     pub fn is_official(&self) -> bool {
+        self.source == ProfileSource::Official && self.id == OFFICIAL_PROFILE_ID
+    }
+
+    /// Files from Kokon's catalog (Qwen or Krea 2), not the user's own.
+    pub fn from_catalog(&self) -> bool {
         self.source == ProfileSource::Official
     }
 
     fn same_files(&self, o: &ModelProfile) -> bool {
-        (&self.diffusion_model, &self.vae, &self.text_encoder, &self.vision_projector) == (&o.diffusion_model, &o.vae, &o.text_encoder, &o.vision_projector)
+        (&self.diffusion_model, &self.vae, &self.text_encoder, &self.vision_projector, &self.tokenizer) == (&o.diffusion_model, &o.vae, &o.text_encoder, &o.vision_projector, &o.tokenizer)
     }
 
     pub fn model_name(&self) -> String {
@@ -372,7 +624,10 @@ impl Default for AppConfig {
         let sdcpp = default_sdcpp_dir();
         Self {
             schema_version: SCHEMA_VERSION,
-            profiles: vec![ModelProfile::official(&sdcpp, crate::catalog::preset(crate::catalog::DEFAULT_PRESET).unwrap())],
+            profiles: {
+                let preset = crate::catalog::preset(crate::catalog::DEFAULT_PRESET).unwrap();
+                vec![ModelProfile::official(&sdcpp, preset), ModelProfile::flux3(&sdcpp, preset), ModelProfile::krea2(&sdcpp, preset), ModelProfile::moss(&sdcpp, preset)]
+            },
             active_profile: OFFICIAL_PROFILE_ID.into(),
             sdcpp_dir: sdcpp,
             gpu_backend: GpuBackend::default(),
@@ -420,6 +675,9 @@ pub struct LoraEntry {
     pub name: String,
     /// The file the user picked (never changed by Kokon).
     pub source: PathBuf,
+    /// Fork: the model it was checked against and is used with (`ModelProfile::model`); empty in
+    /// LoRAs loaded before models had their own, which were all Qwen-Image 2.1's.
+    pub model: String,
     pub weight: f32,
     /// Added in front of the prompt when the LoRA is used.
     pub trigger_words: String,
@@ -436,7 +694,37 @@ pub struct LoraEntry {
 
 impl Default for LoraEntry {
     fn default() -> Self {
-        Self { id: String::new(), name: String::new(), source: PathBuf::new(), weight: 1.0, trigger_words: String::new(), on_by_default: false, size: 0, warning: None, notes: vec![], added_at: String::new() }
+        Self {
+            id: String::new(),
+            name: String::new(),
+            source: PathBuf::new(),
+            model: String::new(),
+            weight: 1.0,
+            trigger_words: String::new(),
+            on_by_default: false,
+            size: 0,
+            warning: None,
+            notes: vec![],
+            added_at: String::new(),
+        }
+    }
+}
+
+impl LoraEntry {
+    /// The model it is for ([`LoraEntry::model`]; Qwen-Image 2.1 when not recorded).
+    pub fn model_or_qwen(&self) -> &str {
+        if self.model.trim().is_empty() { QWEN_IMAGE_21 } else { &self.model }
+    }
+}
+
+/// The name of a model id (`ModelProfile::model`) in messages.
+pub fn model_name(model: &str) -> String {
+    match model {
+        FLUX3_KLEIN => "FLUX.3 Image Klein".into(),
+        KREA2_TURBO => "Krea 2 Turbo".into(),
+        MOSS_IMAGE_SFT => "MOSS-Image".into(),
+        QWEN_IMAGE_21 | "" => "Qwen-Image 2.1".into(),
+        other => other.into(),
     }
 }
 
@@ -620,8 +908,9 @@ impl AppConfig {
     }
 
     /// Keeps the invariants every saved config has: the official profile exists and points to
-    /// the official files of the configured folder and preset (its tuning is kept), every
-    /// other profile is the user's, and the active profile exists.
+    /// the official files of the configured folder and preset (its tuning is kept), the Krea 2
+    /// Turbo profile exists right after it (rebuilt from the catalog every time), every other
+    /// profile is the user's, and the active profile exists.
     pub fn normalize(&mut self) {
         // A prompt equal to the built-in one is saved as "" so it follows future defaults.
         for (custom, default) in [
@@ -634,7 +923,7 @@ impl AppConfig {
             }
         }
         for p in &mut self.profiles {
-            p.source = if p.id == OFFICIAL_PROFILE_ID { ProfileSource::Official } else { ProfileSource::User };
+            p.source = if p.id == OFFICIAL_PROFILE_ID || EXTRA_CATALOG_PROFILES.contains(&p.id.as_str()) { ProfileSource::Official } else { ProfileSource::User };
             if p.model.trim().is_empty() {
                 p.model = QWEN_IMAGE_21.into();
             }
@@ -648,6 +937,15 @@ impl AppConfig {
                 *p = official;
             }
             None => self.profiles.insert(0, official),
+        }
+        // Krea 2 Turbo and MOSS-Image: always offered right after the official files; only their
+        // extra server arguments are the user's.
+        for (i, id) in EXTRA_CATALOG_PROFILES.iter().enumerate() {
+            let mut extra = ModelProfile::extra_catalog(id, &self.sdcpp_dir, self.preset()).expect("a catalog profile");
+            if let Some(at) = self.profiles.iter().position(|p| p.id == *id) {
+                extra.backend_args = self.profiles.remove(at).backend_args;
+            }
+            self.profiles.insert(1 + i, extra);
         }
         if !self.profiles.iter().any(|p| p.id == self.active_profile) {
             self.active_profile = OFFICIAL_PROFILE_ID.into();
@@ -698,7 +996,7 @@ impl AppConfig {
     pub fn use_improved_vae(&mut self) {
         let vae = crate::catalog::VAE.path(&self.sdcpp_dir);
         let active = self.active_profile.clone();
-        if let Some(p) = self.profiles.iter_mut().find(|p| p.id == active && !p.is_official()) {
+        if let Some(p) = self.profiles.iter_mut().find(|p| p.id == active && p.source == ProfileSource::User) {
             p.vae = vae;
         }
         self.normalize();
@@ -710,7 +1008,7 @@ impl AppConfig {
     pub fn use_new_dit(&mut self) {
         let dit = crate::catalog::TURBO_Q4_K_M.path(&self.sdcpp_dir);
         let active = self.active_profile.clone();
-        if let Some(p) = self.profiles.iter_mut().find(|p| p.id == active && !p.is_official()) {
+        if let Some(p) = self.profiles.iter_mut().find(|p| p.id == active && p.source == ProfileSource::User) {
             p.diffusion_model = dit;
         }
         self.normalize();
@@ -720,6 +1018,20 @@ impl AppConfig {
     pub fn use_official(&mut self) {
         self.normalize();
         self.active_profile = OFFICIAL_PROFILE_ID.into();
+    }
+
+    /// Makes the Krea 2 Turbo files the active model (they may still need downloading).
+    pub fn use_krea2(&mut self) {
+        self.use_extra_catalog(KREA2_PROFILE_ID);
+    }
+
+    /// Makes the catalog profile `id` ([`EXTRA_CATALOG_PROFILES`]) the active model (its files
+    /// may still need downloading).
+    pub fn use_extra_catalog(&mut self, id: &str) {
+        self.normalize();
+        if EXTRA_CATALOG_PROFILES.contains(&id) {
+            self.active_profile = id.into();
+        }
     }
 
     /// Model files of the active profile that are not there (label, path).
@@ -773,7 +1085,7 @@ impl AppConfig {
             for f in [&mut p.diffusion_model, &mut p.vae, &mut p.text_encoder] {
                 relocate(f, old, new);
             }
-            if let Some(v) = p.vision_projector.as_mut() {
+            for v in [p.vision_projector.as_mut(), p.tokenizer.as_mut()].into_iter().flatten() {
                 relocate(v, old, new);
             }
         }
@@ -822,7 +1134,9 @@ impl AppConfig {
 
     /// Kokon's Mac engine runs instead of sd-server: chosen in Settings, on the Metal backend only.
     pub fn uses_mac_engine(&self) -> bool {
-        self.mac_engine && self.gpu_backend == GpuBackend::Metal
+        // Kokon's Mac engine runs Qwen-Image 2.1 only; other models always run on sd-server.
+        let other = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(|p| !p.is_qwen());
+        self.mac_engine && self.gpu_backend == GpuBackend::Metal && !other
     }
 
     /// The configured device when it belongs to the active engine, else its first GPU.
@@ -1034,7 +1348,7 @@ mod tests {
         std::fs::remove_file(&mine.vae).unwrap();
         old.save_to(&path).unwrap();
         let c = AppConfig::load_from(&path);
-        assert_eq!((c.active_profile.as_str(), c.profiles.len()), (OFFICIAL_PROFILE_ID, 1));
+        assert_eq!((c.active_profile.as_str(), c.profiles.len()), (OFFICIAL_PROFILE_ID, 1 + EXTRA_CATALOG_PROFILES.len()), "the official and the extra catalog profiles");
         assert!(c.profile().same_files(&ModelProfile::official(&sd, c.preset())));
     }
 
@@ -1055,7 +1369,7 @@ mod tests {
         // Choosing files again keeps the tuning; switching to the official files keeps them.
         c.set_user_files(own_files(dir.path()));
         assert_eq!(c.profile().recommended_settings.area_fast, 768 * 768);
-        assert_eq!(c.profiles.len(), 2);
+        assert_eq!(c.profiles.len(), 2 + EXTRA_CATALOG_PROFILES.len());
         c.use_official();
         assert_eq!(c.active_profile, OFFICIAL_PROFILE_ID);
         assert!(c.user_profile().is_some(), "the user's profile is never deleted");
@@ -1175,7 +1489,7 @@ mod tests {
         assert_eq!(off.diffusion_model, sd("qwen-image-2.1-turbo-Q4_K_M.gguf"));
         // Saved again, nothing is added twice.
         c.save_to(&p).unwrap();
-        assert_eq!(AppConfig::load_from(&p).profiles.len(), 2);
+        assert_eq!(AppConfig::load_from(&p).profiles.len(), 2 + EXTRA_CATALOG_PROFILES.len());
         // A file without profiles uses its own folder and preset.
         std::fs::write(&p, r#"{"sdcppDir":"D:\\sd","hardwarePreset":"24gb"}"#).unwrap();
         let c = AppConfig::load_from(&p);
@@ -1202,7 +1516,7 @@ mod tests {
         c.relocate_paths(&old, &new);
         assert_eq!(c.sdcpp_dir, new.join("sdcpp"));
         assert!(c.profile().diffusion_model.starts_with(new.join("sdcpp")));
-        assert_eq!(c.profiles[1].diffusion_model, PathBuf::from(r"C:\AI\sdcpp\x.gguf"));
+        assert_eq!(c.profiles[1 + EXTRA_CATALOG_PROFILES.len()].diffusion_model, PathBuf::from(r"C:\AI\sdcpp\x.gguf"));
     }
 
     #[test]
@@ -1216,7 +1530,7 @@ mod tests {
         assert!(p.text_encoder.ends_with("Qwen3VL-8B-Instruct-Q8_0.gguf"));
         assert_eq!(p.display_name, "Qwen-Image 2.1 Turbo Q4_K_M (official)");
         assert_eq!(p.recommended_settings.area_fast, 768 * 768);
-        assert_eq!((c.hardware_preset.as_str(), c.profiles.len()), ("32gb", 1));
+        assert_eq!((c.hardware_preset.as_str(), c.profiles.len()), ("32gb", 1 + EXTRA_CATALOG_PROFILES.len()));
         c.vram_override_mib = 12_288;
         assert_eq!(c.planning_vram_mib(Some(16303)), Some(12_288));
         assert!(c.validate().is_ok());
@@ -1322,7 +1636,7 @@ mod tests {
         std::fs::write(&path, r#"{"serverPort": 41000}"#).unwrap();
         let p = AppConfig::load_from(&path);
         assert_eq!(p.server_port, 41000);
-        assert_eq!(p.profiles.len(), 1);
+        assert_eq!(p.profiles.len(), 1 + EXTRA_CATALOG_PROFILES.len(), "the official and the extra catalog profiles");
         std::fs::write(&path, "\u{feff}{\"serverPort\": 42000}").unwrap();
         assert_eq!(AppConfig::load_from(&path).server_port, 42000, "UTF-8 BOM accepted");
         std::fs::write(&path, "{ broken").unwrap();

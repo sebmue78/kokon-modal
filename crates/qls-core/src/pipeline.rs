@@ -139,11 +139,28 @@ pub fn inpaint_prompt(action: InpaintAction, prompt: &str, color: &str) -> Strin
     }
 }
 
+/// Prompt of a plain masked inpaint (models without reference-image edits, Krea 2): a
+/// description of what the painted area should show, since the model sees no instruction and
+/// no marked guide image. A removal describes the background that fills the area.
+pub fn plain_inpaint_prompt(action: InpaintAction, prompt: &str) -> String {
+    let what = action.subject(prompt);
+    match action {
+        InpaintAction::Remove => "empty background, a seamless natural continuation of the surrounding scene, matching textures, lighting and perspective".into(),
+        InpaintAction::Edit => prompt.trim().to_string(),
+        InpaintAction::Replace | InpaintAction::Add => format!("{what}, fitting naturally into the scene with matching lighting, perspective and scale"),
+    }
+}
+
 /// Prompt sent to the model. Transparency requests use the prompt format recommended for
 /// Qwen-Image 2.1 RGBA output; outpainting gets an instruction prefix so short prompts
 /// like "extend left" still describe the task.
 pub fn effective_prompt(plan: &Plan, prompt: &str) -> String {
     let p = prompt.trim();
+    if !plan.qwen_prompts {
+        // Other models (Krea 2, MOSS-Image, FLUX.3): the prompt as written; the RGBA wording and
+        // the outpaint instruction are Qwen-Image 2.1's.
+        return p.to_string();
+    }
     if wants_transparency(p) && !p.starts_with(RGBA_PREFIX) {
         let body = p.trim_end_matches('.');
         return format!("{RGBA_PREFIX} {body}. {RGBA_SUFFIX}");
@@ -270,6 +287,20 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             // the model rebuilds background instead of copying the object back.
             let pad = |img: &RgbaImage| imaging::pad_edge(img, wc.canvas, wc.content_offset);
             let image1 = if action == InpaintAction::Remove { imaging::fill_masked(&content, &m_work) } else { content.clone() };
+            if !plan.qwen_prompts {
+                // Plain masked inpainting: the latent mask alone tells the model where to paint.
+                drop(content);
+                req.init_image = Some(png_b64(&pad(&image1))?);
+                req.prompt = plain_inpaint_prompt(action, prompt);
+                req.mask_image = Some(gray_png_b64(&m_canvas)?);
+                req.strength = plan.strength;
+                req.image_preprocess = vec!["target=init,mode=none".into(), "target=mask,mode=none,filter=nearest-exact".into()];
+                kind = PostKind::Inpaint { source: src.clone(), region, blend };
+                return Ok(PreparedJob {
+                    request: req,
+                    post: PostProcess { kind, keep_alpha, working: plan.working, content: plan.content, output: plan.output, mode: plan.mode, outpaint: plan.outpaint },
+                });
+            }
             // Image 2 (guide): the area marked in a color named in the prompt. The model gets
             // no mask otherwise; the latent mask only discards changes outside it.
             let gc = plan.references.get(1).map(|r| r.canvas).ok_or_else(|| AppError::internal("missing inpaint guide plan"))?;
@@ -305,9 +336,14 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             let mask = imaging::outpaint_mask(op.working.canvas, r, op.overlap_working);
             req.init_image = Some(png_b64(&canvas)?);
             req.mask_image = Some(gray_png_b64(&mask)?);
-            req.ref_images.push(png_b64(&to_canvas(src, &plan.references[0].canvas))?);
             req.strength = plan.strength;
-            req.image_preprocess = vec!["target=init,mode=none".into(), "target=mask,mode=none,filter=nearest-exact".into(), "target=ref,mode=none".into()];
+            if plan.reference_edits {
+                req.ref_images.push(png_b64(&to_canvas(src, &plan.references[0].canvas))?);
+                req.image_preprocess = vec!["target=init,mode=none".into(), "target=mask,mode=none,filter=nearest-exact".into(), "target=ref,mode=none".into()];
+            } else {
+                // Plain masked outpainting (Krea 2): no reference image.
+                req.image_preprocess = vec!["target=init,mode=none".into(), "target=mask,mode=none,filter=nearest-exact".into()];
+            }
             let feather_final = ((op.overlap_working.left.max(op.overlap_working.right).max(op.overlap_working.top).max(op.overlap_working.bottom)) as f64
                 / op.working.scale)
                 .round() as u32;

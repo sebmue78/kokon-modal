@@ -69,7 +69,7 @@ const RES_OPTIONS: { value: ResolutionMode; label: string; sub: string }[] = [
   { value: "auto", label: "Auto", sub: "Set by the quality preset" },
   { value: "1k", label: "1K", sub: "~1 MP" },
   { value: "1.5k", label: "1.5K", sub: "~2.4 MP" },
-  { value: "2k", label: "2K", sub: "~4 MP · the model's native size" },
+  { value: "2k", label: "2K", sub: "~4 MP · the largest size" },
   { value: "source", label: "Source", sub: "Same size as image 1" },
 ];
 

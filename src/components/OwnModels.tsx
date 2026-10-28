@@ -199,7 +199,7 @@ export function OwnModels(props: {
         <FolderOpen size={26} strokeWidth={1.6} />
         <strong>Choose the folder with your models</strong>
         <span className="muted">
-          For example <code>ComfyUI\models</code>. Kokon finds the Qwen-Image 2.1 files in it and in its sub-folders, as GGUF or safetensors. Nothing is copied or moved.
+          For example <code>ComfyUI\models</code>. Kokon Modal finds the Qwen-Image 2.1 files in it and in its sub-folders, as GGUF or safetensors. Nothing is copied or moved.
         </span>
         <button className="btn primary big" onClick={chooseFolder} disabled={scanning}>
           {scanning ? <Loader2 className="spin" size={16} /> : <FolderOpen size={16} />} {scanning ? "Looking for models…" : "Choose folder…"}
@@ -218,7 +218,7 @@ export function OwnModels(props: {
           <strong>{!editing ? "Using your own files" : scan ? `In ${folderName(scan.dir)}` : "Your files"}</strong>
           <span className="muted">
             {!editing
-              ? "Not tested by Kokon. Change them at any time, or switch back to the official files above."
+              ? "Not tested by Kokon Modal. Change them at any time, or switch back to the official files above."
               : scan
                 ? `Found ${found} of 4${downloads.length ? `; ${downloads.length === 1 ? "1 piece" : `${downloads.length} pieces`} will be downloaded` : ""}${skipped ? ` · ${skipped} file${skipped === 1 ? "" : "s"} of other models skipped` : ""}`
                 : "Choose a file for each piece, or download the official one."}
@@ -302,7 +302,7 @@ export function OwnModels(props: {
 
       {editing && tooLarge && (
         <div className="setup-note">
-          This image model is {formatBytes(dit!.size)}, probably too large for {Math.round((props.vramMib ?? 0) / 1024)} GB of VRAM. Kokon makes smaller images to fit, but it may still run out of memory
+          This image model is {formatBytes(dit!.size)}, probably too large for {Math.round((props.vramMib ?? 0) / 1024)} GB of VRAM. Kokon Modal makes smaller images to fit, but it may still run out of memory
           or be slow. A 4-bit or 8-bit version (GGUF Q4_K or Q8_0, or INT8) works better on this card.
         </div>
       )}
@@ -310,7 +310,7 @@ export function OwnModels(props: {
       {dit?.role === "diffusion" && dit.compatible && dit.warning && <div className="setup-note">{dit.warning}</div>}
 
       {editing && slowFp8 && (
-        <div className="setup-note">FP8 files run much slower on AMD and Intel cards with Vulkan than the GGUF (Q4_K) file Kokon downloads. For speed, download the official file or choose a GGUF.</div>
+        <div className="setup-note">FP8 files run much slower on AMD and Intel cards with Vulkan than the GGUF (Q4_K) file Kokon Modal downloads. For speed, download the official file or choose a GGUF.</div>
       )}
 
       {editing && (
@@ -323,7 +323,7 @@ export function OwnModels(props: {
               Cancel
             </button>
           )}
-          {!tooLarge && <span className="muted">Your own files are not tested by Kokon: quality and speed may differ.</span>}
+          {!tooLarge && <span className="muted">Your own files are not tested by Kokon Modal: quality and speed may differ.</span>}
         </div>
       )}
     </div>

@@ -168,6 +168,8 @@ export interface LoraItem {
   name: string;
   /** The file the user picked. */
   source: string;
+  /** Fork: the model it is for (`ModelProfile.model`, e.g. "qwen-image-2.1"). */
+  model: string;
   weight: number;
   triggerWords: string;
   onByDefault: boolean;
@@ -233,7 +235,9 @@ export interface StatusResponse {
     /** The engine can run an upscaler model (null: not running). */
     upscale?: boolean | null;
   };
-  profile: { id: string; display_name: string; source: ProfileSource };
+  profile: { id: string; display_name: string; source: ProfileSource; model?: string };
+  /** Fork: every model to choose from, and whether all its files are there. */
+  profiles?: { id: string; display_name: string; model: string; source: ProfileSource; installed: boolean }[];
   gpu: { name: string; vendor: string; unified: boolean; memory_total_mib: number; memory_used_mib: number; memory_free_mib: number; driver_version: string } | null;
   active_job: JobView | null;
   queue: { queued: number; jobs: JobView[] };
@@ -265,6 +269,8 @@ export interface ModelProfile {
   vae: string;
   textEncoder: string;
   visionProjector: string | null;
+  /** Fork: external tokenizer (MOSS-Image's Qwen3.5), passed with `--tokenizer`. */
+  tokenizer?: string | null;
   backendArgs: string[];
   recommendedSettings: Record<string, unknown>;
   capabilities: Record<string, boolean>;
@@ -402,6 +408,10 @@ export interface ModelsStatus {
   /** Every file of the user's own profile is there. */
   user_installed: boolean;
   official_installed: boolean;
+  /** Fork: every Krea 2 Turbo file of the preset is there. */
+  krea2_installed?: boolean;
+  /** Fork: every file of each extra catalog model (Krea 2, MOSS-Image), by profile id. */
+  catalog_installed?: Record<string, boolean>;
   default_download_dir: string;
   /** The texture-fix VAE (#21): in use, or what switching to it downloads. */
   vae: { improved: boolean; download_bytes: number; page: string };

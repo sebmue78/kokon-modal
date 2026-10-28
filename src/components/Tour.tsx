@@ -15,7 +15,7 @@ const STEPS: Step[] = [
   {
     target: ".stage-frame",
     title: "An example project",
-    text: "Kokon made these images on a PC like yours, about half a minute each. This project is yours to look around in, edit further or delete.",
+    text: "Kokon Modal made these images on a PC like yours, about half a minute each. This project is yours to look around in, edit further or delete.",
   },
   {
     target: ".timeline",

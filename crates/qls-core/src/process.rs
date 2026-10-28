@@ -39,6 +39,11 @@ pub fn build_server_args(cfg: &AppConfig, profile: &ModelProfile) -> Vec<String>
         a.push("--llm_vision".into());
         a.push(p(v));
     }
+    // MOSS-Image's Qwen3.5 vocabulary is not the tokenizer the engine embeds.
+    if let Some(t) = &profile.tokenizer {
+        a.push("--tokenizer".into());
+        a.push(p(t));
+    }
     let dev = cfg.effective_device();
     let metal = cfg.gpu_backend == crate::config::GpuBackend::Metal;
     let mut placement = cfg.text_encoder_placement;
@@ -87,7 +92,9 @@ pub fn build_server_args(cfg: &AppConfig, profile: &ModelProfile) -> Vec<String>
             "0.125".into(),
         ]);
     }
+    // Qwen-Image 2.1's prompt prefix cache; other models have no such model argument.
     match cfg.prefix_cache_type.as_str() {
+        _ if !profile.is_qwen() => {}
         "auto" => {}
         "off" => a.extend(["--model-args".into(), "qwen_image_2_1_prefix_cache=false".into()]),
         t => a.extend(["--model-args".into(), format!("qwen_image_2_1_prefix_cache_type={t}")]),
@@ -558,7 +565,12 @@ impl ServerManager {
         }
         let file = std::fs::File::create(log_path).map_err(|e| fail(AppError::io("create the server log", log_path, e)))?;
         let run_cfg = AppConfig { server_port: port, ..cfg.clone() };
-        let args = build_server_args(&run_cfg, profile);
+        // Fork: a text encoder without an LM head (Qwen3-VL 4B: FLUX.3, Krea 2) runs from its copy
+        // with one, so Prompt+ can write (`gguf_head`); made once, on the first start that needs it.
+        let te = profile.text_encoder.clone();
+        let te = tokio::task::spawn_blocking(move || crate::gguf_head::text_encoder_for_launch(&te)).await.unwrap_or_else(|_| profile.text_encoder.clone());
+        let launch_profile = ModelProfile { text_encoder: te, ..profile.clone() };
+        let args = build_server_args(&run_cfg, &launch_profile);
         tracing::info!("starting {} {}", exe.display(), args.join(" "));
 
         let mut cmd = std::process::Command::new(exe);
@@ -857,7 +869,7 @@ mod tests {
         let a = build_server_args(&cfg, cfg.profile());
         let s = a.join(" ");
         let m = |f: &str| crate::catalog::join_rel(&cfg.sdcpp_dir, &format!("models/qwen21/{f}")).display().to_string();
-        assert!(s.starts_with("--listen-ip 127.0.0.1 --listen-port 39150"));
+        assert!(s.starts_with("--listen-ip 127.0.0.1 --listen-port 39160"));
         assert!(s.contains(&format!("--diffusion-model {}", m("qwen-image-2.1-turbo-Q4_K_M.gguf"))));
         assert!(s.contains(&format!("--vae {}", m("texture_fix_vae_for_qwen_image_2.1_bf16.safetensors"))));
         assert!(s.contains(&format!("--llm {}", m("Qwen3VL-8B-Instruct-Q4_K_M.gguf"))));

@@ -7,6 +7,7 @@ pub mod engine_manifest;
 pub mod error;
 pub mod examples;
 pub mod geometry;
+pub mod gguf_head;
 pub mod hdr;
 pub mod heif;
 pub mod imaging;
@@ -25,3 +26,10 @@ pub mod sdcpp;
 pub mod speed;
 pub mod store;
 pub mod wic;
+
+#[cfg(test)]
+mod krea2_tests;
+#[cfg(test)]
+mod moss_tests;
+#[cfg(test)]
+mod flux3_tests;

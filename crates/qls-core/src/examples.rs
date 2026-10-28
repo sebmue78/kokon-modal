@@ -170,7 +170,7 @@ impl Engine {
                     favorite: false,
                     parent_id: prev.as_ref().map(|p| p.id.clone()),
                     duration_ms: s.seconds * 1000,
-                    notes: vec!["Example made by Kokon, resized for the installer.".into()],
+                    notes: vec!["Example made by Kokon Modal, resized for the installer.".into()],
                     app_version: APP_VERSION.into(),
                     backend_version: None,
                     client: Some("example".into()),

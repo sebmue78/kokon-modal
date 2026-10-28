@@ -1,7 +1,8 @@
 import { ArrowUp, Brush, Check, ChevronDown, Expand, Eye, FolderOpen, Gauge, ImagePlus, Layers, Lightbulb, Maximize, Pencil, Settings2, SlidersHorizontal, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, urls } from "../lib/api";
-import { activeLoras, activeOverrides, aspectLabel, buildRequest, composing, editing, enhancerApplies, expansionPixels, formatDuration, hasOutpaint, imageName, MAX_LORAS, moveRef, needsPrompt, parseRatio, toggleLora, wantsPromptReview, type Ref } from "../lib/logic";
+import { modelLabel } from "./ModelPicker";
+import { activeLoras, activeOverrides, aspectLabel, buildRequest, composing, editing, enhancerApplies, expansionPixels, formatDuration, hasOutpaint, imageName, lorasFor, MAX_LORAS, moveRef, needsPrompt, parseRatio, QWEN_MODEL, toggleModelLora, wantsPromptReview, type Ref } from "../lib/logic";
 import { native } from "../lib/native";
 import { haptic } from "../lib/haptics";
 import { inBrowser, useNarrow } from "../lib/platform";
@@ -14,11 +15,12 @@ import { reviewPhotos } from "./PhotoReview";
 import { AspectGrid, pickAspect, RatioIcon, resolutionLabel, ResolutionMenu } from "./SizeMenus";
 import { Option, Popover, Seg } from "./ui";
 
-// All presets run Qwen-Image 2.1 Turbo (8 steps); they differ in size.
+// The presets differ in size; each model sets its own (Qwen-Image 2.1: 1 MP, 1.5K, 2K; FLUX.3 and
+// MOSS-Image: 1 MP, 1.25K, 1.5K; Krea 2: 1 MP, 1.5K, 2K). The size shown next to the prompt is the real one.
 const QUALITY: { value: Quality; label: string; sub: string }[] = [
   { value: "fast", label: "Fast", sub: "~1 MP · fastest" },
-  { value: "balanced", label: "Balanced", sub: "~1.5K" },
-  { value: "quality", label: "Quality", sub: "native 2K · slowest" },
+  { value: "balanced", label: "Balanced", sub: "larger" },
+  { value: "quality", label: "Quality", sub: "the model's largest size · slowest" },
 ];
 
 const INPAINT_ACTIONS: { value: InpaintAction; label: string; placeholder: string }[] = [
@@ -329,16 +331,18 @@ function usePlanPreview(): { plan: Plan | null; error: string | null } {
 
 const weightLabel = (w: number) => `${Math.round(w * 100)} %`;
 
-/** The project's LoRAs: shown once any LoRA is loaded in Settings. With one LoRA a click turns
- * it on or off; with more, a list with one switch each. */
+/** The project's LoRAs for the model in use: shown once such a LoRA is loaded in Settings. With
+ * one LoRA a click turns it on or off; with more, a list with one switch each. */
 function LoraBadge() {
-  const all = useStore((s) => s.loras);
+  const loaded = useStore((s) => s.loras);
+  const model = useStore((s) => s.status?.profile.model);
   const choice = useStore((s) => s.composer.loras);
+  const all = lorasFor(loaded, model);
   if (all.length === 0) return null;
   const on = activeLoras({ loras: choice }, all);
   const names = all.filter((l) => on.includes(l.id)).map((l) => `${l.name} (${weightLabel(l.weight)})`);
   const title = on.length ? `LoRA on in this project: ${names.join(", ")}` : "LoRA: none on in this project";
-  const toggle = (id: string) => setProjectLoras(toggleLora({ loras: choice }, all, id));
+  const toggle = (id: string) => setProjectLoras(toggleModelLora({ loras: choice }, loaded, all, id));
   if (all.length === 1) {
     const l = all[0];
     return (
@@ -368,7 +372,7 @@ function LoraBadge() {
     >
       {(close) => (
         <>
-          <div className="label">LoRA in this project · up to {MAX_LORAS}</div>
+          <div className="label">LoRA for {modelLabel({ id: "", model: model || QWEN_MODEL, source: "official" }).name} in this project · up to {MAX_LORAS}</div>
           {all.map((l) => {
             const active = on.includes(l.id);
             const full = !active && on.length >= MAX_LORAS;
@@ -409,7 +413,7 @@ function PromptPlus() {
     mode === "off"
       ? "Prompt+: let the model rewrite a short prompt, in any language, as a detailed English description before making the image. Adds a few seconds."
       : mode === "write"
-        ? "Prompt+ on: before making the image, the model rewrites your prompt as a detailed English description (looking at your images). You see it being written; the result keeps both."
+        ? "Prompt+ on: before making the image, the model rewrites your prompt as a detailed English description (with Qwen-Image 2.1 it also looks at your images; FLUX.3 and Krea 2 work from your words). You see it being written; the result keeps both."
         : "Prompt+ on, review first: the model writes the detailed prompt into the box; change it if you like, then press Enter to make the image.";
   const pick = (m: "off" | "write" | "review") => updateComposer({ enhance: m !== "off", enhanceReview: m === "off" ? c.enhanceReview : m === "review" });
   return (

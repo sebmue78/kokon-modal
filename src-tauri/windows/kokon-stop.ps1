@@ -1,4 +1,4 @@
-# Stops Kokon's background processes so the installer can replace (or the uninstaller remove)
+# Stops Kokon Modal's background processes (never Kokon's: only its own install and data folders) so the installer can replace (or the uninstaller remove)
 # their files. Run by hooks.nsh before installing, updating and uninstalling.
 #   -InstDir  Kokon's install folder: only executables inside it (and the inference server in
 #             Kokon's data folder) are stopped, never another copy of sd-server.
@@ -6,7 +6,7 @@
 param([Parameter(Mandatory = $true)][string]$InstDir, [switch]$DryRun)
 
 $ErrorActionPreference = 'SilentlyContinue'
-$data = Join-Path $env:LOCALAPPDATA 'KokonData'
+$data = Join-Path $env:LOCALAPPDATA 'KokonModalData'
 $roots = @($InstDir.TrimEnd('\') + '\')
 
 # Win32_Process gives the path even across 32/64-bit (the installer itself is 32-bit).

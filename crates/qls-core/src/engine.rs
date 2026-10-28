@@ -347,7 +347,9 @@ impl Engine {
     pub fn add_lora(&self, src: &Path) -> AppResult<LoraEntry> {
         let _lock = lora::LIBRARY.lock().unwrap_or_else(|e| e.into_inner());
         let cfg = self.config();
-        let existing = cfg.loras.iter().find(|l| l.source == src);
+        // The same file loaded again for the same model refreshes that entry; for another model it is a new one.
+        let model = cfg.profile().model.clone();
+        let existing = cfg.loras.iter().find(|l| l.source == src && l.model_or_qwen() == model);
         let entry = lora::import(&cfg, src, existing)?;
         let mut list = cfg.loras.clone();
         match list.iter_mut().find(|l| l.id == entry.id) {
@@ -404,7 +406,10 @@ impl Engine {
     /// The loaded LoRAs, with whether Kokon's copy is still there.
     pub fn loras(&self) -> Vec<LoraView> {
         let cfg = self.config();
-        cfg.loras.iter().map(|l| LoraView { available: lora::entry_path(&cfg, l).is_file(), entry: l.clone() }).collect()
+        cfg.loras
+            .iter()
+            .map(|l| LoraView { available: lora::entry_path(&cfg, l).is_file(), entry: LoraEntry { model: l.model_or_qwen().to_string(), ..l.clone() } })
+            .collect()
     }
 
     /// Copies the upscaler shipped with the app into the configured folder when it is missing
@@ -545,7 +550,7 @@ impl Engine {
         self.emit_server();
         let report = mb::report_path(&self.data_dir);
         let args = mb::bench_args(cfg.profile(), &report, quick);
-        let envs = vec![("KOKON_ENGINE_VERSION".to_string(), format!("0.1 (experimental), Kokon {APP_VERSION}"))];
+        let envs = vec![("KOKON_ENGINE_VERSION".to_string(), format!("0.1 (experimental), Kokon Modal {APP_VERSION}"))];
         let command = mb::BenchCommand { exe: cfg.server_exe(), args, envs, report, quick };
         let (e1, e2) = (self.clone(), self.clone());
         let r = self.mac_bench.start(
@@ -1157,7 +1162,8 @@ impl Engine {
             if request.enhance && enhancer::applies(plan.mode) {
                 enhanced = self.enhance_prompt(id, &client, &caps, &cfg, plan.mode, &request.prompt, &sd_req.ref_images, seed).await?;
                 if let Some(text) = &enhanced {
-                    sd_req.prompt = pipeline::enhanced_prompt(&request.prompt, text);
+                    // The RGBA wording is Qwen-Image 2.1's; text-to-image models take the text as is.
+                    sd_req.prompt = if plan.qwen_prompts { pipeline::enhanced_prompt(&request.prompt, text) } else { text.trim().to_string() };
                 }
             }
             // Prompt+ review: the prompt is the result; the user's next job makes the image.
@@ -1349,6 +1355,7 @@ impl Engine {
     /// The LoRAs job `id` uses (see `lora::resolve`); skipped ones are noted on the job.
     fn job_loras(&self, id: &str, cfg: &AppConfig, request: &GenerationRequest, caps: &Capabilities) -> Vec<AppliedLora> {
         let (loras, notes) = lora::resolve(cfg, request.loras.as_deref());
+        // `lora::resolve` keeps only the LoRAs of the model in use.
         let (loras, notes) = if !loras.is_empty() && !caps.img_feature("lora") {
             (Vec::new(), vec!["This inference engine can't use LoRAs (update it in Setup); made without them.".to_string()])
         } else {
@@ -1381,7 +1388,13 @@ impl Engine {
         let started = Instant::now();
         // A new image from references: each reference is labelled alone first, then the scene is
         // written from the labels without the images (see `enhancer::COMPOSE_SYSTEM_PROMPT`).
-        let req = if mode == ResolvedMode::Compose {
+        // Fork: whether the text encoder can see the images in the engine (not for FLUX.3 / Krea 2).
+        let vision = cfg.profile().recommended_settings.prompt_vision;
+        let req = if mode == ResolvedMode::Compose && !vision {
+            // No labels without vision: each reference is named only by its number.
+            let labels: Vec<String> = (0..images.len()).map(|_| "a reference image the user provided".to_string()).collect();
+            enhancer::compose_request(cfg, &labels, prompt, seed)
+        } else if mode == ResolvedMode::Compose {
             let mut labels = Vec::with_capacity(images.len());
             for img in images {
                 let r = client.text_gen(&enhancer::label_request(img.clone(), prompt, seed), Duration::from_secs(120), |_| {}, || self.is_cancelled(id)).await;
@@ -1398,7 +1411,7 @@ impl Engine {
             tracing::info!("prompt enhancer: {} reference labels in {:.1} s: {:?}", labels.len(), started.elapsed().as_secs_f32(), labels);
             enhancer::compose_request(cfg, &labels, prompt, seed)
         } else {
-            enhancer::request(cfg, mode, prompt, images.to_vec(), seed)
+            enhancer::request(cfg, mode, prompt, images.to_vec(), seed, vision)
         };
         let mut text = String::new();
         let mut last_emit = Instant::now();
