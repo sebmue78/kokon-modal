@@ -697,7 +697,9 @@ impl Engine {
         let upscale = request.mode == Mode::Upscale;
         // Removing a painted area needs no description (the planner writes the prompt).
         let removal = request.mask.is_some() && request.inpaint_action == planner::InpaintAction::Remove;
-        if request.prompt.trim().is_empty() && !upscale && !removal {
+        // Fork: a layout can be the whole description.
+        let layout = request.layout.iter().any(|b| !b.text.trim().is_empty());
+        if request.prompt.trim().is_empty() && !upscale && !removal && !layout {
             return Err(AppError::invalid("Describe what to generate or change."));
         }
         if upscale && request.images.is_empty() {
@@ -717,6 +719,8 @@ impl Engine {
         {
             request.seed = None;
         }
+        // Fork: a layout makes a new image, from the sketch for the models that read it.
+        crate::layout::prepare_request(&mut request, self.config().profile().recommended_settings.layout)?;
         let id = format!("job_{}", &uuid::Uuid::new_v4().simple().to_string()[..12]);
         let view = JobView {
             id: id.clone(),
@@ -1145,7 +1149,10 @@ impl Engine {
         } else {
             // 4. Build the request (CPU work).
             let plan2 = plan.clone();
-            let prompt = request.prompt.clone();
+            // Fork: the boxes of a layout follow the scene, in the model's form.
+            let layout_style = profile.recommended_settings.layout;
+            let sketch = crate::layout::uses_sketch(&request, layout_style);
+            let prompt = crate::layout::prompt(layout_style, &request.prompt, &request.layout, sketch);
             let mask_img: Option<GrayImage> = mask.as_ref().map(|(m, _)| m.clone());
             let opts = pipeline::BackendOptions { server_vae_tile_size: cfg.server_vae_tile_size() };
             let prepared = tokio::task::spawn_blocking(move || pipeline::prepare(&plan2, &prompt, seed, &images, mask_img.as_ref(), &opts))
@@ -1160,8 +1167,16 @@ impl Engine {
             // 4b. Prompt enhancer: rewrites the user's prompt, looking at the references
             // exactly as the image model gets them.
             if request.enhance && enhancer::applies(plan.mode) {
-                enhanced = self.enhance_prompt(id, &client, &caps, &cfg, plan.mode, &request.prompt, &sd_req.ref_images, seed).await?;
-                if let Some(text) = &enhanced {
+                // Fork: with a layout, Prompt+ writes the scene as a new image from text (the sketch
+                // is a plan, not a reference), and the boxes are added to its text.
+                let with_layout = !request.layout.is_empty();
+                enhanced = if with_layout {
+                    self.enhance_prompt(id, &client, &caps, &cfg, ResolvedMode::Generate, &request.prompt, &[], seed).await?
+                } else {
+                    self.enhance_prompt(id, &client, &caps, &cfg, plan.mode, &request.prompt, &sd_req.ref_images, seed).await?
+                };
+                let laid_out = enhanced.as_ref().map(|t| crate::layout::prompt(layout_style, t, &request.layout, sketch));
+                if let Some(text) = if with_layout { &laid_out } else { &enhanced } {
                     // The RGBA wording is Qwen-Image 2.1's; text-to-image models take the text as is.
                     sd_req.prompt = if plan.qwen_prompts {
                         pipeline::enhanced_prompt(&request.prompt, text)

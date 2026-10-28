@@ -12,6 +12,7 @@ pub mod hdr;
 pub mod heif;
 pub mod imaging;
 pub mod installer;
+pub mod layout;
 pub mod lora;
 pub mod lut;
 pub mod mac_bench;

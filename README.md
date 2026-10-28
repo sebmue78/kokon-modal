@@ -78,6 +78,11 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   is) and runs Prompt+ on it. The engine shows input images to the text encoder of Qwen-Image 2.1
   and Fibo 2.0 only, so with FLUX.3 and Krea 2 Prompt+ rewrites edits and combinations from your
   words alone, with instructions written for that.
+- **Layout for new images.** The **Layout** button next to the aspect ratio opens a canvas in the
+  shape of the new image: draw boxes and write in each what goes there, the prompt describes the
+  scene. FLUX.3 reads the boxes natively (its `bbox` caption format); Qwen-Image 2.1 and Fibo 2.0
+  Dev get the drawing as a reference image to follow as a plan; Krea 2 and MOSS-Image get the
+  positions in words (approximate). Prompt+ writes the scene first, then the boxes are added.
 - **Its own app next to Kokon.** Kokon Modal has its own name, app id (`app.kokonmodal.desktop`),
   install folder, settings (`%APPDATA%\Kokon Modal`), data and models (`%LOCALAPPDATA%\KokonModalData`),
   output folder (`Pictures\Kokon Modal`) and ports (39160-39162; Kokon uses 39150-39152). Both apps
@@ -119,7 +124,9 @@ on every push to the `alpha-release` branch: tests, the service, the MCP server,
 NSIS installer, then a pre-release `v<version>-alpha`. With the repository secret
 `TAURI_SIGNING_PRIVATE_KEY` (the fork's updater key; its public half is in `src-tauri/tauri.conf.json`)
 the installer is signed for the updater and `latest.json` goes to the release `updates`, the address
-the app checks. Without the secret the build works the same, without an update.
+the app checks. Without the secret the build works the same, without an update. The release notes
+start with `.github/alpha-notes.md` (what's new, written for each release) and the commits since the
+previous alpha.
 
 Where the fork's changes live:
 
@@ -132,6 +139,7 @@ Where the fork's changes live:
 | Model menu, "Based on Kokon" | `src/components/ModelPicker.tsx`, `BasedOn.tsx` |
 | App identity | `src-tauri/tauri.conf.json`, `src-tauri/windows/`, `crates/qls-core/src/config.rs` |
 | Model names in the UI | `src/lib/models.ts` |
+| Layout | `crates/qls-core/src/layout.rs`, `src/lib/layout.ts`, `src/components/LayoutEditor.tsx` |
 | Tests | `crates/qls-core/src/krea2_tests.rs`, `moss_tests.rs`, `flux3_tests.rs`, `fibo2_tests.rs` |
 
 ## Everything else

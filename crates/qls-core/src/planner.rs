@@ -293,6 +293,15 @@ pub struct GenerationRequest {
     /// no LoRA (MCP and the HTTP API don't use LoRAs for now). Not used by upscales.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loras: Option<Vec<String>>,
+    /// Fork: Layout boxes (see `layout`): a new image with these elements where the user drew
+    /// them. The prompt describes the whole scene; the boxes are added for the model when the
+    /// job runs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layout: Vec<crate::layout::LayoutBox>,
+    /// Fork: the app's drawing of the layout (an input id), image 1 for models that read it
+    /// (`LayoutStyle::Sketch`); unused by the others. Consumed by `layout::prepare_request`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout_sketch: Option<String>,
 }
 
 // ---------------------------------------------------------------------------------------

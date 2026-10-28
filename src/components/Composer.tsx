@@ -1,6 +1,7 @@
-import { ArrowUp, Brush, Check, ChevronDown, Expand, Eye, FolderOpen, Gauge, ImagePlus, Layers, Lightbulb, Maximize, Pencil, Settings2, SlidersHorizontal, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
+import { ArrowUp, Brush, Check, ChevronDown, Expand, Eye, FolderOpen, Gauge, ImagePlus, Layers, LayoutTemplate, Lightbulb, Maximize, Pencil, Settings2, SlidersHorizontal, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, urls } from "../lib/api";
+import { usableBoxes } from "../lib/layout";
 import { modelLabel } from "../lib/models";
 import { activeLoras, activeOverrides, aspectLabel, buildRequest, composing, editing, enhancerApplies, expansionPixels, formatDuration, hasOutpaint, imageName, lorasFor, MAX_LORAS, moveRef, needsPrompt, parseRatio, QWEN_MODEL, toggleModelLora, wantsPromptReview, type Ref } from "../lib/logic";
 import { native } from "../lib/native";
@@ -333,6 +334,31 @@ const weightLabel = (w: number) => `${Math.round(w * 100)} %`;
 
 /** The project's LoRAs for the model in use: shown once such a LoRA is loaded in Settings. With
  * one LoRA a click turns it on or off; with more, a list with one switch each. */
+/** Fork: Layout: boxes on a canvas that say where things go in a new image. */
+function LayoutPill() {
+  const layout = useStore((s) => s.composer.layout);
+  const style = useStore((s) => s.status?.profile.layout);
+  const n = usableBoxes(layout).length;
+  if (style === "none" && !n) return null;
+  return (
+    <span className="tool-group pill-group">
+      <button
+        className={`pill ${n ? "on" : ""}`}
+        onClick={() => setState({ overlay: "layout" })}
+        title={style === "none" ? "This model makes no new images, so it can't follow a layout" : "Draw boxes that say where things go in the new image"}
+      >
+        <LayoutTemplate size={14} />
+        <span className="lbl">{n ? `Layout · ${n}` : "Layout"}</span>
+      </button>
+      {n > 0 && (
+        <button className="tool-x" title="Remove the layout" onClick={() => updateComposer({ layout: [] })}>
+          <X size={13} />
+        </button>
+      )}
+    </span>
+  );
+}
+
 function LoraBadge() {
   const loaded = useStore((s) => s.loras);
   const model = useStore((s) => s.status?.profile.model);
@@ -701,6 +727,8 @@ export function Composer() {
                 {(close) => <AspectGrid value={custom ? aspectLabel(c.customWidth, c.customHeight) : c.aspect} onPick={(r) => (pickAspect(r), close())} auto={{ sub: newImage ? "From the prompt, else square" : "Same as image 1" }} />}
               </Popover>
             )}
+
+            {!c.refs.length && <LayoutPill />}
 
             <Popover
               className="wide"

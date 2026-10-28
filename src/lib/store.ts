@@ -9,10 +9,11 @@ import { inBrowser, isNarrow } from "./platform";
 import { useSyncExternalStore } from "react";
 import { markFresh } from "../components/Cocoon";
 import { api, ApiError, setPrivateInputs, subscribe, urls } from "./api";
-import { activeLoras, lorasFor, buildRequest, composing, emptyComposer, goneVersions, macEngineOfferDue, needsPrompt, newKey, pageOutdated, persistentAdvanced, refFromGen, refFromInput, reviewRequest, stageFitsPreview, starPromptDue, timelineLinks, undoTarget, versionLabels, wantsPromptReview, type CompareMode, type Composer, type Ref } from "./logic";
+import { sketchPng } from "./layout";
+import { activeLoras, layoutRatio, lorasFor, buildRequest, composing, emptyComposer, goneVersions, macEngineOfferDue, needsPrompt, newKey, pageOutdated, persistentAdvanced, refFromGen, refFromInput, reviewRequest, stageFitsPreview, starPromptDue, timelineLinks, undoTarget, versionLabels, wantsPromptReview, type CompareMode, type Composer, type Ref } from "./logic";
 import type { AppErrorBody, GenerationRecord, GenerationRequest, InputRecord, JobView, LoraItem, MacBenchState, ServerState, StatusResponse } from "./types";
 
-export type Overlay = null | "gallery" | "settings" | "inpaint" | "expand" | "welcome" | "whats-new" | "mac-engine" | "prompt-tips" | "shortcuts";
+export type Overlay = null | "gallery" | "settings" | "inpaint" | "expand" | "layout" | "welcome" | "whats-new" | "mac-engine" | "prompt-tips" | "shortcuts";
 
 export interface SessionItem {
   key: string;
@@ -1160,6 +1161,16 @@ export async function submitComposer() {
   if (!req.prompt && needsPrompt(s.composer)) {
     toastInfo("Describe what to create or change.");
     return;
+  }
+  // Fork: the models that read a layout as a sketch get it drawn, as image 1.
+  if (req.layout?.length && (s.status?.profile.layout ?? "sketch") === "sketch") {
+    try {
+      const blob = await sketchPng(layoutRatio(s.composer), req.layout);
+      req.layout_sketch = `input:${(await api.upload(blob, "layout.png")).id}`;
+    } catch (e) {
+      toastError(e);
+      return;
+    }
   }
   if (await submitRequest(req)) {
     setState((st) => {

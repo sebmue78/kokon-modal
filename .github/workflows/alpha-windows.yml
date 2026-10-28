@@ -35,6 +35,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The whole history and the tags: the release notes list the commits since the last alpha.
+          fetch-depth: 0
 
       - name: Version
         id: ver
@@ -143,7 +146,27 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cat > notes.md <<EOF
+          # What changed: .github/alpha-notes.md (written for each release), then every commit since
+          # the previous alpha.
+          prev=$(git tag --list 'v*-alpha*' --sort=-creatordate | grep -vx "${{ steps.art.outputs.tag }}" | head -1)
+          {
+            echo "## What's new in this version"
+            echo
+            if [ -f .github/alpha-notes.md ]; then cat .github/alpha-notes.md; else echo "See the commits below."; fi
+            echo
+            if [ -n "$prev" ]; then
+              echo "<details><summary>All changes since $prev</summary>"
+              echo
+              git log --no-merges --format='- %s (%h)' "$prev..HEAD"
+              echo
+              echo "</details>"
+              echo
+            fi
+            echo "---"
+            echo
+          } > changes.md
+          cat changes.md
+          cat > about.md <<EOF
           **Alpha, not tested on a GPU yet.** Kokon Modal is a fork of [Kokon](https://github.com/GabrieleLozupone/kokon)
           by Gabriele Lozupone, with more models to choose in the model menu at the top, next to Qwen-Image 2.1:
 
@@ -157,16 +180,18 @@ jobs:
           Krea 2 and MOSS make images from text and do brushed changes and Expand as plain inpainting. Each model
           downloads its files the first time it is chosen in the model menu, and each has its own LoRAs: load a LoRA
           for the model in use in Settings → LoRA (LoRAs for the new models are not tested yet).
+          **Layout** (next to the aspect ratio) draws boxes that say where things go in a new image.
 
           Notes:
           - Its own app: installs next to Kokon (own folders, settings, gallery, models and ports), both can run at the same time.
             Models are downloaded again for Kokon Modal, or point it at Kokon's files with Settings → Models → Use my own files.
           - Not code-signed: Windows SmartScreen may ask once (More info → Run anyway).
           - Updates: Kokon Modal checks this repository once a day and installs a new version in one click (it can be
-            turned off in Settings → General). Alphas up to v0.11.1-modal-alpha.10 have no updater: install this one by hand once.
+            turned off in Settings → General). Alphas up to v0.11.1-modal-alpha.10 have no updater: install a newer one by hand once.
 
           SHA-256 of \`${{ steps.art.outputs.name }}\`: \`${{ steps.art.outputs.sha }}\`
           EOF
+          cat changes.md about.md > notes.md
           gh release create "${{ steps.art.outputs.tag }}" --target "$GITHUB_SHA" --prerelease --title "Kokon Modal ${{ steps.ver.outputs.version }} (Windows alpha)" \
             --notes-file notes.md "dist-release/${{ steps.art.outputs.name }}"
 
