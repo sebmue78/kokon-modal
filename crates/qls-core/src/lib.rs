@@ -7,6 +7,7 @@ pub mod engine_manifest;
 pub mod error;
 pub mod examples;
 pub mod geometry;
+pub mod gguf_head;
 pub mod hdr;
 pub mod heif;
 pub mod imaging;

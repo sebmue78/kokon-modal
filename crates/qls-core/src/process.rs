@@ -565,7 +565,12 @@ impl ServerManager {
         }
         let file = std::fs::File::create(log_path).map_err(|e| fail(AppError::io("create the server log", log_path, e)))?;
         let run_cfg = AppConfig { server_port: port, ..cfg.clone() };
-        let args = build_server_args(&run_cfg, profile);
+        // Fork: a text encoder without an LM head (Qwen3-VL 4B: FLUX.3, Krea 2) runs from its copy
+        // with one, so Prompt+ can write (`gguf_head`); made once, on the first start that needs it.
+        let te = profile.text_encoder.clone();
+        let te = tokio::task::spawn_blocking(move || crate::gguf_head::text_encoder_for_launch(&te)).await.unwrap_or_else(|_| profile.text_encoder.clone());
+        let launch_profile = ModelProfile { text_encoder: te, ..profile.clone() };
+        let args = build_server_args(&run_cfg, &launch_profile);
         tracing::info!("starting {} {}", exe.display(), args.join(" "));
 
         let mut cmd = std::process::Command::new(exe);
