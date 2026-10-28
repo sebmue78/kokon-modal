@@ -1129,3 +1129,7 @@ kbd { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; display
 .lora-group { display: flex; flex-direction: column; gap: 10px; }
 .lora-group-title { font-size: 13px; font-weight: 600; color: var(--text); margin-top: 6px; }
 .lora-group-title .muted { font-weight: 400; }
+
+/* Fork: next to the model picker when the model in use is not downloaded. */
+.model-download { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; margin-right: 6px; border-radius: 999px; background: var(--text); color: var(--bg); font-size: 12.5px; font-weight: 500; box-shadow: var(--lift); }
+.model-download:hover { opacity: 0.9; }
