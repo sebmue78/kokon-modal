@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sebmue78/kokon-modal/releases"><b>Download (Windows, alpha)</b></a> ·
+  <a href="https://github.com/sebmue78/kokon-modal/releases"><b>Download (Windows)</b></a> ·
   <a href="#models">Models</a> ·
   <a href="#whats-different-from-kokon">What's different</a> ·
   <a href="#install">Install</a> ·
@@ -22,10 +22,10 @@
   <a href="https://github.com/GabrieleLozupone/kokon#readme">Kokon's own README</a>
 </p>
 
-> [!IMPORTANT]
-> **Alpha.** Kokon Modal is an early fork. The Windows installer is built by GitHub Actions and
-> published as a pre-release; the new models have been tried on a few GPUs only. Kokon itself is
-> the tested app: for that, use [Kokon's releases](https://github.com/GabrieleLozupone/kokon/releases).
+> [!NOTE]
+> Kokon Modal is a young fork. The Windows installer is built by GitHub Actions and published as a
+> release; the new models have been tried on a few GPUs only. Kokon itself is the more tested app:
+> for that, use [Kokon's releases](https://github.com/GabrieleLozupone/kokon/releases).
 
 ## Based on Kokon
 
@@ -91,7 +91,8 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   can be installed and run at the same time, and neither touches the other's files or processes.
 - **Updates from this repository.** Kokon Modal checks this fork once a day (Settings → General can
   turn it off or check now) and installs a new version in one click; updates are signed with the
-  fork's own key. Every alpha has its own, higher version (`0.11.1012` = Kokon 0.11.1, build 12).
+  fork's own key. Every release has its own, higher version: Kokon's version with a build number (`0.11.1014` =
+  Kokon 0.11.1, build 14).
 - Small fixes: the setup's file list no longer garbles rows waiting to download.
 
 ## Install
@@ -121,14 +122,14 @@ npm test                                # UI logic
 npx tauri dev                           # run the app (Windows)
 ```
 
-The Windows alpha is built by [`.github/workflows/alpha-windows.yml`](.github/workflows/alpha-windows.yml)
-on every push to the `alpha-release` branch: tests, the service, the MCP server, the app and the
-NSIS installer, then a pre-release `v<version>-alpha`. With the repository secret
+The Windows release is built by [`.github/workflows/alpha-windows.yml`](.github/workflows/alpha-windows.yml)
+on every push to the `release` branch: tests, the service, the MCP server, the app and the
+NSIS installer, then the release `v<version>`. With the repository secret
 `TAURI_SIGNING_PRIVATE_KEY` (the fork's updater key; its public half is in `src-tauri/tauri.conf.json`)
 the installer is signed for the updater and `latest.json` goes to the release `updates`, the address
 the app checks. Without the secret the build works the same, without an update. The release notes
-start with `.github/alpha-notes.md` (what's new, written for each release) and the commits since the
-previous alpha.
+start with `.github/release-notes.md` (what's new, written for each release) and the commits since the
+previous release.
 
 Where the fork's changes live:
 
