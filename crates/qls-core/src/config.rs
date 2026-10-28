@@ -667,6 +667,9 @@ pub struct LoraEntry {
     pub name: String,
     /// The file the user picked (never changed by Kokon).
     pub source: PathBuf,
+    /// Fork: the model it was checked against and is used with (`ModelProfile::model`); empty in
+    /// LoRAs loaded before models had their own, which were all Qwen-Image 2.1's.
+    pub model: String,
     pub weight: f32,
     /// Added in front of the prompt when the LoRA is used.
     pub trigger_words: String,
@@ -683,7 +686,37 @@ pub struct LoraEntry {
 
 impl Default for LoraEntry {
     fn default() -> Self {
-        Self { id: String::new(), name: String::new(), source: PathBuf::new(), weight: 1.0, trigger_words: String::new(), on_by_default: false, size: 0, warning: None, notes: vec![], added_at: String::new() }
+        Self {
+            id: String::new(),
+            name: String::new(),
+            source: PathBuf::new(),
+            model: String::new(),
+            weight: 1.0,
+            trigger_words: String::new(),
+            on_by_default: false,
+            size: 0,
+            warning: None,
+            notes: vec![],
+            added_at: String::new(),
+        }
+    }
+}
+
+impl LoraEntry {
+    /// The model it is for ([`LoraEntry::model`]; Qwen-Image 2.1 when not recorded).
+    pub fn model_or_qwen(&self) -> &str {
+        if self.model.trim().is_empty() { QWEN_IMAGE_21 } else { &self.model }
+    }
+}
+
+/// The name of a model id (`ModelProfile::model`) in messages.
+pub fn model_name(model: &str) -> String {
+    match model {
+        FLUX3_KLEIN => "FLUX.3 Image Klein".into(),
+        KREA2_TURBO => "Krea 2 Turbo".into(),
+        MOSS_IMAGE_SFT => "MOSS-Image".into(),
+        QWEN_IMAGE_21 | "" => "Qwen-Image 2.1".into(),
+        other => other.into(),
     }
 }
 

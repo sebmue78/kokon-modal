@@ -1,7 +1,8 @@
 import { ArrowUp, Brush, Check, ChevronDown, Expand, Eye, FolderOpen, Gauge, ImagePlus, Layers, Lightbulb, Maximize, Pencil, Settings2, SlidersHorizontal, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, urls } from "../lib/api";
-import { activeLoras, activeOverrides, aspectLabel, buildRequest, composing, editing, enhancerApplies, expansionPixels, formatDuration, hasOutpaint, imageName, MAX_LORAS, moveRef, needsPrompt, parseRatio, toggleLora, wantsPromptReview, type Ref } from "../lib/logic";
+import { modelLabel } from "./ModelPicker";
+import { activeLoras, activeOverrides, aspectLabel, buildRequest, composing, editing, enhancerApplies, expansionPixels, formatDuration, hasOutpaint, imageName, lorasFor, MAX_LORAS, moveRef, needsPrompt, parseRatio, QWEN_MODEL, toggleModelLora, wantsPromptReview, type Ref } from "../lib/logic";
 import { native } from "../lib/native";
 import { haptic } from "../lib/haptics";
 import { inBrowser, useNarrow } from "../lib/platform";
@@ -330,16 +331,18 @@ function usePlanPreview(): { plan: Plan | null; error: string | null } {
 
 const weightLabel = (w: number) => `${Math.round(w * 100)} %`;
 
-/** The project's LoRAs: shown once any LoRA is loaded in Settings. With one LoRA a click turns
- * it on or off; with more, a list with one switch each. */
+/** The project's LoRAs for the model in use: shown once such a LoRA is loaded in Settings. With
+ * one LoRA a click turns it on or off; with more, a list with one switch each. */
 function LoraBadge() {
-  const all = useStore((s) => s.loras);
+  const loaded = useStore((s) => s.loras);
+  const model = useStore((s) => s.status?.profile.model);
   const choice = useStore((s) => s.composer.loras);
+  const all = lorasFor(loaded, model);
   if (all.length === 0) return null;
   const on = activeLoras({ loras: choice }, all);
   const names = all.filter((l) => on.includes(l.id)).map((l) => `${l.name} (${weightLabel(l.weight)})`);
   const title = on.length ? `LoRA on in this project: ${names.join(", ")}` : "LoRA: none on in this project";
-  const toggle = (id: string) => setProjectLoras(toggleLora({ loras: choice }, all, id));
+  const toggle = (id: string) => setProjectLoras(toggleModelLora({ loras: choice }, loaded, all, id));
   if (all.length === 1) {
     const l = all[0];
     return (
@@ -369,7 +372,7 @@ function LoraBadge() {
     >
       {(close) => (
         <>
-          <div className="label">LoRA in this project · up to {MAX_LORAS}</div>
+          <div className="label">LoRA for {modelLabel({ id: "", model: model || QWEN_MODEL, source: "official" }).name} in this project · up to {MAX_LORAS}</div>
           {all.map((l) => {
             const active = on.includes(l.id);
             const full = !active && on.length >= MAX_LORAS;

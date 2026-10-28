@@ -1,4 +1,4 @@
-import { CircleAlert, Copy, Cpu, Expand, Image, Layers, MousePointerClick } from "lucide-react";
+import { AppWindow, CircleAlert, Copy, Cpu, Expand, Image, Layers, MousePointerClick } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { formatBytes, installProgress, installStep, installTimeLeft, modelChoiceUi, modelOfferDue, whatsNewDue as due } from "../lib/logic";
@@ -23,7 +23,7 @@ const NEWS = [
     text: "Kokon Modal adds FLUX.3 Image Klein, Krea 2 Turbo and MOSS-Image SFT next to Qwen-Image 2.1: pick one in the model menu at the top, which also downloads it the first time. FLUX.3 edits and combines photos like Qwen; Krea 2 and MOSS make new images from text and do brushed changes and Expand.",
   },
   {
-    icon: Copy,
+    icon: AppWindow,
     title: "Its own app, based on Kokon",
     text: "Kokon Modal installs next to Kokon with its own folders, models and settings, so both can run at the same time. It is built on Kokon by Gabriele Lozupone.",
   },

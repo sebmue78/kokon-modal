@@ -263,7 +263,7 @@ async fn status(State(s): St) -> Json<Value> {
         },
         "upscaler": { "model": cfg.upscaler().map(|u| u.0).unwrap_or_else(|| cfg.upscaler_model.clone()), "available": cfg.upscaler_file().is_some() },
         "engine": { "release": catalog::engine_tag(), "update_needed": engine_update },
-        "profile": { "id": cfg.profile().id, "display_name": cfg.profile().display_name, "source": cfg.profile().source },
+        "profile": { "id": cfg.profile().id, "display_name": cfg.profile().display_name, "source": cfg.profile().source, "model": cfg.profile().model },
         // Fork: every model to choose from (top bar picker), and whether its files are all there.
         "profiles": cfg.profiles.iter().map(|p| json!({
             "id": p.id, "display_name": p.display_name, "model": p.model, "source": p.source,

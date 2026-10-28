@@ -90,6 +90,24 @@ export function activeLoras(c: Pick<Composer, "loras">, all: LoraItem[]): string
   return chosen.filter((id) => usable.has(id)).slice(0, MAX_LORAS);
 }
 
+/** Fork: the model a LoRA list item is for (older services send none: Qwen-Image 2.1's). */
+export const QWEN_MODEL = "qwen-image-2.1";
+export const loraModel = (l: Pick<LoraItem, "model">) => l.model || QWEN_MODEL;
+
+/** Fork: the LoRAs made for `model` (the model in use); the others stay loaded for their own model. */
+export function lorasFor(all: LoraItem[], model: string | undefined): LoraItem[] {
+  const m = model || QWEN_MODEL;
+  return all.filter((l) => loraModel(l) === m);
+}
+
+/** Fork: the project's LoRA choice after switching `id` (one of `forModel`) on or off. The choices
+ * for other models stay as they are, so switching back to a model brings its LoRAs back. */
+export function toggleModelLora(c: Pick<Composer, "loras">, all: LoraItem[], forModel: LoraItem[], id: string): string[] {
+  const mine = new Set(forModel.map((l) => l.id));
+  const others = (c.loras ?? all.filter((l) => l.onByDefault).map((l) => l.id)).filter((x) => !mine.has(x));
+  return [...others, ...toggleLora(c, forModel, id)];
+}
+
 /** The project's LoRA choice after switching `id` on or off. */
 export function toggleLora(c: Pick<Composer, "loras">, all: LoraItem[], id: string): string[] {
   const now = activeLoras(c, all);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  lorasFor,
+  toggleModelLora,
   macEngineOfferDue,
   modelChoiceUi,
   modelOfferDue,
@@ -689,5 +691,22 @@ describe("modelOfferDue", () => {
     expect(modelOfferDue(dit("own"), modelChoiceUi("later", "0.11.1"), "0.12.0")).toBe(true);
     // Already the Q4_K_M, or another file of theirs: the service reports nothing to offer.
     expect(modelOfferDue(dit(null), {}, "0.11.1")).toBe(false);
+  });
+});
+
+
+describe("fork: LoRAs per model", () => {
+  const l = (id: string, model: string, onByDefault = false): LoraItem => ({ id, name: id, source: "", model, weight: 1, triggerWords: "", onByDefault, size: 0, warning: null, notes: [], addedAt: "", available: true });
+  const all = [l("q1", "qwen-image-2.1", true), l("old", ""), l("f1", "flux-3-image-klein"), l("f2", "flux-3-image-klein", true)];
+  it("lists only the model in use, older LoRAs as Qwen's", () => {
+    expect(lorasFor([...all], "flux-3-image-klein").map((x) => x.id)).toEqual(["f1", "f2"]);
+    expect(lorasFor([...all], "qwen-image-2.1").map((x) => x.id)).toEqual(["q1", "old"]);
+    expect(lorasFor([...all], undefined).map((x) => x.id)).toEqual(["q1", "old"]);
+  });
+  it("keeps the other models' choice when switching one on or off", () => {
+    const flux = lorasFor([...all], "flux-3-image-klein");
+    // Defaults: q1 and f2 on. Turning f1 on keeps q1 for Qwen.
+    expect(toggleModelLora({ loras: null }, [...all], flux, "f1").sort()).toEqual(["f1", "f2", "q1"]);
+    expect(toggleModelLora({ loras: ["q1", "f2"] }, [...all], flux, "f2")).toEqual(["q1"]);
   });
 });

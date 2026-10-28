@@ -9,7 +9,7 @@ import { inBrowser, isNarrow } from "./platform";
 import { useSyncExternalStore } from "react";
 import { markFresh } from "../components/Cocoon";
 import { api, ApiError, setPrivateInputs, subscribe, urls } from "./api";
-import { activeLoras, buildRequest, composing, emptyComposer, goneVersions, macEngineOfferDue, needsPrompt, newKey, pageOutdated, persistentAdvanced, refFromGen, refFromInput, reviewRequest, stageFitsPreview, starPromptDue, timelineLinks, undoTarget, versionLabels, wantsPromptReview, type CompareMode, type Composer, type Ref } from "./logic";
+import { activeLoras, lorasFor, buildRequest, composing, emptyComposer, goneVersions, macEngineOfferDue, needsPrompt, newKey, pageOutdated, persistentAdvanced, refFromGen, refFromInput, reviewRequest, stageFitsPreview, starPromptDue, timelineLinks, undoTarget, versionLabels, wantsPromptReview, type CompareMode, type Composer, type Ref } from "./logic";
 import type { AppErrorBody, GenerationRecord, GenerationRequest, InputRecord, JobView, LoraItem, MacBenchState, ServerState, StatusResponse } from "./types";
 
 export type Overlay = null | "gallery" | "settings" | "inpaint" | "expand" | "welcome" | "whats-new" | "mac-engine" | "prompt-tips" | "shortcuts";
@@ -1155,7 +1155,8 @@ export async function submitComposer() {
   if (wantsPromptReview(s.composer)) return startPromptReview();
   const target = composing(s.composer) ? undefined : s.composer.refs[0]?.source;
   const parent = target?.startsWith("gen:") ? target.slice(4) : null;
-  const req: GenerationRequest = { ...buildRequest(s.composer, parent), loras: activeLoras(s.composer, s.loras) };
+  // Only the LoRAs of the model in use (each LoRA is kept for the model it was loaded for).
+  const req: GenerationRequest = { ...buildRequest(s.composer, parent), loras: activeLoras(s.composer, lorasFor(s.loras, s.status?.profile.model)) };
   if (!req.prompt && needsPrompt(s.composer)) {
     toastInfo("Describe what to create or change.");
     return;

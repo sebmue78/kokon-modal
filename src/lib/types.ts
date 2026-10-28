@@ -168,6 +168,8 @@ export interface LoraItem {
   name: string;
   /** The file the user picked. */
   source: string;
+  /** Fork: the model it is for (`ModelProfile.model`, e.g. "qwen-image-2.1"). */
+  model: string;
   weight: number;
   triggerWords: string;
   onByDefault: boolean;
@@ -233,7 +235,7 @@ export interface StatusResponse {
     /** The engine can run an upscaler model (null: not running). */
     upscale?: boolean | null;
   };
-  profile: { id: string; display_name: string; source: ProfileSource };
+  profile: { id: string; display_name: string; source: ProfileSource; model?: string };
   /** Fork: every model to choose from, and whether all its files are there. */
   profiles?: { id: string; display_name: string; model: string; source: ProfileSource; installed: boolean }[];
   gpu: { name: string; vendor: string; unified: boolean; memory_total_mib: number; memory_used_mib: number; memory_free_mib: number; driver_version: string } | null;

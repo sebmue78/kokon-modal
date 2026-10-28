@@ -1124,3 +1124,8 @@ kbd { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; display
 .model-picker:has(select:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
 .model-picker-name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-picker select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: inherit; font-size: 13px; }
+
+/* Fork: Settings → LoRA, one group per model. */
+.lora-group { display: flex; flex-direction: column; gap: 10px; }
+.lora-group-title { font-size: 13px; font-weight: 600; color: var(--text); margin-top: 6px; }
+.lora-group-title .muted { font-weight: 400; }

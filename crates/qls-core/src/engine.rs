@@ -347,7 +347,9 @@ impl Engine {
     pub fn add_lora(&self, src: &Path) -> AppResult<LoraEntry> {
         let _lock = lora::LIBRARY.lock().unwrap_or_else(|e| e.into_inner());
         let cfg = self.config();
-        let existing = cfg.loras.iter().find(|l| l.source == src);
+        // The same file loaded again for the same model refreshes that entry; for another model it is a new one.
+        let model = cfg.profile().model.clone();
+        let existing = cfg.loras.iter().find(|l| l.source == src && l.model_or_qwen() == model);
         let entry = lora::import(&cfg, src, existing)?;
         let mut list = cfg.loras.clone();
         match list.iter_mut().find(|l| l.id == entry.id) {
@@ -404,7 +406,10 @@ impl Engine {
     /// The loaded LoRAs, with whether Kokon's copy is still there.
     pub fn loras(&self) -> Vec<LoraView> {
         let cfg = self.config();
-        cfg.loras.iter().map(|l| LoraView { available: lora::entry_path(&cfg, l).is_file(), entry: l.clone() }).collect()
+        cfg.loras
+            .iter()
+            .map(|l| LoraView { available: lora::entry_path(&cfg, l).is_file(), entry: LoraEntry { model: l.model_or_qwen().to_string(), ..l.clone() } })
+            .collect()
     }
 
     /// Copies the upscaler shipped with the app into the configured folder when it is missing
@@ -1350,10 +1355,8 @@ impl Engine {
     /// The LoRAs job `id` uses (see `lora::resolve`); skipped ones are noted on the job.
     fn job_loras(&self, id: &str, cfg: &AppConfig, request: &GenerationRequest, caps: &Capabilities) -> Vec<AppliedLora> {
         let (loras, notes) = lora::resolve(cfg, request.loras.as_deref());
-        let (loras, notes) = if !loras.is_empty() && !cfg.profile().is_qwen() {
-            // Kokon's LoRA library is checked against Qwen-Image 2.1's layers.
-            (Vec::new(), vec!["Your LoRAs are for Qwen-Image 2.1, not this model; made without them.".to_string()])
-        } else if !loras.is_empty() && !caps.img_feature("lora") {
+        // `lora::resolve` keeps only the LoRAs of the model in use.
+        let (loras, notes) = if !loras.is_empty() && !caps.img_feature("lora") {
             (Vec::new(), vec!["This inference engine can't use LoRAs (update it in Setup); made without them.".to_string()])
         } else {
             (loras, notes)
