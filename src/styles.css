@@ -554,6 +554,8 @@ pre.diag { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font
 .layout-lasso circle.closing { fill: var(--box); r: 8px; }
 .layout-vertex { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 2px solid var(--box); transform: translate(-50%, -50%); cursor: move; z-index: 3; touch-action: none; }
 .layout-toolset .pill { height: 30px; }
+.layout-area.lasso .layout-box, .layout-area.lasso .layout-box *, .layout-area.drawing .layout-vertex { pointer-events: none; }
+.layout-area.lasso:not(.drawing) .layout-bar, .layout-area.lasso:not(.drawing) .layout-bar *, .layout-area.lasso:not(.drawing) .layout-box.active .layout-corner { pointer-events: auto; }
 .layout-tools { gap: 12px; flex-wrap: wrap; justify-content: center; align-items: center; }
 .layout-hint { font-size: 12px; max-width: 520px; text-align: center; }
 .num-input { width: 74px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); padding: 0 8px; text-align: right; outline: none; }
