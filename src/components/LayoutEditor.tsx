@@ -126,6 +126,8 @@ export function LayoutEditor() {
     if (tool === "lasso") {
       // No focus change on the canvas: the new area's text field keeps the focus it gets.
       e.preventDefault();
+      // A text field left open would take the typing (and Backspace) meant for the outline.
+      if (document.activeElement instanceof HTMLTextAreaElement) document.activeElement.blur();
       const pt: Point = [p.x, p.y];
       setActive(null);
       if (!lasso) return setLasso([pt]);
@@ -207,7 +209,11 @@ export function LayoutEditor() {
       </div>
       <div className="editor-stage" ref={stageRef} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
         <div
-          className={`layout-area ${full || none ? "" : "drawable"}`}
+          // With the outline tool, clicks go through the areas to the canvas (points can be set on
+          // top of them); only an area's bar, and the selected area's corners and points, still
+          // take them. While an
+          // outline is being drawn, nothing does.
+          className={`layout-area ${full || none ? "" : "drawable"} ${tool === "lasso" ? "lasso" : ""} ${lasso ? "drawing" : ""}`}
           ref={areaRef}
           style={{ width: cw, height: ch }}
           onPointerDown={onCanvasDown}
@@ -236,7 +242,13 @@ export function LayoutEditor() {
                 style={{ left: `${b.x * 100}%`, top: `${b.y * 100}%`, width: `${b.w * 100}%`, height: `${b.h * 100}%`, ["--box" as string]: color }}
                 onPointerDown={() => setActive(i)}
               >
-                <div className="layout-bar" onPointerDown={onBoxDown(i)} title="Drag to move">
+                <div
+                  className="layout-bar"
+                  onPointerDown={onBoxDown(i)}
+                  // With the outline tool the text field lets clicks through: its bar opens it.
+                  onClick={() => tool === "lasso" && textRefs.current[i]?.focus()}
+                  title={tool === "lasso" ? "Drag to move, click to write" : "Drag to move"}
+                >
                   <span className="layout-num">{i + 1}</span>
                   <span className="spacer" />
                   <button className="layout-del" title="Delete this area" onPointerDown={(e) => e.stopPropagation()} onClick={() => remove(i)}>
