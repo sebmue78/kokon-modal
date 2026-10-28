@@ -9,4 +9,6 @@
   sketch they follow. FLUX.3, Krea 2 and MOSS-Image get the area around the outline (its
   bounding box), because their prompt formats only know rectangles.
 - The editor remembers the tool you used last.
-- This version still has to be tested on a GPU. Please report what you notice.
+- **Releases instead of alphas.** Kokon Modal is now published as regular releases. Versions keep
+  counting as before: Kokon's version with a build number. The in-app update works as before.
+- Layout has not been tried on a GPU yet. Please report what you notice.
