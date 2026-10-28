@@ -1,5 +1,6 @@
 // Pure UI logic (unit-tested in logic.test.ts).
 
+import { usableBoxes, type LayoutBox } from "./layout";
 import type { Advanced, GenerationRecord, GenerationRequest, InpaintAction, InputRecord, InstallItem, JobView, LoraItem, LutInfo, MacBenchState, Mode, ModelsStatus, StatusResponse, OutpaintSpec, Plan, Quality, ResolutionMode, Size } from "./types";
 
 export interface Ref {
@@ -42,6 +43,8 @@ export interface Composer {
   create: boolean;
   /** LoRAs switched on in this project; null = the ones on by default (`activeLoras`). */
   loras: string[] | null;
+  /** Fork: Layout boxes for a new image without input images (`layoutInUse`). */
+  layout?: LayoutBox[];
 }
 
 /** A preset name from any version: older ones also had "turbo" (now Fast) and "ultra" (now Quality). */
@@ -71,6 +74,7 @@ export const emptyComposer = (prefs?: Partial<Composer>): Composer => ({
   enhancedFrom: null,
   create: false,
   loras: null,
+  layout: [],
 });
 
 /** The prompt makes a new image from the reference images (rather than editing image 1). */
@@ -151,6 +155,15 @@ export function hasOutpaint(o: OutpaintSpec | null): boolean {
 
 /** A mask painted on image 1 that the request uses (not for a new image from references). */
 const maskInUse = (c: Composer) => !composing(c) && !!c.mask && !!c.refs[0] && c.mask.refKey === c.refs[0].key;
+/** Fork: a Layout is used for a new image from the prompt alone (no input images). */
+export const layoutInUse = (c: Pick<Composer, "refs" | "layout">): boolean => c.refs.length === 0 && usableBoxes(c.layout).length > 0;
+
+/** Fork: width / height of the image a layout is drawn for (the composer's shape; Auto is square). */
+export function layoutRatio(c: Pick<Composer, "aspect" | "resolution" | "customWidth" | "customHeight">): number {
+  if (c.resolution === "custom" && c.customWidth > 0 && c.customHeight > 0) return c.customWidth / c.customHeight;
+  return parseRatio(c.aspect) ?? 1;
+}
+
 const outpaintInUse = (c: Composer) => !composing(c) && hasOutpaint(c.outpaint);
 
 /** Composer state -> stable service request. */
@@ -160,16 +173,18 @@ export function buildRequest(c: Composer, parentId?: string | null): GenerationR
   // Inpaint and expand keep the source's shape; create, edit and combine take the chosen ratio.
   const shaped = !maskValid && !outpaintInUse(c);
   const reviewed = !!c.enhancedFrom && !!c.prompt.trim();
+  const layout = layoutInUse(c);
   return {
     prompt: c.prompt.trim(),
-    mode: composing(c) ? "compose" : c.mode,
-    images: c.mode === "generate" && !composing(c) ? [] : c.refs.map((r) => r.source),
+    mode: layout ? "generate" : composing(c) ? "compose" : c.mode,
+    images: layout || (c.mode === "generate" && !composing(c)) ? [] : c.refs.map((r) => r.source),
     mask: maskValid ? `input:${c.mask!.inputId}` : null,
     ...(maskValid ? { inpaint_action: c.inpaintAction } : {}),
     outpaint: outpaintInUse(c) ? c.outpaint : null,
     quality: c.quality,
     resolution: c.resolution,
-    aspect_ratio: shaped && c.aspect !== "auto" && !custom ? c.aspect : null,
+    // A layout is drawn on a canvas of the chosen shape: square for Auto.
+    aspect_ratio: shaped && !custom ? (c.aspect !== "auto" ? c.aspect : layout ? "1:1" : null) : null,
     width: custom ? c.customWidth : null,
     height: custom ? c.customHeight : null,
     seed: c.seed,
@@ -179,6 +194,7 @@ export function buildRequest(c: Composer, parentId?: string | null): GenerationR
     parent_id: parentId ?? null,
     // A prompt Prompt+ wrote already is sent as it is, with the user's words kept beside it.
     ...(reviewed ? { enhanced_from: c.enhancedFrom } : c.enhance && enhancerApplies(c) ? { enhance: true } : {}),
+    ...(layout ? { layout: usableBoxes(c.layout) } : {}),
   };
 }
 
@@ -200,7 +216,8 @@ export function enhancerApplies(c: Composer): boolean {
 
 /** False only for a removal in a painted area, which needs no description. */
 export function needsPrompt(c: Composer): boolean {
-  return !(maskInUse(c) && c.inpaintAction === "remove");
+  // Fork: the boxes of a layout can be the whole description.
+  return !(maskInUse(c) && c.inpaintAction === "remove") && !layoutInUse(c);
 }
 
 /** Advanced fields that change how the model samples. They last for the session only: a value
@@ -258,7 +275,15 @@ export function composerFromRecord(g: GenerationRecord, base: Composer): Compose
     advanced: cleanAdvanced(req?.advanced ?? {}),
     // The LoRAs it was made with (none for images made before LoRAs or without them).
     loras: (g.loras ?? []).map((l) => l.id),
+    // Fork: its layout; the sketch it was drawn as is not a reference to keep.
+    layout: req?.layout ?? [],
   };
+  if (req?.layout?.length) {
+    c.refs = [];
+    c.create = false;
+    c.mask = null;
+    c.mode = "auto";
+  }
   if (req?.width && req?.height) {
     c.customWidth = req.width;
     c.customHeight = req.height;

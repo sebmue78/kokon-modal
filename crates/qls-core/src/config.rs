@@ -213,6 +213,8 @@ pub struct RecommendedSettings {
     /// Classifier-free guidance; 1 = off (distilled Turbo models). Above 1 the negative prompt
     /// is used.
     pub cfg_scale: f32,
+    /// Fork: how the model is told about a Layout (`layout::LayoutStyle`).
+    pub layout: crate::layout::LayoutStyle,
 }
 
 impl Default for RecommendedSettings {
@@ -236,6 +238,7 @@ impl Default for RecommendedSettings {
             text_to_image: true,
             underscore_image_tags: false,
             cfg_scale: 1.0,
+            layout: crate::layout::LayoutStyle::Sketch,
         }
     }
 }
@@ -262,6 +265,7 @@ impl RecommendedSettings {
             text_to_image: true,
             underscore_image_tags: false,
             cfg_scale: 1.0,
+            layout: crate::layout::LayoutStyle::Words,
         }
     }
 
@@ -285,6 +289,7 @@ impl RecommendedSettings {
             text_to_image: true,
             underscore_image_tags: false,
             cfg_scale: 3.0,
+            layout: crate::layout::LayoutStyle::Words,
         }
     }
 
@@ -308,12 +313,13 @@ impl RecommendedSettings {
             text_to_image: true,
             underscore_image_tags: true,
             cfg_scale: 5.0,
+            layout: crate::layout::LayoutStyle::Sketch,
         }
     }
 
     /// Fibo 2.0 Edit Turbo (sd.cpp's recipe fibo2-edit-turbo): edits only, 4 steps without CFG.
     pub fn fibo2_edit_turbo() -> Self {
-        Self { steps: 4, cfg_scale: 1.0, text_to_image: false, ..Self::fibo2_dev() }
+        Self { steps: 4, cfg_scale: 1.0, text_to_image: false, layout: crate::layout::LayoutStyle::None, ..Self::fibo2_dev() }
     }
 
     /// FLUX.3 Image Klein (its model card and sd.cpp's docs/flux3.md): distilled, 16 steps, no
@@ -336,6 +342,7 @@ impl RecommendedSettings {
             text_to_image: true,
             underscore_image_tags: false,
             cfg_scale: 1.0,
+            layout: crate::layout::LayoutStyle::Native,
         }
     }
 }

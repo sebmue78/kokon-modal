@@ -67,6 +67,10 @@ export interface GenerationRequest {
   enhanced_from?: string | null;
   /** LoRA ids to use (the app always sends its list; omitted = none, as for MCP). */
   loras?: string[] | null;
+  /** Fork: Layout boxes (fractions of the image) for a new image. */
+  layout?: import("./layout").LayoutBox[];
+  /** Fork: the drawn layout ("input:<id>"), image 1 for the models that read a sketch. */
+  layout_sketch?: string | null;
 }
 
 export interface WorkingCanvas { source: Size; content: Size; canvas: Size; content_offset: [number, number]; scale: number }
@@ -235,7 +239,8 @@ export interface StatusResponse {
     /** The engine can run an upscaler model (null: not running). */
     upscale?: boolean | null;
   };
-  profile: { id: string; display_name: string; source: ProfileSource; model?: string };
+  /** Fork: `layout` says how the model in use follows a Layout. */
+  profile: { id: string; display_name: string; source: ProfileSource; model?: string; layout?: import("./layout").LayoutStyle };
   /** Fork: every model to choose from, and whether all its files are there. */
   profiles?: { id: string; display_name: string; model: string; source: ProfileSource; installed: boolean }[];
   gpu: { name: string; vendor: string; unified: boolean; memory_total_mib: number; memory_used_mib: number; memory_free_mib: number; driver_version: string } | null;

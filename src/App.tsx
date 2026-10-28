@@ -12,6 +12,7 @@ import {
 import { Composer, importPaths, uploadFiles } from "./components/Composer";
 import { Login } from "./components/Login";
 import { ExpandEditor } from "./components/ExpandEditor";
+import { LayoutEditor } from "./components/LayoutEditor";
 import { Gallery } from "./components/Gallery";
 import { InpaintEditor } from "./components/InpaintEditor";
 import { Settings as SettingsDialog } from "./components/Settings";
@@ -379,9 +380,10 @@ export default function App() {
           {overlay === "gallery" && <Gallery />}
           {overlay === "inpaint" && <InpaintEditor />}
           {overlay === "expand" && <ExpandEditor />}
+          {overlay === "layout" && <LayoutEditor />}
           {dragging && <div className="drop-hint">{editing ? "Drop to add as a reference image" : "Drop an image to start editing it"}</div>}
         </div>
-        {!needsSetup && overlay !== "inpaint" && overlay !== "expand" && overlay !== "gallery" && <Composer />}
+        {!needsSetup && overlay !== "inpaint" && overlay !== "expand" && overlay !== "layout" && overlay !== "gallery" && <Composer />}
       </div>
       {dialogs}
       <Tour />

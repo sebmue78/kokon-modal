@@ -1,0 +1,155 @@
+// Fork: Layout. Rectangles the user draws on a canvas the shape of the new image, each with what
+// should appear there. Coordinates are fractions of the image (0..1 from the top left). How the
+// model gets them is the service's job (crates/qls-core/src/layout.rs); the app draws the sketch
+// for the models that read one (Qwen-Image 2.1, Fibo 2.0 Dev).
+
+export interface LayoutBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string;
+}
+
+/** How the model in use is told about a layout (the service's `LayoutStyle`). */
+export type LayoutStyle = "sketch" | "native" | "words" | "none";
+
+export const MAX_BOXES = 12;
+/** The smallest box, as a fraction of the image side. */
+export const MIN_BOX = 0.03;
+
+const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
+
+/** The box kept inside the image and at least `MIN_BOX` in each direction. */
+export function clampBox(b: LayoutBox): LayoutBox {
+  const w = Math.min(1, Math.max(MIN_BOX, clamp01(b.w)));
+  const h = Math.min(1, Math.max(MIN_BOX, clamp01(b.h)));
+  return { ...b, x: Math.min(clamp01(b.x), 1 - w), y: Math.min(clamp01(b.y), 1 - h), w, h };
+}
+
+/** The rectangle between two points (a drag), clamped. */
+export function boxFromPoints(ax: number, ay: number, bx: number, by: number, text = ""): LayoutBox {
+  const x0 = clamp01(Math.min(ax, bx));
+  const y0 = clamp01(Math.min(ay, by));
+  const x1 = clamp01(Math.max(ax, bx));
+  const y1 = clamp01(Math.max(ay, by));
+  return clampBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, text });
+}
+
+export type Corner = "nw" | "ne" | "sw" | "se";
+
+/** The box after dragging one corner by (dx, dy); the opposite corner stays. */
+export function resizeBox(b: LayoutBox, corner: Corner, dx: number, dy: number): LayoutBox {
+  const left = corner === "nw" || corner === "sw";
+  const top = corner === "nw" || corner === "ne";
+  const ax = left ? b.x + b.w : b.x;
+  const ay = top ? b.y + b.h : b.y;
+  const mx = (left ? b.x : b.x + b.w) + dx;
+  const my = (top ? b.y : b.y + b.h) + dy;
+  // Not past the opposite corner: the box keeps its minimum size instead of flipping.
+  const px = left ? Math.min(mx, ax - MIN_BOX) : Math.max(mx, ax + MIN_BOX);
+  const py = top ? Math.min(my, ay - MIN_BOX) : Math.max(my, ay + MIN_BOX);
+  return boxFromPoints(ax, ay, px, py, b.text);
+}
+
+/** The box moved by (dx, dy), staying inside the image. */
+export function moveBox(b: LayoutBox, dx: number, dy: number): LayoutBox {
+  return { ...b, x: Math.min(1 - b.w, Math.max(0, b.x + dx)), y: Math.min(1 - b.h, Math.max(0, b.y + dy)) };
+}
+
+/** Boxes worth sending: with text, inside the image, at most `MAX_BOXES`. */
+export function usableBoxes(boxes: LayoutBox[] | undefined): LayoutBox[] {
+  return (boxes ?? [])
+    .filter((b) => b.text.trim())
+    .slice(0, MAX_BOXES)
+    .map((b) => {
+      const c = clampBox(b);
+      const r = (v: number) => Math.round(v * 10000) / 10000;
+      return { x: r(c.x), y: r(c.y), w: r(c.w), h: r(c.h), text: c.text.trim() };
+    });
+}
+
+/** Size of the sketch image: `long` px on the long side, the image's ratio. */
+export function sketchSize(ratio: number, long = 1024): { width: number; height: number } {
+  const r = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  return r >= 1 ? { width: long, height: Math.max(16, Math.round(long / r)) } : { width: Math.max(16, Math.round(long * r)), height: long };
+}
+
+/** Colors of the boxes, one per number (also in the editor). */
+export const BOX_COLORS = ["#e5484d", "#3e63dd", "#30a46c", "#f76b15", "#8e4ec6", "#12a594", "#d6409f", "#978365", "#0090ff", "#ab4aba", "#46a758", "#e54666"];
+
+/** Wraps text into lines that fit `maxWidth` (measured by `measure`). */
+export function wrapText(text: string, maxWidth: number, measure: (s: string) => number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word;
+    if (measure(next) <= maxWidth || !line) line = next;
+    else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** Draws the sketch: a plain background with each box outlined in its color, its number and
+ * its text. The model is told to use it as a plan only. */
+export function drawSketch(ctx: CanvasRenderingContext2D, width: number, height: number, boxes: LayoutBox[]) {
+  ctx.fillStyle = "#f2f2f2";
+  ctx.fillRect(0, 0, width, height);
+  const unit = Math.max(width, height) / 1024;
+  boxes.forEach((b, i) => {
+    const color = BOX_COLORS[i % BOX_COLORS.length];
+    const x = b.x * width;
+    const y = b.y * height;
+    const w = b.w * width;
+    const h = b.h * height;
+    ctx.fillStyle = `${color}26`;
+    ctx.fillRect(x, y, w, h);
+    ctx.lineWidth = 4 * unit;
+    ctx.strokeStyle = color;
+    ctx.strokeRect(x + 2 * unit, y + 2 * unit, w - 4 * unit, h - 4 * unit);
+    const pad = 10 * unit;
+    let size = Math.max(12 * unit, Math.min(30 * unit, h / 5));
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#111";
+    const label = `${i + 1}. ${b.text}`;
+    let lines: string[] = [];
+    // Smaller type until the text fits the box (down to a minimum).
+    for (; size >= 12 * unit; size -= 2 * unit) {
+      ctx.font = `600 ${size}px sans-serif`;
+      lines = wrapText(label, w - 2 * pad, (s) => ctx.measureText(s).width);
+      if (lines.length * size * 1.2 <= h - 2 * pad) break;
+    }
+    const max = Math.max(1, Math.floor((h - 2 * pad) / (size * 1.2)));
+    lines.slice(0, max).forEach((l, k) => ctx.fillText(l, x + pad, y + pad + k * size * 1.2, w - 2 * pad));
+  });
+}
+
+/** The sketch as a PNG. */
+export async function sketchPng(ratio: number, boxes: LayoutBox[]): Promise<Blob> {
+  const { width, height } = sketchSize(ratio);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Can't draw the layout sketch.");
+  drawSketch(ctx, width, height, boxes);
+  return await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Can't draw the layout sketch."))), "image/png"));
+}
+
+/** What the editor says about the model in use. */
+export function layoutHint(style: LayoutStyle | undefined, model: string): string {
+  switch (style) {
+    case "native":
+      return `${model} reads the boxes directly.`;
+    case "words":
+      return `${model} gets the positions in words: placement is approximate.`;
+    case "none":
+      return `${model} makes no new images, so it can't follow a layout.`;
+    default:
+      return `${model} gets the layout as a sketch to follow.`;
+  }
+}
