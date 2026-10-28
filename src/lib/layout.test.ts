@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxFromPoints, clampBox, layoutHint, MAX_BOXES, MIN_BOX, moveBox, resizeBox, sketchSize, usableBoxes, wrapText } from "./layout";
+import { boxFromPoints, clampBox, moveVertex, near, shapeBox, layoutHint, MAX_BOXES, MIN_BOX, moveBox, resizeBox, sketchSize, usableBoxes, wrapText } from "./layout";
 import { buildRequest, composerFromRecord, emptyComposer, layoutInUse, layoutRatio, needsPrompt, type Ref } from "./logic";
 import type { GenerationRecord } from "./types";
 
@@ -18,6 +18,31 @@ describe("layout boxes", () => {
     expect(f.x).toBeCloseTo(0.6 - MIN_BOX);
     expect(f.w).toBeCloseTo(MIN_BOX);
     expect(clampBox(box(0.9, 0.9, 0.5, 0.5)).x).toBeCloseTo(0.5);
+  });
+
+  it("keeps outlines with their bounding box", () => {
+    const s = shapeBox([[0.2, 0.5], [0.6, 0.4], [0.7, 1.2], [0.1, 0.9]], "a lake");
+    expect([s.x, s.y, s.h]).toEqual([0.1, 0.4, 0.6]);
+    expect(s.w).toBeCloseTo(0.6);
+    expect(s.points![2]).toEqual([0.7, 1]);
+    // Moving and stretching take the points along.
+    const m = moveBox(s, 0.2, 0);
+    expect(m.x).toBeCloseTo(0.3);
+    expect(m.points![0][0]).toBeCloseTo(0.4);
+    const r = resizeBox(s, "se", -0.3, -0.3);
+    expect(r.w).toBeCloseTo(0.3);
+    expect(r.points![2][0]).toBeCloseTo(0.4);
+    expect(r.points![2][1]).toBeCloseTo(0.7);
+    // A point moved: a new bounding box.
+    expect(moveVertex(s, 2, 0.9, 0.95).w).toBeCloseTo(0.8);
+    expect(clampBox(s).points).toHaveLength(4);
+    expect(usableBoxes([s])[0].points).toHaveLength(4);
+    expect(usableBoxes([{ ...box(0, 0, 0.5, 0.5), points: [[0, 0], [1, 1]] }])[0].points).toBeUndefined();
+  });
+
+  it("closes an outline on its first point", () => {
+    expect(near([0.5, 0.5], [0.505, 0.5], 1000, 1000)).toBe(true);
+    expect(near([0.5, 0.5], [0.52, 0.5], 1000, 1000)).toBe(false);
   });
 
   it("sends only boxes with text, at most the limit", () => {

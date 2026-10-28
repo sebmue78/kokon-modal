@@ -1,13 +1,12 @@
-- **New: Layout.** For a new image, the **Layout** button next to the aspect ratio opens a canvas
-  in the image's shape. Drag to draw boxes, move them by their bar and resize them by their corners,
-  and write in each box what should appear there (at most 12 boxes). The prompt describes the whole
-  scene, and the boxes say where things go. How each model follows the layout:
-  - **FLUX.3 Image Klein** reads the boxes directly, in its own box format.
-  - **Qwen-Image 2.1 and Fibo 2.0 Dev** get the layout as a sketch to follow: a reference image
-    with the numbered boxes, plus the positions in words.
-  - **Krea 2 and MOSS-Image** get the positions in words, so the placement is approximate.
-  - **Fibo 2.0 Edit Turbo** makes no new images, so it can't follow a layout.
-
-  With Prompt+ on, Prompt+ first writes the scene and then the boxes are added.
-- **Release notes** now list what changed, with every commit since the previous alpha.
-- This version still has to be tested on a GPU, Layout above all. Please report what you notice.
+- **New in Layout: outlines (polygonal lasso).** Next to **Rectangle**, the Layout editor now
+  has an **Outline** tool. Click point by point, and the area closes when you click the first
+  point again (or double-click). Then write what goes there.
+  - Backspace takes back the last point; Esc stops the outline.
+  - When an outline is selected, drag its points to reshape it. Drag its bar to move it, or its
+    corners to stretch it.
+  - Rectangles and outlines can be mixed in one layout (at most 12 areas).
+- **How the models use outlines:** Qwen-Image 2.1 and Fibo 2.0 Dev see the real shape in the
+  sketch they follow. FLUX.3, Krea 2 and MOSS-Image get the area around the outline (its
+  bounding box), because their prompt formats only know rectangles.
+- The editor remembers the tool you used last.
+- This version still has to be tested on a GPU. Please report what you notice.

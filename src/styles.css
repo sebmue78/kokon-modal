@@ -541,6 +541,19 @@ pre.diag { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font
 .layout-corner.ne { left: 100%; top: 0; cursor: nesw-resize; }
 .layout-corner.sw { left: 0; top: 100%; cursor: nesw-resize; }
 .layout-corner.se { left: 100%; top: 100%; cursor: nwse-resize; }
+.layout-box.shape { border: 0; background: none; pointer-events: none; }
+.layout-box.shape > * { pointer-events: auto; }
+.layout-box.shape .layout-bar { border-radius: 3px; align-self: flex-start; min-width: 96px; opacity: 0.92; }
+.layout-box.shape .layout-text { flex: none; height: 52px; width: min(100%, 240px); background: rgba(255, 255, 255, 0.8); border-radius: 3px; margin-top: 2px; }
+.layout-box.shape.active { box-shadow: none; outline: 1px dashed var(--box); outline-offset: 2px; }
+.layout-shapes { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.layout-shapes polygon { fill: color-mix(in srgb, var(--box) 14%, transparent); stroke: var(--box); stroke-width: 2; stroke-linejoin: round; }
+.layout-shapes polygon.active { stroke-width: 3; }
+.layout-lasso polyline { fill: none; stroke: var(--box); stroke-width: 2; stroke-dasharray: 6 4; stroke-linejoin: round; }
+.layout-lasso circle { fill: #fff; stroke: var(--box); stroke-width: 2; }
+.layout-lasso circle.closing { fill: var(--box); r: 8px; }
+.layout-vertex { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 2px solid var(--box); transform: translate(-50%, -50%); cursor: move; z-index: 3; touch-action: none; }
+.layout-toolset .pill { height: 30px; }
 .layout-tools { gap: 12px; flex-wrap: wrap; justify-content: center; align-items: center; }
 .layout-hint { font-size: 12px; max-width: 520px; text-align: center; }
 .num-input { width: 74px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); padding: 0 8px; text-align: right; outline: none; }

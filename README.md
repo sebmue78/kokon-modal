@@ -79,8 +79,10 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   and Fibo 2.0 only, so with FLUX.3 and Krea 2 Prompt+ rewrites edits and combinations from your
   words alone, with instructions written for that.
 - **Layout for new images.** The **Layout** button next to the aspect ratio opens a canvas in the
-  shape of the new image: draw boxes and write in each what goes there, the prompt describes the
-  scene. FLUX.3 reads the boxes natively (its `bbox` caption format); Qwen-Image 2.1 and Fibo 2.0
+  shape of the new image: draw rectangles, or outlines point by point (like a polygonal lasso:
+  the area closes on the first point), and write in each what goes there; the prompt describes
+  the scene. Outlines are drawn as their shape in the sketch; FLUX.3, Krea 2 and MOSS-Image use
+  the box around them. FLUX.3 reads the boxes natively (its `bbox` caption format); Qwen-Image 2.1 and Fibo 2.0
   Dev get the drawing as a reference image to follow as a plan; Krea 2 and MOSS-Image get the
   positions in words (approximate). Prompt+ writes the scene first, then the boxes are added.
 - **Its own app next to Kokon.** Kokon Modal has its own name, app id (`app.kokonmodal.desktop`),
