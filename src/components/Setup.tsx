@@ -397,7 +397,7 @@ export function Setup() {
           <p className="setup-lead">
             {own
               ? "Everything runs on this PC. Use the Qwen-Image 2.1 files you already have, for example from ComfyUI: Setup only downloads the engine and what you don't have."
-              : `Everything runs on this PC. Setup downloads the image model once (${chosen ? formatBytes(chosen.files.reduce((a, f) => a + f.size, 0)) : "about 12 GB"}); after that, nothing leaves your computer.`}
+              : "Everything runs on this PC. Setup downloads the image model once; after that, nothing leaves your computer."}
           </p>
         </div>
 
