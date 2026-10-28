@@ -44,7 +44,7 @@ are downloaded the first time you choose them (the app asks first, then shows th
 
 | Model | What it does | Steps | Prompt+ | License (check before commercial use) |
 | --- | --- | --- | --- | --- |
-| **Qwen-Image 2.1 Turbo** (Alibaba Qwen) | New images, every kind of edit, combining images, LoRAs | 8 | yes | Qwen Research License: research and evaluation only, non-commercial |
+| **Qwen-Image 2.1 Turbo** (Alibaba Qwen) | New images, every kind of edit, combining images | 8 | yes | Qwen Research License: research and evaluation only, non-commercial |
 | **FLUX.3 Image Klein** (Black Forest Labs, 5.6B) | New images, edits of a whole photo, combining up to 10 images; brushed changes as plain inpainting | 16 | yes, recommended | FLUX Kommunity License: non-commercial; commercial use of images only for qualifying users |
 | **Fibo 2.0 Dev** (Bria, 8B) | New images, edits of a whole photo, combining up to 10 images (`<image_1>`, `<image_2>`); brushed changes as plain inpainting | 20, CFG 5 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
 | **Fibo 2.0 Edit Turbo** (Bria, 8B) | Fast edits of a whole photo and combining images; no new images from text | 4 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
@@ -70,7 +70,8 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   and says so instead of failing.
 - **LoRAs per model.** Each LoRA is loaded for the model in use and only used with it; the LoRA
   button next to the prompt lists the LoRAs of that model, and each model keeps its own choice per
-  project. LoRAs for FLUX.3, Krea 2 and MOSS-Image are not tested yet.
+  project. This works for every model; LoRAs for FLUX.3, Fibo 2.0, Krea 2 and MOSS-Image are not
+  tested yet (FLUX.3 and Fibo use LoRAs trained on their base models, Krea 2 on Krea 2 Raw).
 - **Prompt+ with FLUX.3 and Krea 2.** Their Qwen3-VL 4B text encoder ties its output layer to its
   embeddings, so its GGUF has no LM head and the engine could not write with it. Kokon Modal writes
   a copy with the head added once (about 4.7 GB, next to the downloaded file, which stays as it
