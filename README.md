@@ -9,7 +9,7 @@
 
 <p align="center">
   A fork of <a href="https://github.com/GabrieleLozupone/kokon"><b>Kokon</b></a> by Gabriele Lozupone that adds
-  <b>FLUX.3 Image Klein</b>, <b>Krea 2 Turbo</b> and <b>MOSS-Image</b> next to Qwen-Image 2.1.<br>
+  <b>FLUX.3 Image Klein</b>, <b>Fibo 2.0</b>, <b>Krea 2 Turbo</b> and <b>MOSS-Image</b> next to Qwen-Image 2.1.<br>
   Everything still runs on your own GPU: no account, no uploads, no limits.
 </p>
 
@@ -46,23 +46,26 @@ are downloaded the first time you choose them (the app asks first, then shows th
 | --- | --- | --- | --- | --- |
 | **Qwen-Image 2.1 Turbo** (Alibaba Qwen) | New images, every kind of edit, combining images, LoRAs | 8 | yes | Qwen Research License: research and evaluation only, non-commercial |
 | **FLUX.3 Image Klein** (Black Forest Labs, 5.6B) | New images, edits of a whole photo, combining up to 10 images; brushed changes as plain inpainting | 16 | yes, recommended | FLUX Kommunity License: non-commercial; commercial use of images only for qualifying users |
+| **Fibo 2.0 Dev** (Bria, 8B) | New images, edits of a whole photo, combining up to 10 images (`<image_1>`, `<image_2>`); brushed changes as plain inpainting | 20, CFG 5 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
+| **Fibo 2.0 Edit Turbo** (Bria, 8B) | Fast edits of a whole photo and combining images; no new images from text | 4 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
 | **Krea 2 Turbo** (Krea, 12.9B) | New images from text, up to 2K; brushed changes and Expand as plain inpainting | 8 | yes | Krea 2 Community License |
 | **MOSS-Image SFT** (OpenMOSS, 5B) | New images from text, with CFG and negative prompts; brushed changes and Expand | 20 | no (its Qwen3.5 encoder can't write text in the engine) | Apache-2.0 |
 
 Download sizes on a 24 GB card (smaller files are picked for smaller cards): Qwen-Image about
-12 GB, FLUX.3 about 12 GB, Krea 2 about 18 GB, MOSS-Image about 12 GB. FLUX.3 and Krea 2 share
-their text encoder (Qwen3-VL 4B), and FLUX.3 and MOSS-Image share their decoder (the FLUX.2 VAE):
-a shared file is downloaded once. Every file is pinned by URL, size and SHA-256 and checked after
+12 GB, FLUX.3 about 12 GB, Fibo 2.0 Dev or Edit Turbo about 16 GB each, Krea 2 about 18 GB,
+MOSS-Image about 12 GB. FLUX.3, Fibo 2.0 and Krea 2 share their text encoder (Qwen3-VL 4B), and
+FLUX.3, Fibo 2.0 and MOSS-Image their decoder (the FLUX.2 VAE): a shared file is downloaded once,
+so the second of them is much smaller (Fibo 2.0 after FLUX.3: about 10 GB). Every file is pinned by URL, size and SHA-256 and checked after
 download.
 
 The image sizes of the quality presets follow the model: Qwen-Image 2.1 and Krea 2 go up to 2K,
-FLUX.3 and MOSS-Image to 1.5K for now (not measured yet on real hardware).
+FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardware).
 
 ## What's different from Kokon
 
 - **More models**, with a model menu in the top bar that shows the model in use, switches and
   loads a model at once, and downloads one that is not there yet.
-- **Edits where the model can do them.** Qwen-Image 2.1 and FLUX.3 edit photos and combine images;
+- **Edits where the model can do them.** Qwen-Image 2.1, FLUX.3 and Fibo 2.0 edit photos and combine images;
   with Krea 2 and MOSS-Image, Kokon Modal offers what they do (new images, brushed changes, Expand)
   and says so instead of failing.
 - **LoRAs per model.** Each LoRA is loaded for the model in use and only used with it; the LoRA
@@ -71,9 +74,9 @@ FLUX.3 and MOSS-Image to 1.5K for now (not measured yet on real hardware).
 - **Prompt+ with FLUX.3 and Krea 2.** Their Qwen3-VL 4B text encoder ties its output layer to its
   embeddings, so its GGUF has no LM head and the engine could not write with it. Kokon Modal writes
   a copy with the head added once (about 4.7 GB, next to the downloaded file, which stays as it
-  is) and runs Prompt+ on it. The engine shows input images only to Qwen-Image 2.1's text encoder,
-  so with FLUX.3 and Krea 2 Prompt+ rewrites edits and combinations from your words alone, with
-  instructions written for that.
+  is) and runs Prompt+ on it. The engine shows input images to the text encoder of Qwen-Image 2.1
+  and Fibo 2.0 only, so with FLUX.3 and Krea 2 Prompt+ rewrites edits and combinations from your
+  words alone, with instructions written for that.
 - **Its own app next to Kokon.** Kokon Modal has its own name, app id (`app.kokonmodal.desktop`),
   install folder, settings (`%APPDATA%\Kokon Modal`), data and models (`%LOCALAPPDATA%\KokonModalData`),
   output folder (`Pictures\Kokon Modal`) and ports (39160-39162; Kokon uses 39150-39152). Both apps
@@ -90,7 +93,7 @@ FLUX.3 and MOSS-Image to 1.5K for now (not measured yet on real hardware).
 3. On first start, Setup checks your GPU and downloads the engine and Qwen-Image 2.1.
    Already have Kokon's model files? **Use models I already have** can point Kokon Modal at them
    (in `%LOCALAPPDATA%\KokonData\sdcpp\models\qwen21`) instead of downloading them again.
-4. Choose FLUX.3, Krea 2 or MOSS-Image in the model menu at the top when you want them.
+4. Choose FLUX.3, Fibo 2.0, Krea 2 or MOSS-Image in the model menu at the top when you want them.
 
 **Requirements** are Kokon's: Windows 10/11 64-bit, an NVIDIA card with 12 GB of VRAM (8 GB in
 beta) or AMD/Intel through Vulkan (beta), 16 GB of RAM (32 GB recommended), and an SSD with room
@@ -124,7 +127,8 @@ Where the fork's changes live:
 | LoRAs per model | `crates/qls-core/src/lora.rs`, `src/components/LoraSettings.tsx` |
 | Model menu, "Based on Kokon" | `src/components/ModelPicker.tsx`, `BasedOn.tsx` |
 | App identity | `src-tauri/tauri.conf.json`, `src-tauri/windows/`, `crates/qls-core/src/config.rs` |
-| Tests | `crates/qls-core/src/krea2_tests.rs`, `moss_tests.rs`, `flux3_tests.rs` |
+| Model names in the UI | `src/lib/models.ts` |
+| Tests | `crates/qls-core/src/krea2_tests.rs`, `moss_tests.rs`, `flux3_tests.rs`, `fibo2_tests.rs` |
 
 ## Everything else
 

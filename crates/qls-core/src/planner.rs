@@ -377,6 +377,9 @@ pub struct Plan {
     /// edits and the RGBA wording. True in older records.
     #[serde(default = "yes")]
     pub qwen_prompts: bool,
+    /// Input images are named `<image_1>` in prompts ([`RecommendedSettings::underscore_image_tags`]).
+    #[serde(default)]
+    pub underscore_image_tags: bool,
 }
 
 fn yes() -> bool {
@@ -910,7 +913,7 @@ fn ref_canvas(src: Size, max_canvas_area: u64, rec: &RecommendedSettings) -> Wor
 /// The model of the active profile cannot edit from reference images (Krea 2, MOSS-Image).
 fn no_reference_edits() -> AppError {
     AppError::invalid("This model makes new images from text only: it can't edit a whole photo or combine images.")
-        .suggest("Brush the area to change (or use Expand), or switch to Qwen-Image 2.1 or FLUX.3 Image Klein in the model menu at the top for edits and combines.")
+        .suggest("Brush the area to change (or use Expand), or switch to Qwen-Image 2.1, FLUX.3 Image Klein or Fibo 2.0 in the model menu at the top for edits and combines.")
 }
 
 /// Produces the generation plan. `rec` comes from the active model profile.
@@ -927,6 +930,10 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
     let (mode, auto_mode, mode_reason) = detect_mode(req, inputs)?;
     if !rec.reference_edits && matches!(mode, ResolvedMode::Edit | ResolvedMode::MultiReference | ResolvedMode::Compose) {
         return Err(no_reference_edits());
+    }
+    if !rec.text_to_image && mode == ResolvedMode::Generate {
+        return Err(AppError::invalid("This model only edits images: add a photo to change, or brushed changes and Expand on one.")
+            .suggest("For new images from text, switch to another model in the model menu at the top (Fibo 2.0 Dev, FLUX.3, Qwen-Image 2.1, ...)."));
     }
     if req.enhance_only && !(req.enhance && crate::enhancer::applies(mode)) {
         return Err(AppError::invalid("Prompt+ writes prompts for new images, edits and combines only."));
@@ -1262,6 +1269,7 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
         custom_sigmas: if quick_upscale || !rec.turbo_sigmas { Vec::new() } else { TURBO_SIGMAS.to_vec() },
         reference_edits: rec.reference_edits,
         qwen_prompts: rec.qwen_prompts,
+        underscore_image_tags: rec.underscore_image_tags,
         vae_tile,
         reference_detail: matches!(mode, ResolvedMode::Edit | ResolvedMode::MultiReference | ResolvedMode::Compose | ResolvedMode::Inpaint).then(|| adv.reference_detail.unwrap_or_default()),
     })

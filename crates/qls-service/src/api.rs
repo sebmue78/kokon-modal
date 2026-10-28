@@ -398,6 +398,7 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
         User,
     }
     let extra = |t: &str| EXTRA_CATALOG_PROFILES.iter().copied().find(|id| *id == t || (t == "krea2" && *id == KREA2_PROFILE_ID) || (t == "moss" && *id == MOSS_PROFILE_ID) || (t == "flux3" && *id == FLUX3_PROFILE_ID));
+    // Any catalog profile can also be named by its id (the model menu sends ids).
     let target = match b.target.as_deref() {
         Some("user") => Target::User,
         Some("official") => Target::Official,

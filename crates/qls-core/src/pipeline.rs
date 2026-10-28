@@ -4,6 +4,7 @@
 //! Enlargements go through ESRGAN when the engine has it: [`crop_content`], then
 //! [`enlarge_target`] / [`esrgan_plan`] + [`Stitcher`], then [`finish`].
 
+use std::sync::LazyLock;
 use image::{GrayImage, Luma, Rgba, RgbaImage};
 
 use crate::error::{AppError, AppResult, ErrorCode};
@@ -139,6 +140,13 @@ pub fn inpaint_prompt(action: InpaintAction, prompt: &str, color: &str) -> Strin
     }
 }
 
+/// Fork: `<image1>`, `<image 2>` and `<image_3>` written as `<image_N>`, the form Fibo 2.0's
+/// prompts use (its docs: "instructions can refer to `<image_1>`, `<image_2>`").
+pub fn underscore_image_tags(prompt: &str) -> String {
+    static TAG: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)<image[ _]?(\d+)>").unwrap());
+    TAG.replace_all(prompt, "<image_$1>").into_owned()
+}
+
 /// Prompt of a plain masked inpaint (models without reference-image edits, Krea 2): a
 /// description of what the painted area should show, since the model sees no instruction and
 /// no marked guide image. A removal describes the background that fills the area.
@@ -157,9 +165,9 @@ pub fn plain_inpaint_prompt(action: InpaintAction, prompt: &str) -> String {
 pub fn effective_prompt(plan: &Plan, prompt: &str) -> String {
     let p = prompt.trim();
     if !plan.qwen_prompts {
-        // Other models (Krea 2, MOSS-Image, FLUX.3): the prompt as written; the RGBA wording and
-        // the outpaint instruction are Qwen-Image 2.1's.
-        return p.to_string();
+        // Other models (Krea 2, MOSS-Image, FLUX.3, Fibo 2.0): the prompt as written; the RGBA
+        // wording and the outpaint instruction are Qwen-Image 2.1's.
+        return if plan.underscore_image_tags { underscore_image_tags(p) } else { p.to_string() };
     }
     if wants_transparency(p) && !p.starts_with(RGBA_PREFIX) {
         let body = p.trim_end_matches('.');

@@ -1,7 +1,7 @@
 import { ArrowUp, Brush, Check, ChevronDown, Expand, Eye, FolderOpen, Gauge, ImagePlus, Layers, Lightbulb, Maximize, Pencil, Settings2, SlidersHorizontal, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, urls } from "../lib/api";
-import { modelLabel } from "./ModelPicker";
+import { modelLabel } from "../lib/models";
 import { activeLoras, activeOverrides, aspectLabel, buildRequest, composing, editing, enhancerApplies, expansionPixels, formatDuration, hasOutpaint, imageName, lorasFor, MAX_LORAS, moveRef, needsPrompt, parseRatio, QWEN_MODEL, toggleModelLora, wantsPromptReview, type Ref } from "../lib/logic";
 import { native } from "../lib/native";
 import { haptic } from "../lib/haptics";
@@ -372,7 +372,7 @@ function LoraBadge() {
     >
       {(close) => (
         <>
-          <div className="label">LoRA for {modelLabel({ id: "", model: model || QWEN_MODEL, source: "official" }).name} in this project · up to {MAX_LORAS}</div>
+          <div className="label">LoRA for {modelLabel({ model: model || QWEN_MODEL, source: "official" }).name} in this project · up to {MAX_LORAS}</div>
           {all.map((l) => {
             const active = on.includes(l.id);
             const full = !active && on.length >= MAX_LORAS;
@@ -413,7 +413,7 @@ function PromptPlus() {
     mode === "off"
       ? "Prompt+: let the model rewrite a short prompt, in any language, as a detailed English description before making the image. Adds a few seconds."
       : mode === "write"
-        ? "Prompt+ on: before making the image, the model rewrites your prompt as a detailed English description (with Qwen-Image 2.1 it also looks at your images; FLUX.3 and Krea 2 work from your words). You see it being written; the result keeps both."
+        ? "Prompt+ on: before making the image, the model rewrites your prompt as a detailed English description (with Qwen-Image 2.1 and Fibo 2.0 it also looks at your images; FLUX.3 and Krea 2 work from your words). You see it being written; the result keeps both."
         : "Prompt+ on, review first: the model writes the detailed prompt into the box; change it if you like, then press Enter to make the image.";
   const pick = (m: "off" | "write" | "review") => updateComposer({ enhance: m !== "off", enhanceReview: m === "off" ? c.enhanceReview : m === "review" });
   return (

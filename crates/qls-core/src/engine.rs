@@ -1163,7 +1163,13 @@ impl Engine {
                 enhanced = self.enhance_prompt(id, &client, &caps, &cfg, plan.mode, &request.prompt, &sd_req.ref_images, seed).await?;
                 if let Some(text) = &enhanced {
                     // The RGBA wording is Qwen-Image 2.1's; text-to-image models take the text as is.
-                    sd_req.prompt = if plan.qwen_prompts { pipeline::enhanced_prompt(&request.prompt, text) } else { text.trim().to_string() };
+                    sd_req.prompt = if plan.qwen_prompts {
+                        pipeline::enhanced_prompt(&request.prompt, text)
+                    } else if plan.underscore_image_tags {
+                        pipeline::underscore_image_tags(text.trim())
+                    } else {
+                        text.trim().to_string()
+                    };
                 }
             }
             // Prompt+ review: the prompt is the result; the user's next job makes the image.
