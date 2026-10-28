@@ -12,19 +12,11 @@ import { RemoteAccess } from "./RemoteAccess";
 import { UpscalerControls } from "./Upscalers";
 import { WHATS_NEW_VERSION } from "./WhatsNew";
 import { FORK_REPO_URL, UPSTREAM_AUTHOR, UPSTREAM_REPO_URL } from "../lib/fork";
+import { CATALOG_MODELS } from "../lib/models";
 
 /** Fork: catalog models besides Qwen, by profile id (qls-core `EXTRA_CATALOG_PROFILES`). */
-const TEXT_ONLY = "Text to image, plus brushed changes and Expand as plain inpainting. Whole-photo edits and combining images need Qwen-Image 2.1 or FLUX.3.";
-const EXTRA_MODELS: Record<string, { name: string; about: string; target: "flux3" | "krea2" | "moss" }> = {
-  "flux-3-image-klein": {
-    name: "FLUX.3 Image Klein",
-    about:
-      "Black Forest Labs' 5.6B model, 16 steps: new images, edits of a whole photo and combining up to 10 images; brushed changes are plain inpainting. Turn on Prompt+ for best results. FLUX Kommunity License: non-commercial use, commercial outputs only for qualifying users.",
-    target: "flux3",
-  },
-  "krea-2-turbo": { name: "Krea 2 Turbo", about: `Krea's 12.9B model, 8 steps, up to 2K (Krea 2 Community License). ${TEXT_ONLY}`, target: "krea2" },
-  "moss-image-sft": { name: "MOSS-Image SFT", about: `OpenMOSS's 5B model, 20 steps with CFG, negative prompts work (Apache-2.0). ${TEXT_ONLY}`, target: "moss" },
-};
+/** Fork: catalog models besides Qwen, by profile id (`lib/models.ts`). */
+const EXTRA_MODELS = CATALOG_MODELS;
 import type { AppConfig, Check, InstallStatus, MacBenchState, ModelProfile, ModelsStatus, SetupReport, TextEncoderPlacement } from "../lib/types";
 import { IconButton, Seg, Switch } from "./ui";
 import { autoCheckEnabled, checkForUpdate } from "../lib/updates";
@@ -42,7 +34,7 @@ export function RepoCard() {
         <GitHubMark />
         <div className="body">
           <strong>Kokon Modal is open source</strong>
-          <span className="muted">A fork of Kokon that adds FLUX.3 Image Klein, Krea 2 and MOSS-Image. Code and issues are on GitHub.</span>
+          <span className="muted">A fork of Kokon that adds FLUX.3 Image Klein, Fibo 2.0, Krea 2 and MOSS-Image. Code and issues are on GitHub.</span>
         </div>
         <button className="btn primary" onClick={() => native.openLink(REPO_URL).catch(toastError)}>
           Open GitHub
@@ -562,7 +554,7 @@ export function Settings() {
               <div className="setting-card">
                 <div className="setting-card-text">
                   <strong>Model setup</strong>
-                  <span className="muted">Downloads the official Qwen-Image 2.1 weights for your graphics card, uses Qwen-Image 2.1 files you already have, or switches between the 8, 12, 16, 24 and 32 GB presets. FLUX.3, Krea 2 and MOSS-Image are chosen under Model below or in the model menu at the top.</span>
+                  <span className="muted">Downloads the official Qwen-Image 2.1 weights for your graphics card, uses Qwen-Image 2.1 files you already have, or switches between the 8, 12, 16, 24 and 32 GB presets. The other models (FLUX.3, Fibo 2.0, Krea 2, MOSS-Image) are chosen under Model below or in the model menu at the top.</span>
                 </div>
                 <button
                   className="btn primary"
@@ -593,7 +585,7 @@ export function Settings() {
                 // Fork: a catalog model besides Qwen (Krea 2, MOSS-Image), downloaded on demand into its own folder.
                 <div className="setting-card">
                   <div className="setting-card-text">
-                    <strong>{EXTRA_MODELS[profile.id].name}</strong>
+                    <strong>{EXTRA_MODELS[profile.id].full}</strong>
                     <span className="muted">
                       {EXTRA_MODELS[profile.id].about}{" "}
                       {ms?.catalog_installed?.[profile.id] ? "Downloaded." : "Not downloaded yet."}
@@ -609,9 +601,9 @@ export function Settings() {
                     <button
                       className="btn primary"
                       onClick={async () => {
-                        if (dirty && !window.confirm(`Discard the unsaved changes and download ${EXTRA_MODELS[profile.id].name}?`)) return;
+                        if (dirty && !window.confirm(`Discard the unsaved changes and download ${EXTRA_MODELS[profile.id].full}?`)) return;
                         try {
-                          await api.install(cfg.hardwarePreset, cfg.gpuBackend, true, undefined, EXTRA_MODELS[profile.id].target);
+                          await api.install(cfg.hardwarePreset, cfg.gpuBackend, true, undefined, profile.id);
                           openModelSetup(null);
                         } catch (e) {
                           toastError(e);
@@ -758,7 +750,7 @@ export function Settings() {
                 <Switch on={!!cfg.macEngine} onChange={(v) => set({ macEngine: v })} />
               </div>
               <span className="muted" style={{ marginTop: -10 }}>
-                Kokon's own engine for Apple Silicon: the GPU, the CPU's matrix unit and the Neural Engine work together, about 4 times faster. New images, edits, brushed edits, extending and Prompt+ work on it, with Qwen-Image 2.1 only (FLUX.3, Krea 2 and MOSS-Image use the standard engine); LoRAs and the upscaler model still need it off.
+                Kokon's own engine for Apple Silicon: the GPU, the CPU's matrix unit and the Neural Engine work together, about 4 times faster. New images, edits, brushed edits, extending and Prompt+ work on it, with Qwen-Image 2.1 only (the other models use the standard engine); LoRAs and the upscaler model still need it off.
               </span>
               {!inBrowser && <MacBench blocked={dirty ? "Save or discard your changes first" : !cfg.macEngine ? "Turn on Kokon's Mac engine and save first" : null} />}
               {!cfg.macEngine && (

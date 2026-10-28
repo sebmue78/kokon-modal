@@ -2,7 +2,7 @@ import { CircleAlert, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { formatBytes, loraModel, MAX_LORAS, QWEN_MODEL } from "../lib/logic";
-import { modelLabel } from "./ModelPicker";
+import { modelLabel } from "../lib/models";
 import { native } from "../lib/native";
 import { inBrowser } from "../lib/platform";
 import { refreshLoras, toastError, toastInfo, useStore } from "../lib/store";
@@ -98,7 +98,7 @@ function LoraRow({ l }: { l: LoraItem }) {
 }
 
 /** Fork: a model id's short name ("FLUX.3 Klein"). */
-const nameOf = (model: string) => modelLabel({ id: "", model, source: "official" }).name;
+const nameOf = (model: string) => modelLabel({ model, source: "official" }).name;
 
 /** Settings → LoRA: the user's own LoRA files, grouped by the model each is for (the model in use
  * first). A LoRA is loaded for the model in use and only used with it. */
@@ -146,7 +146,7 @@ export function LoraSettings() {
       </span>
       <span className="muted">
         Qwen-Image 2.1 and Krea 2: most LoRAs are trained on the full base model (Qwen-Image 2.1, Krea 2 Raw), while Kokon Modal runs the faster Turbo model, so
-        compare with the LoRA on and off. FLUX.3 Image Klein uses LoRAs trained on Klein Base. LoRAs for FLUX.3, Krea 2 and MOSS-Image are not tested yet. A LoRA
+        compare with the LoRA on and off. FLUX.3 Image Klein uses LoRAs trained on Klein Base. LoRAs for the other models are not tested yet. A LoRA
         makes each image about 20 % slower.
       </span>
       {models.map((m) => {

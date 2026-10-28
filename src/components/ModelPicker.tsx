@@ -1,27 +1,20 @@
 // Fork: the model in use, always visible in the top bar, and a menu to switch between
-// Qwen-Image 2.1, FLUX.3 Image Klein, Krea 2 Turbo and MOSS-Image (and the user's own files). A model that is not
+// Qwen-Image 2.1 and the models of `lib/models.ts` (and the user's own files). A model that is not
 // downloaded yet starts its download in the Models screen.
 import { ChevronDown, Layers } from "lucide-react";
 import { useState } from "react";
 import { api } from "../lib/api";
 import { native } from "../lib/native";
+import { CATALOG_MODELS, modelLabel } from "../lib/models";
 import { openModelSetup, refreshStatus, toastError, toastInfo, useStore } from "../lib/store";
 
 type Entry = { id: string; display_name: string; model: string; source: string; installed: boolean };
 
-/** Short name and what the model does, for the menu and its tooltip. */
-export function modelLabel(p: { id: string; model: string; source: string }): { name: string; hint: string } {
-  if (p.model === "flux-3-image-klein") return { name: "FLUX.3 Klein", hint: "New images, edits of a whole photo and combining images (non-commercial license)" };
-  if (p.model === "krea-2-turbo") return { name: "Krea 2 Turbo", hint: "New images from text, brushed changes and Expand" };
-  if (p.model === "moss-image-sft") return { name: "MOSS-Image", hint: "New images from text (with negative prompts), brushed changes and Expand" };
-  return { name: p.source === "user" ? "Qwen-Image 2.1 (your files)" : "Qwen-Image 2.1", hint: "Everything: new images, edits of a whole photo and combining images" };
-}
+export { modelLabel };
 
-/** Install target of a catalog model that is not downloaded yet. */
-function installTarget(p: Entry): "official" | "flux3" | "krea2" | "moss" | null {
-  if (p.model === "flux-3-image-klein") return "flux3";
-  if (p.model === "krea-2-turbo") return "krea2";
-  if (p.model === "moss-image-sft") return "moss";
+/** Install target of a model that is not downloaded yet: a catalog model by its id. */
+function installTarget(p: Entry): string | null {
+  if (CATALOG_MODELS[p.model]) return p.id;
   return p.source === "official" ? "official" : null;
 }
 

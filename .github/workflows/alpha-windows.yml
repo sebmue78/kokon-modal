@@ -1,6 +1,6 @@
 name: Windows alpha (fork)
 
-# Fork (kokon-modal): builds the Windows installer with FLUX.3, Krea 2 and MOSS-Image on GitHub's Windows
+# Fork (kokon-modal): builds the Windows installer with FLUX.3, Fibo 2.0, Krea 2 and MOSS-Image on GitHub's Windows
 # runner and publishes it as a pre-release v<version>-modal-alpha.<run number>. Started by a push to
 # the branch alpha-release (or by hand in the Actions tab).
 #
@@ -108,10 +108,12 @@ jobs:
         run: |
           cat > notes.md <<EOF
           **Alpha, not tested on a GPU yet.** Kokon Modal is a fork of [Kokon](https://github.com/GabrieleLozupone/kokon)
-          by Gabriele Lozupone, with three more models to choose in the model menu at the top, next to Qwen-Image 2.1:
+          by Gabriele Lozupone, with more models to choose in the model menu at the top, next to Qwen-Image 2.1:
 
           - **FLUX.3 Image Klein** (5.6B, 16 steps; new images, edits of a whole photo and combining up to 10 images;
             FLUX Kommunity License: non-commercial, commercial outputs only for qualifying users)
+          - **Fibo 2.0 Dev and Edit Turbo** (8B, by Bria; Dev: new images and edits, 20 steps; Edit Turbo: edits only, 4 steps;
+            CC BY-NC 4.0, non-commercial only)
           - **Krea 2 Turbo** (12.9B, 8 steps, up to 2K; Krea 2 Community License)
           - **MOSS-Image SFT** (5B, 20 steps with CFG and negative prompts; Apache-2.0)
 

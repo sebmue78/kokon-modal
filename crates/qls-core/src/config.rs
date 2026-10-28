@@ -72,8 +72,18 @@ pub const MOSS_PROFILE_ID: &str = "moss-image-sft";
 pub const FLUX3_KLEIN: &str = "flux-3-image-klein";
 /// Profile id of the FLUX.3 Image Klein files from the catalog (always listed, downloaded on demand).
 pub const FLUX3_PROFILE_ID: &str = "flux-3-image-klein";
+/// Fibo 2.0 Dev (briaai/Fibo-2.0-dev, CC BY-NC 4.0: non-commercial): an 8B DiT for text to image
+/// and edits with references (seen by its Qwen3-VL 4B text encoder too), 20 steps at CFG 5. Shares
+/// the 4B text encoder, its vision projector and the FLUX.2 VAE with FLUX.3 Image Klein.
+pub const FIBO2_DEV: &str = "fibo-2.0-dev";
+/// Fibo 2.0 Edit Turbo (briaai/Fibo-2.0-edit-turbo, CC BY-NC 4.0): Fibo distilled for edits only,
+/// 4 steps without CFG. It needs at least one input image.
+pub const FIBO2_EDIT: &str = "fibo-2.0-edit-turbo";
+/// Profile ids of the Fibo 2.0 files from the catalog (always listed, downloaded on demand).
+pub const FIBO2_DEV_PROFILE_ID: &str = "fibo-2.0-dev";
+pub const FIBO2_EDIT_PROFILE_ID: &str = "fibo-2.0-edit-turbo";
 /// Models from the catalog besides Qwen-Image 2.1, in the order Settings lists them.
-pub const EXTRA_CATALOG_PROFILES: &[&str] = &[FLUX3_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
+pub const EXTRA_CATALOG_PROFILES: &[&str] = &[FLUX3_PROFILE_ID, FIBO2_DEV_PROFILE_ID, FIBO2_EDIT_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
 
 /// Where the text encoder's weights live. Compute always runs on the selected GPU except
 /// for `Cpu`, which also computes on the CPU (slow for image editing, measured ~35×).
@@ -195,6 +205,11 @@ pub struct RecommendedSettings {
     /// vision part on only for some models (Qwen-Image 2.1, not FLUX.3 Image Klein or Krea 2): for
     /// the others Prompt+ rewrites edits from the words alone (`enhancer::EDIT_BLIND_SYSTEM_PROMPT`).
     pub prompt_vision: bool,
+    /// The model makes new images from text alone (Fibo 2.0 Edit Turbo does not: it edits).
+    pub text_to_image: bool,
+    /// The model names its input images `<image_1>`, `<image_2>` (Fibo 2.0) instead of Kokon's
+    /// `<image1>`: prompts are written in its form.
+    pub underscore_image_tags: bool,
     /// Classifier-free guidance; 1 = off (distilled Turbo models). Above 1 the negative prompt
     /// is used.
     pub cfg_scale: f32,
@@ -218,6 +233,8 @@ impl Default for RecommendedSettings {
             reference_edits: true,
             qwen_prompts: true,
             prompt_vision: true,
+            text_to_image: true,
+            underscore_image_tags: false,
             cfg_scale: 1.0,
         }
     }
@@ -242,6 +259,8 @@ impl RecommendedSettings {
             reference_edits: false,
             qwen_prompts: false,
             prompt_vision: false,
+            text_to_image: true,
+            underscore_image_tags: false,
             cfg_scale: 1.0,
         }
     }
@@ -263,8 +282,38 @@ impl RecommendedSettings {
             reference_edits: false,
             qwen_prompts: false,
             prompt_vision: false,
+            text_to_image: true,
+            underscore_image_tags: false,
             cfg_scale: 3.0,
         }
+    }
+
+    /// Fibo 2.0 Dev (sd.cpp's docs/fibo2.md and its server recipe fibo2-dev): 20 steps at CFG 5,
+    /// Euler, sizes a multiple of 16, about 1 MP (its reference preset sizes inputs to ~1 MP); the
+    /// larger tiers are not measured yet. References are seen by its text encoder too.
+    pub fn fibo2_dev() -> Self {
+        Self {
+            sampler: "euler".into(),
+            area_fast: 1024 * 1024,
+            area_balanced: 1280 * 1280,
+            area_quality: 1536 * 1536,
+            align: 16,
+            max_side: 2048,
+            max_references: 10,
+            steps: 20,
+            turbo_sigmas: false,
+            reference_edits: true,
+            qwen_prompts: false,
+            prompt_vision: true,
+            text_to_image: true,
+            underscore_image_tags: true,
+            cfg_scale: 5.0,
+        }
+    }
+
+    /// Fibo 2.0 Edit Turbo (sd.cpp's recipe fibo2-edit-turbo): edits only, 4 steps without CFG.
+    pub fn fibo2_edit_turbo() -> Self {
+        Self { steps: 4, cfg_scale: 1.0, text_to_image: false, ..Self::fibo2_dev() }
     }
 
     /// FLUX.3 Image Klein (its model card and sd.cpp's docs/flux3.md): distilled, 16 steps, no
@@ -284,6 +333,8 @@ impl RecommendedSettings {
             reference_edits: true,
             qwen_prompts: false,
             prompt_vision: false,
+            text_to_image: true,
+            underscore_image_tags: false,
             cfg_scale: 1.0,
         }
     }
@@ -312,6 +363,11 @@ impl ProfileCapabilities {
     /// no transparent output (that prompt format is Qwen-Image 2.1's).
     pub fn krea2_turbo() -> Self {
         Self { text_to_image: true, edit: false, multi_reference: false, inpaint: true, outpaint: true, alpha: false }
+    }
+
+    /// Fibo 2.0 Edit Turbo: edits, combines and brushed edits; no new images from text alone.
+    pub fn fibo2_edit_turbo() -> Self {
+        Self { text_to_image: false, alpha: false, ..Self::default() }
     }
 
     /// FLUX.3 Image Klein: everything Qwen-Image 2.1 does except transparent output.
@@ -459,9 +515,39 @@ impl ModelProfile {
         }
     }
 
+    /// The Fibo 2.0 files for a hardware preset (`catalog::fibo2_files`): realrebelai's GGUF of Dev or
+    /// Edit Turbo, with the Qwen3-VL 4B text encoder, its vision projector and the FLUX.2 VAE that
+    /// FLUX.3 Image Klein uses (the same files).
+    pub fn fibo2(sdcpp_dir: &Path, preset: &crate::catalog::Preset, edit: bool) -> Self {
+        let (diffusion, text_encoder) = crate::catalog::fibo2_files(preset, edit);
+        let quant = diffusion.dest.rsplit('-').next().unwrap_or("").trim_end_matches(".gguf");
+        let (id, model, name, rec, caps) = if edit {
+            (FIBO2_EDIT_PROFILE_ID, FIBO2_EDIT, "Fibo 2.0 Edit Turbo", RecommendedSettings::fibo2_edit_turbo(), ProfileCapabilities::fibo2_edit_turbo())
+        } else {
+            (FIBO2_DEV_PROFILE_ID, FIBO2_DEV, "Fibo 2.0 Dev", RecommendedSettings::fibo2_dev(), ProfileCapabilities::flux3_klein())
+        };
+        Self {
+            id: id.into(),
+            display_name: format!("{name} {quant}"),
+            model: model.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: diffusion.path(sdcpp_dir),
+            vae: crate::catalog::MOSS_VAE.path(sdcpp_dir),
+            text_encoder: text_encoder.path(sdcpp_dir),
+            vision_projector: Some(crate::catalog::QWEN3VL_4B_VISION.path(sdcpp_dir)),
+            tokenizer: None,
+            backend_args: vec![],
+            recommended_settings: rec,
+            capabilities: caps,
+        }
+    }
+
     /// The catalog profile `id` other than the official Qwen files ([`EXTRA_CATALOG_PROFILES`]).
     pub fn extra_catalog(id: &str, sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Option<Self> {
         match id {
+            FIBO2_DEV_PROFILE_ID => Some(Self::fibo2(sdcpp_dir, preset, false)),
+            FIBO2_EDIT_PROFILE_ID => Some(Self::fibo2(sdcpp_dir, preset, true)),
             FLUX3_PROFILE_ID => Some(Self::flux3(sdcpp_dir, preset)),
             KREA2_PROFILE_ID => Some(Self::krea2(sdcpp_dir, preset)),
             MOSS_PROFILE_ID => Some(Self::moss(sdcpp_dir, preset)),
@@ -626,7 +712,9 @@ impl Default for AppConfig {
             schema_version: SCHEMA_VERSION,
             profiles: {
                 let preset = crate::catalog::preset(crate::catalog::DEFAULT_PRESET).unwrap();
-                vec![ModelProfile::official(&sdcpp, preset), ModelProfile::flux3(&sdcpp, preset), ModelProfile::krea2(&sdcpp, preset), ModelProfile::moss(&sdcpp, preset)]
+                std::iter::once(ModelProfile::official(&sdcpp, preset))
+                    .chain(EXTRA_CATALOG_PROFILES.iter().filter_map(|id| ModelProfile::extra_catalog(id, &sdcpp, preset)))
+                    .collect()
             },
             active_profile: OFFICIAL_PROFILE_ID.into(),
             sdcpp_dir: sdcpp,
@@ -721,6 +809,8 @@ impl LoraEntry {
 pub fn model_name(model: &str) -> String {
     match model {
         FLUX3_KLEIN => "FLUX.3 Image Klein".into(),
+        FIBO2_DEV => "Fibo 2.0 Dev".into(),
+        FIBO2_EDIT => "Fibo 2.0 Edit Turbo".into(),
         KREA2_TURBO => "Krea 2 Turbo".into(),
         MOSS_IMAGE_SFT => "MOSS-Image".into(),
         QWEN_IMAGE_21 | "" => "Qwen-Image 2.1".into(),

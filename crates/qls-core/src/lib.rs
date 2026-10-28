@@ -33,3 +33,5 @@ mod krea2_tests;
 mod moss_tests;
 #[cfg(test)]
 mod flux3_tests;
+#[cfg(test)]
+mod fibo2_tests;

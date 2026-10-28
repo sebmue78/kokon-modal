@@ -827,6 +827,58 @@ pub fn flux3_files(p: &Preset) -> (Download, Download) {
 /// The FLUX.3-only files the catalog knows (found by file name in [`profile_model_downloads`]).
 pub const FLUX3_DOWNLOADS: &[Download] = &[FLUX3_KLEIN_Q4_K, FLUX3_KLEIN_Q8_0, QWEN3VL_4B_VISION];
 
+// ---------------------------------------------------------------------------------------
+// Fibo 2.0 (fork): sd.cpp's docs/fibo2.md, realrebelai's GGUFs (the source of the Krea 2 GGUFs),
+// pinned from the Hugging Face API on 2026-10-28. CC BY-NC 4.0 (non-commercial). Text encoder,
+// vision projector and VAE are FLUX.3 Image Klein's files.
+// ---------------------------------------------------------------------------------------
+
+/// Folder under the stable-diffusion.cpp folder that holds the Fibo 2.0 weights.
+pub const FIBO2_SUBDIR: &str = "models/fibo2";
+const FIBO2_GGUFS: &str = "https://huggingface.co/realrebelai/Fibo-2.0_GGUFs/tree/main";
+
+macro_rules! fibo2_gguf {
+    ($name:ident, $id:literal, $label:literal, $file:literal, $size:literal, $sha:literal) => {
+        pub const $name: Download = Download {
+            id: $id,
+            label: $label,
+            kind: FileKind::Model,
+            url: concat!("https://huggingface.co/realrebelai/Fibo-2.0_GGUFs/resolve/main/", $file),
+            fallback_urls: &[],
+            page: FIBO2_GGUFS,
+            size: $size,
+            sha256: $sha,
+            dest: concat!("models/fibo2/", $file),
+            provides: &[],
+            engine_tag: None,
+        };
+    };
+}
+
+fibo2_gguf!(FIBO2_DEV_Q4_0, "fibo2_dev_q4_0", "Fibo 2.0 Dev Q4_0", "fibo2_dev-Q4_0.gguf", 6_590_251_680, "00fae5c6e930a61c0e3910be0a29049ce129646ea3671814deaa4d079061a11e");
+fibo2_gguf!(FIBO2_DEV_Q5_0, "fibo2_dev_q5_0", "Fibo 2.0 Dev Q5_0", "fibo2_dev-Q5_0.gguf", 7_448_117_920, "5fa5b229550120cfa88294b1c934c253e4038e2dad8be308857d3b3d8614c75e");
+fibo2_gguf!(FIBO2_DEV_Q8_0, "fibo2_dev_q8_0", "Fibo 2.0 Dev Q8_0", "fibo2_dev-Q8_0.gguf", 10_021_716_640, "ab2f15a15754f315479522b967859fd2a35a0a43aa34d30e3e1f4bd6c8b524fc");
+fibo2_gguf!(FIBO2_EDIT_Q4_0, "fibo2_edit_q4_0", "Fibo 2.0 Edit Turbo Q4_0", "fibo2_edit_turbo-Q4_0.gguf", 6_590_251_680, "da3751d4d8496bf01c27ec6e60cf0fbfb1c50a52f070d17ea3a6522c7247d6ac");
+fibo2_gguf!(FIBO2_EDIT_Q5_0, "fibo2_edit_q5_0", "Fibo 2.0 Edit Turbo Q5_0", "fibo2_edit_turbo-Q5_0.gguf", 7_448_117_920, "d70b27b2fa7718d9c17b705f2eed28e7cfb9d8e8997e05d13bf7809c75378abe");
+fibo2_gguf!(FIBO2_EDIT_Q8_0, "fibo2_edit_q8_0", "Fibo 2.0 Edit Turbo Q8_0", "fibo2_edit_turbo-Q8_0.gguf", 10_021_716_640, "0a05d3b1e7f65012355aef49a72e80ace7dcca5236c7c1bb1ee34ab7e326b20e");
+
+/// Fibo 2.0's image model (Dev, or Edit Turbo when `edit`) and (shared) text encoder for a preset.
+/// Not measured on real hardware yet: from the file sizes, with the text encoder in system RAM.
+pub fn fibo2_files(p: &Preset, edit: bool) -> (Download, Download) {
+    let dit = match (p.min_vram_mib, edit) {
+        (v, false) if v >= 20 * 1024 => FIBO2_DEV_Q8_0,
+        (v, false) if v >= 14 * 1024 => FIBO2_DEV_Q5_0,
+        (_, false) => FIBO2_DEV_Q4_0,
+        (v, true) if v >= 20 * 1024 => FIBO2_EDIT_Q8_0,
+        (v, true) if v >= 14 * 1024 => FIBO2_EDIT_Q5_0,
+        (_, true) => FIBO2_EDIT_Q4_0,
+    };
+    (dit, krea2_files(p).1)
+}
+
+/// The Fibo-only files the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const FIBO2_DOWNLOADS: &[Download] = &[FIBO2_DEV_Q4_0, FIBO2_DEV_Q5_0, FIBO2_DEV_Q8_0, FIBO2_EDIT_Q4_0, FIBO2_EDIT_Q5_0, FIBO2_EDIT_Q8_0];
+
 /// Every Krea 2 file the catalog knows (found by file name in [`profile_model_downloads`]).
 pub const KREA2_DOWNLOADS: &[Download] = &[KREA2_TURBO_Q4_K_M, KREA2_TURBO_Q8_0, KREA2_TEXT_ENCODER_Q8_0, KREA2_TEXT_ENCODER_Q4_K_M, KREA2_VAE];
 
@@ -1044,7 +1096,7 @@ pub fn downloads_for(p: &Preset, backend: GpuBackend, sdcpp_dir: &Path) -> Vec<D
 pub fn profile_model_downloads(profile: &crate::config::ModelProfile) -> Vec<Download> {
     let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
     let official: Vec<Download> =
-        qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).collect();
+        qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).chain(FIBO2_DOWNLOADS.iter().copied()).collect();
     profile
         .files()
         .into_iter()

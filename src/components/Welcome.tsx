@@ -70,7 +70,7 @@ export function Welcome() {
         <BasedOnKokon />
         <p className="welcome-lead">
           A private image studio that lives on your {machine}. Describe a new image, or a change to a photo, in plain words, with the open model that suits it:
-          Qwen-Image 2.1 for every kind of edit, FLUX.3 Image Klein, Krea 2 or MOSS-Image. Switch between them in the model menu at the top. Like a cocoon,
+          Qwen-Image 2.1 for every kind of edit, FLUX.3 Image Klein, Fibo 2.0, Krea 2 or MOSS-Image. Switch between them in the model menu at the top. Like a cocoon,
           Kokon Modal is a closed space where something new takes shape, and nothing gets out unless you take it out.
         </p>
         <div className="welcome-grid">
