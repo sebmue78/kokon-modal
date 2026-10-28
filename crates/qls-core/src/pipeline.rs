@@ -156,9 +156,9 @@ pub fn plain_inpaint_prompt(action: InpaintAction, prompt: &str) -> String {
 /// like "extend left" still describe the task.
 pub fn effective_prompt(plan: &Plan, prompt: &str) -> String {
     let p = prompt.trim();
-    if !plan.reference_edits {
-        // Text-to-image models (Krea 2): the prompt describes the picture, not an instruction,
-        // and the RGBA wording is Qwen-Image 2.1's.
+    if !plan.qwen_prompts {
+        // Other models (Krea 2, MOSS-Image, FLUX.3): the prompt as written; the RGBA wording and
+        // the outpaint instruction are Qwen-Image 2.1's.
         return p.to_string();
     }
     if wants_transparency(p) && !p.starts_with(RGBA_PREFIX) {
@@ -287,7 +287,7 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             // the model rebuilds background instead of copying the object back.
             let pad = |img: &RgbaImage| imaging::pad_edge(img, wc.canvas, wc.content_offset);
             let image1 = if action == InpaintAction::Remove { imaging::fill_masked(&content, &m_work) } else { content.clone() };
-            if !plan.reference_edits {
+            if !plan.qwen_prompts {
                 // Plain masked inpainting: the latent mask alone tells the model where to paint.
                 drop(content);
                 req.init_image = Some(png_b64(&pad(&image1))?);

@@ -30,3 +30,5 @@ pub mod wic;
 mod krea2_tests;
 #[cfg(test)]
 mod moss_tests;
+#[cfg(test)]
+mod flux3_tests;

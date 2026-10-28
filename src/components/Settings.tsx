@@ -14,9 +14,16 @@ import { WHATS_NEW_VERSION } from "./WhatsNew";
 import { FORK_REPO_URL, UPSTREAM_AUTHOR, UPSTREAM_REPO_URL } from "../lib/fork";
 
 /** Fork: catalog models besides Qwen, by profile id (qls-core `EXTRA_CATALOG_PROFILES`). */
-const EXTRA_MODELS: Record<string, { name: string; about: string; target: "krea2" | "moss" }> = {
-  "krea-2-turbo": { name: "Krea 2 Turbo", about: "Krea's 12.9B model, 8 steps, up to 2K (Krea 2 Community License).", target: "krea2" },
-  "moss-image-sft": { name: "MOSS-Image SFT", about: "OpenMOSS's 5B model, 20 steps with CFG, negative prompts work (Apache-2.0).", target: "moss" },
+const TEXT_ONLY = "Text to image, plus brushed changes and Expand as plain inpainting. Whole-photo edits and combining images need Qwen-Image 2.1 or FLUX.3.";
+const EXTRA_MODELS: Record<string, { name: string; about: string; target: "flux3" | "krea2" | "moss" }> = {
+  "flux-3-image-klein": {
+    name: "FLUX.3 Image Klein",
+    about:
+      "Black Forest Labs' 5.6B model, 16 steps: new images, edits of a whole photo and combining up to 10 images; brushed changes are plain inpainting. Turn on Prompt+ for best results. FLUX Kommunity License: non-commercial use, commercial outputs only for qualifying users.",
+    target: "flux3",
+  },
+  "krea-2-turbo": { name: "Krea 2 Turbo", about: `Krea's 12.9B model, 8 steps, up to 2K (Krea 2 Community License). ${TEXT_ONLY}`, target: "krea2" },
+  "moss-image-sft": { name: "MOSS-Image SFT", about: `OpenMOSS's 5B model, 20 steps with CFG, negative prompts work (Apache-2.0). ${TEXT_ONLY}`, target: "moss" },
 };
 import type { AppConfig, Check, InstallStatus, MacBenchState, ModelProfile, ModelsStatus, SetupReport, TextEncoderPlacement } from "../lib/types";
 import { IconButton, Seg, Switch } from "./ui";
@@ -35,7 +42,7 @@ export function RepoCard() {
         <GitHubMark />
         <div className="body">
           <strong>Kokon Modal is open source</strong>
-          <span className="muted">A fork of Kokon that adds Krea 2 and MOSS-Image. Code and issues are on GitHub.</span>
+          <span className="muted">A fork of Kokon that adds FLUX.3 Image Klein, Krea 2 and MOSS-Image. Code and issues are on GitHub.</span>
         </div>
         <button className="btn primary" onClick={() => native.openLink(REPO_URL).catch(toastError)}>
           Open GitHub
@@ -588,8 +595,7 @@ export function Settings() {
                   <div className="setting-card-text">
                     <strong>{EXTRA_MODELS[profile.id].name}</strong>
                     <span className="muted">
-                      {EXTRA_MODELS[profile.id].about} Text to image, plus brushed changes and Expand as plain inpainting.
-                      Whole-photo edits and combining images need Qwen-Image 2.1.{" "}
+                      {EXTRA_MODELS[profile.id].about}{" "}
                       {ms?.catalog_installed?.[profile.id] ? "Downloaded." : "Not downloaded yet."}
                     </span>
                     <details className="model-files">

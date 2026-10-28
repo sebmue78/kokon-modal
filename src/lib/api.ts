@@ -94,7 +94,7 @@ export const api = {
   },
   /** `apply = false`: only download (an engine update), keeping the configured preset and settings.
    * `gpu`: card to run on once installed (index in `hardware().gpus`). */
-  install: (preset: string, backend: GpuBackend, apply = true, gpu?: number, target?: "official" | "user" | "krea2" | "moss") =>
+  install: (preset: string, backend: GpuBackend, apply = true, gpu?: number, target?: "official" | "user" | "flux3" | "krea2" | "moss") =>
     call<InstallStatus>("/setup/install", { method: "POST", body: json({ preset, backend, apply, gpu, target }) }),
   /** The active model's files and what is missing. */
   models: () => call<ModelsStatus>("/models"),

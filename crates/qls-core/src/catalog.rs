@@ -760,6 +760,73 @@ pub fn moss_files(p: &Preset) -> (Download, Download) {
 /// Every MOSS-Image file the catalog knows (found by file name in [`profile_model_downloads`]).
 pub const MOSS_DOWNLOADS: &[Download] = &[MOSS_SFT_Q4_K, MOSS_SFT_Q8_0, MOSS_TEXT_ENCODER_Q4_K_M, MOSS_TEXT_ENCODER_Q8_0, MOSS_VAE, MOSS_TOKENIZER];
 
+// ---------------------------------------------------------------------------------------
+// FLUX.3 Image Klein (fork): sd.cpp's docs/flux3.md, pinned from the Hugging Face API on
+// 2026-10-28. FLUX Kommunity License (non-commercial; commercial outputs for qualifying users).
+// Its text encoder is Krea 2's Qwen3-VL 4B file and its VAE MOSS-Image's FLUX.2 file (the same
+// files, downloaded once whichever model comes first).
+// ---------------------------------------------------------------------------------------
+
+/// Folder under the stable-diffusion.cpp folder that holds the FLUX.3 weights.
+pub const FLUX3_SUBDIR: &str = "models/flux3";
+const FLUX3_GGUFS: &str = "https://huggingface.co/leejet/flux-3-image-klein-GGUF/tree/main";
+
+/// FLUX.3 Image Klein, 4-bit (leejet's GGUF, made with stable-diffusion.cpp). 5.6B parameters.
+pub const FLUX3_KLEIN_Q4_K: Download = Download {
+    id: "flux3_klein_q4_k",
+    label: "FLUX.3 Image Klein Q4_K",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/leejet/flux-3-image-klein-GGUF/resolve/main/flux3-image-klein-Q4_K.gguf",
+    fallback_urls: &[],
+    page: FLUX3_GGUFS,
+    size: 3_514_023_104,
+    sha256: "19ddbfbed61da4bb16ebf169aaf48e9e5db43aba557be1ee537e9f00f586092e",
+    dest: "models/flux3/flux3-image-klein-Q4_K.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// FLUX.3 Image Klein, 8-bit: for 16 GB cards and up.
+pub const FLUX3_KLEIN_Q8_0: Download = Download {
+    id: "flux3_klein_q8_0",
+    label: "FLUX.3 Image Klein Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/leejet/flux-3-image-klein-GGUF/resolve/main/flux3-image-klein-Q8_0.gguf",
+    fallback_urls: &[],
+    page: FLUX3_GGUFS,
+    size: 6_151_716_032,
+    sha256: "8b71ffd749bcacbd50cc0acca4f2d31a044c94412743e1e780db99bf13f89752",
+    dest: "models/flux3/flux3-image-klein-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Qwen3-VL 4B's vision projector (Qwen's GGUF): lets Prompt+ look at FLUX.3's reference images.
+/// The image model itself takes the references as latents, without it.
+pub const QWEN3VL_4B_VISION: Download = Download {
+    id: "qwen3vl_4b_vision",
+    label: "Qwen3-VL 4B vision projector",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-4B-Instruct-F16.gguf",
+    fallback_urls: &[],
+    page: KREA2_TE,
+    size: 836_180_256,
+    sha256: "256f3a43bd4205ffef48d6b92715e1e70b5b0e9aef06522584967513a9985331",
+    dest: "models/flux3/mmproj-Qwen3VL-4B-Instruct-F16.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// FLUX.3 Image Klein's image model and (shared) text encoder for a hardware preset. Not measured
+/// on real hardware yet: derived from the file sizes with the text encoder in system RAM.
+pub fn flux3_files(p: &Preset) -> (Download, Download) {
+    let dit = if p.min_vram_mib >= 14 * 1024 { FLUX3_KLEIN_Q8_0 } else { FLUX3_KLEIN_Q4_K };
+    (dit, krea2_files(p).1)
+}
+
+/// The FLUX.3-only files the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const FLUX3_DOWNLOADS: &[Download] = &[FLUX3_KLEIN_Q4_K, FLUX3_KLEIN_Q8_0, QWEN3VL_4B_VISION];
+
 /// Every Krea 2 file the catalog knows (found by file name in [`profile_model_downloads`]).
 pub const KREA2_DOWNLOADS: &[Download] = &[KREA2_TURBO_Q4_K_M, KREA2_TURBO_Q8_0, KREA2_TEXT_ENCODER_Q8_0, KREA2_TEXT_ENCODER_Q4_K_M, KREA2_VAE];
 
@@ -976,7 +1043,8 @@ pub fn downloads_for(p: &Preset, backend: GpuBackend, sdcpp_dir: &Path) -> Vec<D
 /// saved where the profile expects it. Existing files are never replaced, whatever their name.
 pub fn profile_model_downloads(profile: &crate::config::ModelProfile) -> Vec<Download> {
     let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
-    let official: Vec<Download> = qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).collect();
+    let official: Vec<Download> =
+        qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).collect();
     profile
         .files()
         .into_iter()

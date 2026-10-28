@@ -166,7 +166,7 @@ export function Setup() {
       setInst(i);
       // A running install of the user's own files is labelled "user:<preset>", of a catalog model
       // besides Qwen "<profile id>:<preset>".
-      setPreset((p) => p ?? (i.running && i.preset ? i.preset.replace(/^(user|krea-2-turbo|moss-image-sft):/, "") : h.recommended));
+      setPreset((p) => p ?? (i.running && i.preset ? i.preset.replace(/^(user|flux-3-image-klein|krea-2-turbo|moss-image-sft):/, "") : h.recommended));
     } catch (e) {
       toastError(e);
     } finally {
@@ -290,13 +290,13 @@ export function Setup() {
     window.setTimeout(() => document.getElementById("own-models")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
 
-  const download = (target: "official" | "user" | "krea2" | "moss") => {
+  const download = (target: "official" | "user" | "flux3" | "krea2" | "moss") => {
     if (!preset) return;
     setMode(target === "user" ? "own" : "official");
     api.install(preset, backend ?? hw?.backend ?? "cuda", true, undefined, target).then(setInst, toastError);
   };
 
-  const switchTo = async (profile: "official" | "user" | "krea2" | "moss") => {
+  const switchTo = async (profile: string) => {
     setRepairBusy(profile === "user" ? "Switching to your files…" : "Switching to the official model…");
     try {
       setModels(await api.useModels(profile));
@@ -337,7 +337,7 @@ export function Setup() {
   // While (or after) installing this preset, show the live list; otherwise what is on disk.
   const installKey = own ? `user:${preset}` : preset;
   // Fork: a Krea 2 download (started from Settings or below) shows its own live list.
-  const kreaInstall = !!inst && (inst.preset === `krea-2-turbo:${preset}` || inst.preset === `moss-image-sft:${preset}`);
+  const kreaInstall = !!inst && ["flux-3-image-klein", "krea-2-turbo", "moss-image-sft"].some((id) => inst.preset === `${id}:${preset}`);
   const live = !!inst && (inst.preset === installKey || kreaInstall) && inst.items.length > 0 && (running || inst.items.some((i) => i.state !== "pending" && i.state !== "present"));
   const items = live ? inst!.items : own ? (ownActive ? hw!.user_files!.files : []) : chosen?.files ?? [];
   const missing = items.filter((i) => i.state !== "present" && i.state !== "done");
@@ -359,6 +359,9 @@ export function Setup() {
     // Fork: Krea 2 Turbo or MOSS-Image is active and some of its files are missing.
     if (models.active.id === "krea-2-turbo") {
       repairOptions.push({ icon: <Download size={16} />, title: "Download Krea 2 Turbo", detail: `${models.downloadable.join(", ")}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("krea2") });
+    }
+    if (models.active.id === "flux-3-image-klein") {
+      repairOptions.push({ icon: <Download size={16} />, title: "Download FLUX.3 Image Klein", detail: `${models.downloadable.join(", ")}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("flux3") });
     }
     if (models.active.id === "moss-image-sft") {
       repairOptions.push({ icon: <Download size={16} />, title: "Download MOSS-Image", detail: `${models.downloadable.join(", ")}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("moss") });

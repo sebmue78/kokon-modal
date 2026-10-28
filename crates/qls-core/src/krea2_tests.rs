@@ -69,7 +69,7 @@ fn krea_profile_is_always_offered_and_selectable() {
     let ids: Vec<&str> = c.profiles.iter().map(|p| p.id.as_str()).collect();
     assert_eq!(
         ids,
-        vec![OFFICIAL_PROFILE_ID, KREA2_PROFILE_ID, crate::config::MOSS_PROFILE_ID],
+        [&[OFFICIAL_PROFILE_ID][..], crate::config::EXTRA_CATALOG_PROFILES].concat(),
         "listed once, right after the official files"
     );
     assert_eq!(

@@ -20,7 +20,7 @@ use axum::{
 use futures_util::stream::Stream;
 use qls_core::{
     catalog,
-    config::{AppConfig, EXTRA_CATALOG_PROFILES, GpuBackend, KREA2_PROFILE_ID, MOSS_PROFILE_ID, OFFICIAL_PROFILE_ID, USER_PROFILE_ID},
+    config::{AppConfig, EXTRA_CATALOG_PROFILES, FLUX3_PROFILE_ID, GpuBackend, KREA2_PROFILE_ID, MOSS_PROFILE_ID, OFFICIAL_PROFILE_ID, USER_PROFILE_ID},
     diagnostics,
     engine::{APP_VERSION, JobView, LoraPatch},
     error::{AppError, ErrorCode},
@@ -397,7 +397,7 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
         Extra(&'static str),
         User,
     }
-    let extra = |t: &str| EXTRA_CATALOG_PROFILES.iter().copied().find(|id| *id == t || (t == "krea2" && *id == KREA2_PROFILE_ID) || (t == "moss" && *id == MOSS_PROFILE_ID));
+    let extra = |t: &str| EXTRA_CATALOG_PROFILES.iter().copied().find(|id| *id == t || (t == "krea2" && *id == KREA2_PROFILE_ID) || (t == "moss" && *id == MOSS_PROFILE_ID) || (t == "flux3" && *id == FLUX3_PROFILE_ID));
     let target = match b.target.as_deref() {
         Some("user") => Target::User,
         Some("official") => Target::Official,
@@ -1666,6 +1666,7 @@ async fn models_use(State(s): St, Json(b): Json<UseBody>) -> ApiResult<Json<Valu
         "official" => cfg.use_official(),
         "krea2" => cfg.use_krea2(),
         "moss" => cfg.use_extra_catalog(MOSS_PROFILE_ID),
+        "flux3" => cfg.use_extra_catalog(FLUX3_PROFILE_ID),
         // Fork: any profile by its id (the top bar picker).
         id if EXTRA_CATALOG_PROFILES.contains(&id) => cfg.use_extra_catalog(id),
         OFFICIAL_PROFILE_ID => cfg.use_official(),

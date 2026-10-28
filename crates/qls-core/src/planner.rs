@@ -373,6 +373,10 @@ pub struct Plan {
     /// without it inpaint and outpaint are plain masked inpainting. True in older records.
     #[serde(default = "yes")]
     pub reference_edits: bool,
+    /// Qwen-Image 2.1's prompt formats ([`RecommendedSettings::qwen_prompts`]): guided brushed
+    /// edits and the RGBA wording. True in older records.
+    #[serde(default = "yes")]
+    pub qwen_prompts: bool,
 }
 
 fn yes() -> bool {
@@ -906,7 +910,7 @@ fn ref_canvas(src: Size, max_canvas_area: u64, rec: &RecommendedSettings) -> Wor
 /// The model of the active profile cannot edit from reference images (Krea 2, MOSS-Image).
 fn no_reference_edits() -> AppError {
     AppError::invalid("This model makes new images from text only: it can't edit a whole photo or combine images.")
-        .suggest("Brush the area to change (or use Expand), or switch to Qwen-Image 2.1 in Settings → Models for edits and combines.")
+        .suggest("Brush the area to change (or use Expand), or switch to Qwen-Image 2.1 or FLUX.3 Image Klein in the model menu at the top for edits and combines.")
 }
 
 /// Produces the generation plan. `rec` comes from the active model profile.
@@ -1257,6 +1261,7 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
         upscale,
         custom_sigmas: if quick_upscale || !rec.turbo_sigmas { Vec::new() } else { TURBO_SIGMAS.to_vec() },
         reference_edits: rec.reference_edits,
+        qwen_prompts: rec.qwen_prompts,
         vae_tile,
         reference_detail: matches!(mode, ResolvedMode::Edit | ResolvedMode::MultiReference | ResolvedMode::Compose | ResolvedMode::Inpaint).then(|| adv.reference_detail.unwrap_or_default()),
     })

@@ -65,8 +65,15 @@ pub const KREA2_PROFILE_ID: &str = "krea-2-turbo";
 pub const MOSS_IMAGE_SFT: &str = "moss-image-sft";
 /// Profile id of the MOSS-Image SFT files from the catalog (always listed, downloaded on demand).
 pub const MOSS_PROFILE_ID: &str = "moss-image-sft";
+/// FLUX.3 Image Klein (black-forest-labs/flux-3-image-klein, FLUX Kommunity License: non-commercial,
+/// with a commercial-output exception for qualifying users): a 5.6B distilled DiT for text to image,
+/// edits and multi-reference compositions (up to 10 references, passed to the DiT as latents), with
+/// Qwen3-VL 4B as text encoder (Krea 2's file) and the FLUX.2 VAE (MOSS-Image's file). 16 steps, no CFG.
+pub const FLUX3_KLEIN: &str = "flux-3-image-klein";
+/// Profile id of the FLUX.3 Image Klein files from the catalog (always listed, downloaded on demand).
+pub const FLUX3_PROFILE_ID: &str = "flux-3-image-klein";
 /// Models from the catalog besides Qwen-Image 2.1, in the order Settings lists them.
-pub const EXTRA_CATALOG_PROFILES: &[&str] = &[KREA2_PROFILE_ID, MOSS_PROFILE_ID];
+pub const EXTRA_CATALOG_PROFILES: &[&str] = &[FLUX3_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
 
 /// Where the text encoder's weights live. Compute always runs on the selected GPU except
 /// for `Cpu`, which also computes on the CPU (slow for image editing, measured ~35×).
@@ -180,6 +187,10 @@ pub struct RecommendedSettings {
     /// Without it, brushed edits and Expand are plain masked inpainting and whole-image edits,
     /// combines and new images from references are not available.
     pub reference_edits: bool,
+    /// Qwen-Image 2.1's prompt formats: brushed edits as an instruction with a marked guide image
+    /// (`<image1>`/`<image2>`), and its RGBA wording for transparency. Other models get plain
+    /// masked inpainting and the prompt as written.
+    pub qwen_prompts: bool,
     /// Classifier-free guidance; 1 = off (distilled Turbo models). Above 1 the negative prompt
     /// is used.
     pub cfg_scale: f32,
@@ -201,6 +212,7 @@ impl Default for RecommendedSettings {
             steps: 8,
             turbo_sigmas: true,
             reference_edits: true,
+            qwen_prompts: true,
             cfg_scale: 1.0,
         }
     }
@@ -223,6 +235,7 @@ impl RecommendedSettings {
             steps: 8,
             turbo_sigmas: false,
             reference_edits: false,
+            qwen_prompts: false,
             cfg_scale: 1.0,
         }
     }
@@ -242,7 +255,28 @@ impl RecommendedSettings {
             steps: 20,
             turbo_sigmas: false,
             reference_edits: false,
+            qwen_prompts: false,
             cfg_scale: 3.0,
+        }
+    }
+
+    /// FLUX.3 Image Klein (its model card and sd.cpp's docs/flux3.md): distilled, 16 steps, no
+    /// guidance, Euler with the server's discrete schedule (time shift 6.93), sizes a multiple of
+    /// 16, up to 10 reference images. The larger tiers are not measured yet: 1.25K and 1.5K.
+    pub fn flux3_klein() -> Self {
+        Self {
+            sampler: "euler".into(),
+            area_fast: 1024 * 1024,
+            area_balanced: 1280 * 1280,
+            area_quality: 1536 * 1536,
+            align: 16,
+            max_side: 2048,
+            max_references: 10,
+            steps: 16,
+            turbo_sigmas: false,
+            reference_edits: true,
+            qwen_prompts: false,
+            cfg_scale: 1.0,
         }
     }
 }
@@ -270,6 +304,11 @@ impl ProfileCapabilities {
     /// no transparent output (that prompt format is Qwen-Image 2.1's).
     pub fn krea2_turbo() -> Self {
         Self { text_to_image: true, edit: false, multi_reference: false, inpaint: true, outpaint: true, alpha: false }
+    }
+
+    /// FLUX.3 Image Klein: everything Qwen-Image 2.1 does except transparent output.
+    pub fn flux3_klein() -> Self {
+        Self { alpha: false, ..Self::default() }
     }
 
     /// MOSS-Image: the same as Krea 2 (text to image, masked inpainting and Expand).
@@ -389,9 +428,33 @@ impl ModelProfile {
         }
     }
 
+    /// The FLUX.3 Image Klein files for a hardware preset (`catalog::flux3_files`): leejet's GGUF,
+    /// the Qwen3-VL 4B text encoder shared with Krea 2 (with its vision projector, so Prompt+ can
+    /// look at the references) and the FLUX.2 VAE shared with MOSS-Image.
+    pub fn flux3(sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Self {
+        let (diffusion, text_encoder) = crate::catalog::flux3_files(preset);
+        let quant = diffusion.dest.rsplit('-').next().unwrap_or("").trim_end_matches(".gguf");
+        Self {
+            id: FLUX3_PROFILE_ID.into(),
+            display_name: format!("FLUX.3 Image Klein {quant}"),
+            model: FLUX3_KLEIN.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: diffusion.path(sdcpp_dir),
+            vae: crate::catalog::MOSS_VAE.path(sdcpp_dir),
+            text_encoder: text_encoder.path(sdcpp_dir),
+            vision_projector: Some(crate::catalog::QWEN3VL_4B_VISION.path(sdcpp_dir)),
+            tokenizer: None,
+            backend_args: vec![],
+            recommended_settings: RecommendedSettings::flux3_klein(),
+            capabilities: ProfileCapabilities::flux3_klein(),
+        }
+    }
+
     /// The catalog profile `id` other than the official Qwen files ([`EXTRA_CATALOG_PROFILES`]).
     pub fn extra_catalog(id: &str, sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Option<Self> {
         match id {
+            FLUX3_PROFILE_ID => Some(Self::flux3(sdcpp_dir, preset)),
             KREA2_PROFILE_ID => Some(Self::krea2(sdcpp_dir, preset)),
             MOSS_PROFILE_ID => Some(Self::moss(sdcpp_dir, preset)),
             _ => None,
@@ -555,7 +618,7 @@ impl Default for AppConfig {
             schema_version: SCHEMA_VERSION,
             profiles: {
                 let preset = crate::catalog::preset(crate::catalog::DEFAULT_PRESET).unwrap();
-                vec![ModelProfile::official(&sdcpp, preset), ModelProfile::krea2(&sdcpp, preset), ModelProfile::moss(&sdcpp, preset)]
+                vec![ModelProfile::official(&sdcpp, preset), ModelProfile::flux3(&sdcpp, preset), ModelProfile::krea2(&sdcpp, preset), ModelProfile::moss(&sdcpp, preset)]
             },
             active_profile: OFFICIAL_PROFILE_ID.into(),
             sdcpp_dir: sdcpp,
@@ -1244,7 +1307,7 @@ mod tests {
         std::fs::remove_file(&mine.vae).unwrap();
         old.save_to(&path).unwrap();
         let c = AppConfig::load_from(&path);
-        assert_eq!((c.active_profile.as_str(), c.profiles.len()), (OFFICIAL_PROFILE_ID, 3), "the official, Krea 2 and MOSS-Image profiles");
+        assert_eq!((c.active_profile.as_str(), c.profiles.len()), (OFFICIAL_PROFILE_ID, 1 + EXTRA_CATALOG_PROFILES.len()), "the official and the extra catalog profiles");
         assert!(c.profile().same_files(&ModelProfile::official(&sd, c.preset())));
     }
 
@@ -1265,7 +1328,7 @@ mod tests {
         // Choosing files again keeps the tuning; switching to the official files keeps them.
         c.set_user_files(own_files(dir.path()));
         assert_eq!(c.profile().recommended_settings.area_fast, 768 * 768);
-        assert_eq!(c.profiles.len(), 4);
+        assert_eq!(c.profiles.len(), 2 + EXTRA_CATALOG_PROFILES.len());
         c.use_official();
         assert_eq!(c.active_profile, OFFICIAL_PROFILE_ID);
         assert!(c.user_profile().is_some(), "the user's profile is never deleted");
@@ -1385,7 +1448,7 @@ mod tests {
         assert_eq!(off.diffusion_model, sd("qwen-image-2.1-turbo-Q4_K_M.gguf"));
         // Saved again, nothing is added twice.
         c.save_to(&p).unwrap();
-        assert_eq!(AppConfig::load_from(&p).profiles.len(), 4);
+        assert_eq!(AppConfig::load_from(&p).profiles.len(), 2 + EXTRA_CATALOG_PROFILES.len());
         // A file without profiles uses its own folder and preset.
         std::fs::write(&p, r#"{"sdcppDir":"D:\\sd","hardwarePreset":"24gb"}"#).unwrap();
         let c = AppConfig::load_from(&p);
@@ -1412,7 +1475,7 @@ mod tests {
         c.relocate_paths(&old, &new);
         assert_eq!(c.sdcpp_dir, new.join("sdcpp"));
         assert!(c.profile().diffusion_model.starts_with(new.join("sdcpp")));
-        assert_eq!(c.profiles[3].diffusion_model, PathBuf::from(r"C:\AI\sdcpp\x.gguf"));
+        assert_eq!(c.profiles[1 + EXTRA_CATALOG_PROFILES.len()].diffusion_model, PathBuf::from(r"C:\AI\sdcpp\x.gguf"));
     }
 
     #[test]
@@ -1426,7 +1489,7 @@ mod tests {
         assert!(p.text_encoder.ends_with("Qwen3VL-8B-Instruct-Q8_0.gguf"));
         assert_eq!(p.display_name, "Qwen-Image 2.1 Turbo Q4_K_M (official)");
         assert_eq!(p.recommended_settings.area_fast, 768 * 768);
-        assert_eq!((c.hardware_preset.as_str(), c.profiles.len()), ("32gb", 3));
+        assert_eq!((c.hardware_preset.as_str(), c.profiles.len()), ("32gb", 1 + EXTRA_CATALOG_PROFILES.len()));
         c.vram_override_mib = 12_288;
         assert_eq!(c.planning_vram_mib(Some(16303)), Some(12_288));
         assert!(c.validate().is_ok());
@@ -1532,7 +1595,7 @@ mod tests {
         std::fs::write(&path, r#"{"serverPort": 41000}"#).unwrap();
         let p = AppConfig::load_from(&path);
         assert_eq!(p.server_port, 41000);
-        assert_eq!(p.profiles.len(), 3, "the official, Krea 2 and MOSS-Image profiles");
+        assert_eq!(p.profiles.len(), 1 + EXTRA_CATALOG_PROFILES.len(), "the official and the extra catalog profiles");
         std::fs::write(&path, "\u{feff}{\"serverPort\": 42000}").unwrap();
         assert_eq!(AppConfig::load_from(&path).server_port, 42000, "UTF-8 BOM accepted");
         std::fs::write(&path, "{ broken").unwrap();

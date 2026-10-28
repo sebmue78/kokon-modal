@@ -19,8 +19,8 @@ const MAC_NEWS = {
 const NEWS = [
   {
     icon: Layers,
-    title: "Two more models: Krea 2 and MOSS-Image",
-    text: "Kokon Modal adds Krea 2 Turbo and MOSS-Image SFT next to Qwen-Image 2.1: pick one in the model menu at the top, which also downloads it the first time. Both make new images from text and do brushed changes and Expand; edits of a whole photo stay with Qwen.",
+    title: "Three more models: FLUX.3, Krea 2 and MOSS-Image",
+    text: "Kokon Modal adds FLUX.3 Image Klein, Krea 2 Turbo and MOSS-Image SFT next to Qwen-Image 2.1: pick one in the model menu at the top, which also downloads it the first time. FLUX.3 edits and combines photos like Qwen; Krea 2 and MOSS make new images from text and do brushed changes and Expand.",
   },
   {
     icon: Copy,
