@@ -234,6 +234,8 @@ export interface StatusResponse {
     upscale?: boolean | null;
   };
   profile: { id: string; display_name: string; source: ProfileSource };
+  /** Fork: every model to choose from, and whether all its files are there. */
+  profiles?: { id: string; display_name: string; model: string; source: ProfileSource; installed: boolean }[];
   gpu: { name: string; vendor: string; unified: boolean; memory_total_mib: number; memory_used_mib: number; memory_free_mib: number; driver_version: string } | null;
   active_job: JobView | null;
   queue: { queued: number; jobs: JobView[] };

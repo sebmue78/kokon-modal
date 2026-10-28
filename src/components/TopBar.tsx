@@ -12,6 +12,7 @@ import { SilkSpin } from "./Cocoon";
 import { ProjectTitle, Wordmark } from "./Sidebar";
 import { WindowControls } from "./TitleBar";
 import { IconButton } from "./ui";
+import { ModelPicker } from "./ModelPicker";
 
 /** `quiet`: nothing while the model is loaded and idle (the phone bar has no room for "all is well"). */
 export function StatusIndicator({ quiet = false }: { quiet?: boolean }) {
@@ -140,6 +141,7 @@ export function TopBar() {
       <div className="toolbar" data-tauri-drag-region>
         {!needsSetup && <HistoryButtons />}
         <UpdatePill />
+        {!needsSetup && !isNarrow() && <ModelPicker />}
         <StatusIndicator />
         {!needsSetup && <PrivateToggle />}
         <IconButton title="Shortcuts (?)" onClick={() => setState({ overlay: "shortcuts" })}>

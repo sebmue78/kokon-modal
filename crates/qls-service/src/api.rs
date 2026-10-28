@@ -264,6 +264,11 @@ async fn status(State(s): St) -> Json<Value> {
         "upscaler": { "model": cfg.upscaler().map(|u| u.0).unwrap_or_else(|| cfg.upscaler_model.clone()), "available": cfg.upscaler_file().is_some() },
         "engine": { "release": catalog::engine_tag(), "update_needed": engine_update },
         "profile": { "id": cfg.profile().id, "display_name": cfg.profile().display_name, "source": cfg.profile().source },
+        // Fork: every model to choose from (top bar picker), and whether its files are all there.
+        "profiles": cfg.profiles.iter().map(|p| json!({
+            "id": p.id, "display_name": p.display_name, "model": p.model, "source": p.source,
+            "installed": p.files().iter().all(|(_, f, required)| !required || f.is_file()),
+        })).collect::<Vec<_>>(),
         "gpu": gpu,
         "active_job": s.engine.active_job(),
         "queue": { "queued": queued, "jobs": jobs.iter().filter(|j| !j.status.is_terminal()).collect::<Vec<_>>() },
@@ -1661,6 +1666,10 @@ async fn models_use(State(s): St, Json(b): Json<UseBody>) -> ApiResult<Json<Valu
         "official" => cfg.use_official(),
         "krea2" => cfg.use_krea2(),
         "moss" => cfg.use_extra_catalog(MOSS_PROFILE_ID),
+        // Fork: any profile by its id (the top bar picker).
+        id if EXTRA_CATALOG_PROFILES.contains(&id) => cfg.use_extra_catalog(id),
+        OFFICIAL_PROFILE_ID => cfg.use_official(),
+        USER_PROFILE_ID if cfg.user_profile().is_some() => cfg.active_profile = USER_PROFILE_ID.into(),
         "user" if cfg.user_profile().is_some() => cfg.active_profile = USER_PROFILE_ID.into(),
         "user" => return Err(AppError::invalid("Choose your model files first.").into()),
         other => return Err(AppError::invalid(format!("Unknown profile {other}.")).into()),

@@ -104,7 +104,7 @@ export const api = {
   /** Saves the user's own files (checked) as the active model; `vision_projector` null = not needed. */
   setUserModels: (b: { diffusion_model: ModelSlot; vae: ModelSlot; text_encoder: ModelSlot; vision_projector: ModelSlot | null; scan_dir: string | null }) =>
     call<ModelsStatus>("/models/user", { method: "POST", body: json(b) }),
-  useModels: (profile: "official" | "user" | "krea2" | "moss") => call<ModelsStatus>("/models/use", { method: "POST", body: json({ profile }) }),
+  useModels: (profile: string) => call<ModelsStatus>("/models/use", { method: "POST", body: json({ profile }) }),
   /** Downloads the texture-fix VAE and switches the active model to it (progress in installStatus). */
   improveVae: () => call<InstallStatus>("/models/vae", { method: "POST" }),
   newImageModel: () => call<InstallStatus>("/models/dit", { method: "POST" }),

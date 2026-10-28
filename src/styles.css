@@ -1115,3 +1115,12 @@ kbd { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; display
   font-weight: 500;
   opacity: 0.55;
 }
+
+/* Fork: the model picker in the top bar, next to the status capsule. A native select laid over a
+   capsule, so the menu is the system's (keyboard and screen readers work as usual). */
+.model-picker { position: relative; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 11px; margin-right: 6px; border-radius: 999px; background: var(--bg); box-shadow: var(--lift); color: var(--text); font-size: 12.5px; cursor: pointer; }
+.model-picker:hover { background: var(--surface-2); }
+.model-picker:has(select:disabled) { opacity: 0.6; cursor: default; }
+.model-picker:has(select:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
+.model-picker-name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-picker select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: inherit; font-size: 13px; }

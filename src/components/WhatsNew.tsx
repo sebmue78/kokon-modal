@@ -1,4 +1,4 @@
-import { CircleAlert, Copy, Cpu, Expand, Image, MousePointerClick } from "lucide-react";
+import { CircleAlert, Copy, Cpu, Expand, Image, Layers, MousePointerClick } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { formatBytes, installProgress, installStep, installTimeLeft, modelChoiceUi, modelOfferDue, whatsNewDue as due } from "../lib/logic";
@@ -18,12 +18,12 @@ const MAC_NEWS = {
 
 const NEWS = [
   {
-    icon: Image,
+    icon: Layers,
     title: "Two more models: Krea 2 and MOSS-Image",
-    text: "Kokon Modal adds Krea 2 Turbo and MOSS-Image SFT next to Qwen-Image 2.1 (Settings → Models). Both make new images from text and do brushed changes and Expand; edits of a whole photo stay with Qwen.",
+    text: "Kokon Modal adds Krea 2 Turbo and MOSS-Image SFT next to Qwen-Image 2.1: pick one in the model menu at the top, which also downloads it the first time. Both make new images from text and do brushed changes and Expand; edits of a whole photo stay with Qwen.",
   },
   {
-    icon: CircleAlert,
+    icon: Copy,
     title: "Its own app, based on Kokon",
     text: "Kokon Modal installs next to Kokon with its own folders, models and settings, so both can run at the same time. It is built on Kokon by Gabriele Lozupone.",
   },
