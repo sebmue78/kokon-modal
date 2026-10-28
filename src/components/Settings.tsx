@@ -562,7 +562,7 @@ export function Settings() {
               <div className="setting-card">
                 <div className="setting-card-text">
                   <strong>Model setup</strong>
-                  <span className="muted">Downloads the official Qwen-Image 2.1 weights for your graphics card, uses model files you already have, or switches between the 12, 16, 24 and 32 GB presets.</span>
+                  <span className="muted">Downloads the official Qwen-Image 2.1 weights for your graphics card, uses Qwen-Image 2.1 files you already have, or switches between the 8, 12, 16, 24 and 32 GB presets. FLUX.3, Krea 2 and MOSS-Image are chosen under Model below or in the model menu at the top.</span>
                 </div>
                 <button
                   className="btn primary"
@@ -629,10 +629,10 @@ export function Settings() {
                     <strong>Official model</strong>
                     <span className="muted">
                       {ms === null
-                        ? "Qwen-Image 2.1 Turbo, tested with Kokon Modal."
+                        ? "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial)."
                         : ms.official_installed
-                          ? "Qwen-Image 2.1 Turbo, tested with Kokon Modal. Downloaded."
-                          : "Qwen-Image 2.1 Turbo, tested with Kokon Modal. Not downloaded into this folder yet: Download… gets it, or use model files you already have."}
+                          ? "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial). Downloaded."
+                          : "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial). Not downloaded into this folder yet: Download… gets it, or use model files you already have."}
                     </span>
                     <details className="model-files">
                       <summary>Files</summary>
@@ -758,7 +758,7 @@ export function Settings() {
                 <Switch on={!!cfg.macEngine} onChange={(v) => set({ macEngine: v })} />
               </div>
               <span className="muted" style={{ marginTop: -10 }}>
-                Kokon's own engine for Apple Silicon: the GPU, the CPU's matrix unit and the Neural Engine work together, about 4 times faster. New images, edits, brushed edits, extending and Prompt+ work on it; LoRAs and the upscaler model still need it off.
+                Kokon's own engine for Apple Silicon: the GPU, the CPU's matrix unit and the Neural Engine work together, about 4 times faster. New images, edits, brushed edits, extending and Prompt+ work on it, with Qwen-Image 2.1 only (FLUX.3, Krea 2 and MOSS-Image use the standard engine); LoRAs and the upscaler model still need it off.
               </span>
               {!inBrowser && <MacBench blocked={dirty ? "Save or discard your changes first" : !cfg.macEngine ? "Turn on Kokon's Mac engine and save first" : null} />}
               {!cfg.macEngine && (

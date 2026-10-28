@@ -39,7 +39,7 @@ async function markSeen(updateCheck: boolean) {
 
 const PROMISES = [
   { icon: Cpu, title: `Made on your ${machine}`, text: "Your graphics chip creates every image. Photos and prompts never leave this computer." },
-  { icon: CloudOff, title: "Online only when needed", text: "To download the model, and once a day to check for a new Kokon Modal version. Your images and prompts are never sent." },
+  { icon: CloudOff, title: "Online only when needed", text: "To download the models you choose, and once a day to check for a new Kokon Modal version. Your images and prompts are never sent." },
   { icon: Unlimited, title: "No limits", text: "No account, no credits, no subscription, no queue. Create as much as you like." },
   { icon: EyeOff, title: "Private mode", text: "Click the eye icon and nothing is kept: no gallery, no files, no history." },
 ];
@@ -69,8 +69,9 @@ export function Welcome() {
         <h1>Welcome to Kokon Modal</h1>
         <BasedOnKokon />
         <p className="welcome-lead">
-          A private image studio that lives on your {machine}. Describe a new image, or a change to a photo, in plain words. Like a cocoon, Kokon Modal is a closed space where something new
-          takes shape, and nothing gets out unless you take it out.
+          A private image studio that lives on your {machine}. Describe a new image, or a change to a photo, in plain words, with the open model that suits it:
+          Qwen-Image 2.1 for every kind of edit, FLUX.3 Image Klein, Krea 2 or MOSS-Image. Switch between them in the model menu at the top. Like a cocoon,
+          Kokon Modal is a closed space where something new takes shape, and nothing gets out unless you take it out.
         </p>
         <div className="welcome-grid">
           {PROMISES.map(({ icon: Icon, title, text }) => (

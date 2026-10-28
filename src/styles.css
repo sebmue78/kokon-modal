@@ -577,8 +577,8 @@ pre.diag { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font
 .setup-file:first-child { border-top: 0; }
 .setup-file .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .setup-file .state { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.setup-file.present, .setup-file.done { color: var(--text-2); }
-.setup-file.failed .state { color: var(--text); font-weight: 600; }
+.setup-file.is-present, .setup-file.is-done { color: var(--text-2); }
+.setup-file.is-failed .state { color: var(--text); font-weight: 600; }
 .setup-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .btn.big { height: 42px; padding: 0 20px; font-size: 14px; border-radius: 12px; }
 .btn.ghost { background: transparent; color: var(--text-2); }

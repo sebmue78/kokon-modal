@@ -47,7 +47,7 @@ export function MacEngineOffer() {
       <div className="welcome" role="dialog" aria-label="Try Kokon's Mac engine">
         <KokonMark size={44} />
         <h1>Try Kokon's Mac engine</h1>
-        <p className="welcome-lead">Kokon Modal includes Kokon's own engine for Apple Silicon. It's experimental, so it stays off until you turn it on.</p>
+        <p className="welcome-lead">Kokon Modal includes Kokon's own engine for Apple Silicon, for Qwen-Image 2.1 (the other models use the standard engine). It's experimental, so it stays off until you turn it on.</p>
         <div className="welcome-grid">
           {POINTS.map(({ icon: Icon, title, text }) => (
             <div className="welcome-item" key={title}>

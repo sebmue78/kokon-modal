@@ -29,7 +29,7 @@ const NEWS = [
   },
   {
     icon: Image,
-    title: "A new copy of the image model",
+    title: "A new copy of the Qwen model",
     text: "New installs get unsloth's Q4_K_M of Qwen-Image 2.1 Turbo: the same model in the same 4-bit size, better supported and slightly better. If you have the earlier file, Kokon Modal asks before changing it.",
   },
   {

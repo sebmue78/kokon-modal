@@ -68,11 +68,13 @@ function Failure({ it, issuesUrl }: { it: InstallItem; issuesUrl: string }) {
   );
 }
 
+/** The files of an install. Each row's state is the class "is-<state>": a bare "pending" would
+ * also match the image placeholder's `.pending` style (centered, shadowed, collapsed rows). */
 function FileList({ items }: { items: InstallItem[] }) {
   return (
     <div className="setup-files">
       {items.map((it) => (
-        <div className={`setup-file ${it.state}`} key={it.id}>
+        <div className={`setup-file is-${it.state}`} key={it.id}>
           <ItemIcon it={it} />
           <span className="name">{it.label}</span>
           <span className="state">{installItemShort(it)}</span>
@@ -400,7 +402,7 @@ export function Setup() {
           <p className="setup-lead">
             {own
               ? "Everything runs on this PC. Use the Qwen-Image 2.1 files you already have, for example from ComfyUI: Setup only downloads the engine and what you don't have."
-              : "Everything runs on this PC. Setup downloads the image model once; after that, nothing leaves your computer."}
+              : "Everything runs on this PC. Setup downloads the image model once; after that, nothing leaves your computer. FLUX.3, Krea 2 and MOSS-Image can be added later from the model menu at the top."}
           </p>
         </div>
 
@@ -472,7 +474,7 @@ export function Setup() {
                       <Download size={20} />
                       <div>
                         <strong>Download the model</strong>
-                        <span>Qwen-Image 2.1 Turbo, tested with Kokon Modal{modelBytes ? ` · ${formatBytes(modelBytes)}` : ""}</span>
+                        <span>Qwen-Image 2.1 Turbo, the model for every kind of edit{modelBytes ? ` · ${formatBytes(modelBytes)}` : ""}</span>
                       </div>
                     </button>
                     {!inBrowser && (
@@ -480,7 +482,7 @@ export function Setup() {
                         <FolderOpen size={20} />
                         <div>
                           <strong>Use models I already have</strong>
-                          <span>From ComfyUI or another folder; only the engine is downloaded</span>
+                          <span>Qwen-Image 2.1 files from ComfyUI or another folder; only the engine is downloaded</span>
                         </div>
                       </button>
                     )}
@@ -698,8 +700,13 @@ export function Setup() {
           </div>
         )}
         <p className="muted setup-foot">
-          Qwen-Image 2.1 Turbo is released by Alibaba's Qwen team under the Qwen Research License: research and evaluation only, no commercial use. By downloading it you accept that license. The upscalers are Superscale-SP by Nmkd
-          (WTFPL) and the experimental 4xNomos2_hq_mosr by Philip Hofmann (CC BY 4.0). Downloads come only from GitHub (stable-diffusion.cpp, upscaler) and Hugging Face, and every file is verified with its SHA-256 checksum.
+          Each model has its own license, and you accept it when you download that model. Qwen-Image 2.1 Turbo (downloaded here) is released by
+          Alibaba&apos;s Qwen team under the Qwen Research License: research and evaluation only, no commercial use. The other models are downloaded only
+          when you choose them in the model menu at the top: FLUX.3 Image Klein by Black Forest Labs under the FLUX Kommunity License
+          (non-commercial; commercial use of images only for qualifying users), Krea 2 Turbo by Krea under the Krea 2 Community License, and MOSS-Image
+          SFT by the OpenMOSS team under Apache-2.0 (commercial use allowed). Read a model&apos;s license on its Hugging Face page before using its
+          images commercially. The upscalers are Superscale-SP by Nmkd (WTFPL) and the experimental 4xNomos2_hq_mosr by Philip Hofmann (CC BY 4.0).
+          Downloads come only from GitHub (stable-diffusion.cpp, upscaler) and Hugging Face, and every file is verified with its SHA-256 checksum.
         </p>
       </div>
     </div>

@@ -123,7 +123,7 @@ export function LoraSettings() {
         <div className="setting-card-text">
           <strong>Your LoRA files (beta)</strong>
           <span className="muted">
-            Load LoRAs made for Qwen-Image 2.1 (.safetensors). Kokon Modal checks each file and keeps its own prepared copy; your file is not changed. Turn them on or off for each project with the
+            Load LoRAs made for Qwen-Image 2.1 (.safetensors); FLUX.3, Krea 2 and MOSS-Image run without them. Kokon Modal checks each file and keeps its own prepared copy; your file is not changed. Turn them on or off for each project with the
             LoRA button next to the prompt, up to {MAX_LORAS} at a time.
           </span>
         </div>

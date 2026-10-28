@@ -14,11 +14,12 @@ import { reviewPhotos } from "./PhotoReview";
 import { AspectGrid, pickAspect, RatioIcon, resolutionLabel, ResolutionMenu } from "./SizeMenus";
 import { Option, Popover, Seg } from "./ui";
 
-// All presets run Qwen-Image 2.1 Turbo (8 steps); they differ in size.
+// The presets differ in size; each model sets its own (Qwen-Image 2.1: 1 MP, 1.5K, 2K; FLUX.3 and
+// MOSS-Image: 1 MP, 1.25K, 1.5K; Krea 2: 1 MP, 1.5K, 2K). The size shown next to the prompt is the real one.
 const QUALITY: { value: Quality; label: string; sub: string }[] = [
   { value: "fast", label: "Fast", sub: "~1 MP · fastest" },
-  { value: "balanced", label: "Balanced", sub: "~1.5K" },
-  { value: "quality", label: "Quality", sub: "native 2K · slowest" },
+  { value: "balanced", label: "Balanced", sub: "larger" },
+  { value: "quality", label: "Quality", sub: "the model's largest size · slowest" },
 ];
 
 const INPAINT_ACTIONS: { value: InpaintAction; label: string; placeholder: string }[] = [
