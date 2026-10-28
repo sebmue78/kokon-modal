@@ -65,9 +65,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZEOTYyMjkyRkI1MTQzREQKUldUZFExSDdraUtXL2ZXWWcrNnhNVGZuTnp2UFFrRk1XMFR0em1IWURmcmVEUlJ2bnVscDBCaC8K",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM3MDlDQjRCQUZDRjg1MTgKUldRWWhjK3ZTOHNKTjhTMDFMak1sTHF0MkYrZkdEQ2NkcjlTV1VaY09MVnpNTWhWUk5DaTVrSE0K",
       "endpoints": [
-        "https://github.com/sebmue78/kokon-modal/releases/latest/download/latest.json"
+        "https://github.com/sebmue78/kokon-modal/releases/download/updates/latest.json"
       ],
       "windows": {
         "installMode": "passive"

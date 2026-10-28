@@ -82,8 +82,9 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   install folder, settings (`%APPDATA%\Kokon Modal`), data and models (`%LOCALAPPDATA%\KokonModalData`),
   output folder (`Pictures\Kokon Modal`) and ports (39160-39162; Kokon uses 39150-39152). Both apps
   can be installed and run at the same time, and neither touches the other's files or processes.
-- **No automatic updates yet.** The in-app update check points at this fork, which publishes no
-  update manifest yet: install a new alpha over the old one (settings, gallery and models stay).
+- **Updates from this repository.** Kokon Modal checks this fork once a day (Settings → General can
+  turn it off or check now) and installs a new version in one click; updates are signed with the
+  fork's own key. Every alpha has its own, higher version (`0.11.1012` = Kokon 0.11.1, build 12).
 - Small fixes: the setup's file list no longer garbles rows waiting to download.
 
 ## Install
@@ -115,8 +116,10 @@ npx tauri dev                           # run the app (Windows)
 
 The Windows alpha is built by [`.github/workflows/alpha-windows.yml`](.github/workflows/alpha-windows.yml)
 on every push to the `alpha-release` branch: tests, the service, the MCP server, the app and the
-NSIS installer, then a pre-release `v<version>-modal-alpha.<run>`. It is built without Kokon's
-updater signing key (no updater artifacts).
+NSIS installer, then a pre-release `v<version>-alpha`. With the repository secret
+`TAURI_SIGNING_PRIVATE_KEY` (the fork's updater key; its public half is in `src-tauri/tauri.conf.json`)
+the installer is signed for the updater and `latest.json` goes to the release `updates`, the address
+the app checks. Without the secret the build works the same, without an update.
 
 Where the fork's changes live:
 
