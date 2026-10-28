@@ -1388,7 +1388,13 @@ impl Engine {
         let started = Instant::now();
         // A new image from references: each reference is labelled alone first, then the scene is
         // written from the labels without the images (see `enhancer::COMPOSE_SYSTEM_PROMPT`).
-        let req = if mode == ResolvedMode::Compose {
+        // Fork: whether the text encoder can see the images in the engine (not for FLUX.3 / Krea 2).
+        let vision = cfg.profile().recommended_settings.prompt_vision;
+        let req = if mode == ResolvedMode::Compose && !vision {
+            // No labels without vision: each reference is named only by its number.
+            let labels: Vec<String> = (0..images.len()).map(|_| "a reference image the user provided".to_string()).collect();
+            enhancer::compose_request(cfg, &labels, prompt, seed)
+        } else if mode == ResolvedMode::Compose {
             let mut labels = Vec::with_capacity(images.len());
             for img in images {
                 let r = client.text_gen(&enhancer::label_request(img.clone(), prompt, seed), Duration::from_secs(120), |_| {}, || self.is_cancelled(id)).await;
@@ -1405,7 +1411,7 @@ impl Engine {
             tracing::info!("prompt enhancer: {} reference labels in {:.1} s: {:?}", labels.len(), started.elapsed().as_secs_f32(), labels);
             enhancer::compose_request(cfg, &labels, prompt, seed)
         } else {
-            enhancer::request(cfg, mode, prompt, images.to_vec(), seed)
+            enhancer::request(cfg, mode, prompt, images.to_vec(), seed, vision)
         };
         let mut text = String::new();
         let mut last_emit = Instant::now();

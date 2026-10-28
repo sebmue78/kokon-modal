@@ -413,7 +413,7 @@ function PromptPlus() {
     mode === "off"
       ? "Prompt+: let the model rewrite a short prompt, in any language, as a detailed English description before making the image. Adds a few seconds."
       : mode === "write"
-        ? "Prompt+ on: before making the image, the model rewrites your prompt as a detailed English description (looking at your images). You see it being written; the result keeps both."
+        ? "Prompt+ on: before making the image, the model rewrites your prompt as a detailed English description (with Qwen-Image 2.1 it also looks at your images; FLUX.3 and Krea 2 work from your words). You see it being written; the result keeps both."
         : "Prompt+ on, review first: the model writes the detailed prompt into the box; change it if you like, then press Enter to make the image.";
   const pick = (m: "off" | "write" | "review") => updateComposer({ enhance: m !== "off", enhanceReview: m === "off" ? c.enhanceReview : m === "review" });
   return (

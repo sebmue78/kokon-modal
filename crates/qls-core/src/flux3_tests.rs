@@ -87,6 +87,7 @@ fn flux_plans_sixteen_steps_without_cfg() {
     assert_eq!(p.mode, ResolvedMode::Generate);
     assert_eq!((p.steps, p.cfg), (16, 1.0));
     assert!(p.custom_sigmas.is_empty() && p.reference_edits && !p.qwen_prompts);
+    assert!(!rec.prompt_vision && RecommendedSettings::default().prompt_vision, "the engine shows images to Qwen's text encoder only");
     assert!(p.working.is_aligned(16));
 }
 

@@ -191,6 +191,10 @@ pub struct RecommendedSettings {
     /// (`<image1>`/`<image2>`), and its RGBA wording for transparency. Other models get plain
     /// masked inpainting and the prompt as written.
     pub qwen_prompts: bool,
+    /// Prompt+ can show the input images to the text encoder. The engine turns the text encoder's
+    /// vision part on only for some models (Qwen-Image 2.1, not FLUX.3 Image Klein or Krea 2): for
+    /// the others Prompt+ rewrites edits from the words alone (`enhancer::EDIT_BLIND_SYSTEM_PROMPT`).
+    pub prompt_vision: bool,
     /// Classifier-free guidance; 1 = off (distilled Turbo models). Above 1 the negative prompt
     /// is used.
     pub cfg_scale: f32,
@@ -213,6 +217,7 @@ impl Default for RecommendedSettings {
             turbo_sigmas: true,
             reference_edits: true,
             qwen_prompts: true,
+            prompt_vision: true,
             cfg_scale: 1.0,
         }
     }
@@ -236,6 +241,7 @@ impl RecommendedSettings {
             turbo_sigmas: false,
             reference_edits: false,
             qwen_prompts: false,
+            prompt_vision: false,
             cfg_scale: 1.0,
         }
     }
@@ -256,6 +262,7 @@ impl RecommendedSettings {
             turbo_sigmas: false,
             reference_edits: false,
             qwen_prompts: false,
+            prompt_vision: false,
             cfg_scale: 3.0,
         }
     }
@@ -276,6 +283,7 @@ impl RecommendedSettings {
             turbo_sigmas: false,
             reference_edits: true,
             qwen_prompts: false,
+            prompt_vision: false,
             cfg_scale: 1.0,
         }
     }

@@ -54,6 +54,20 @@ pub const COMPOSE_SYSTEM_PROMPT: &str = r#"You write prompts for an image genera
 - Write in English whatever language the user writes in: about 80 to 180 words, up to about 280 when the scene has several people or many objects, with a sentence for each.
 Output only the prompt."#;
 
+/// Fork: the built-in edit prompt for models whose text encoder can't see the images in the engine
+/// (FLUX.3 Image Klein, Krea 2): the instruction is rewritten from the user's words alone, so it
+/// asks for a precise, complete instruction without inventing what the images show.
+pub const EDIT_BLIND_SYSTEM_PROMPT: &str = r#"You write prompts for an image editing model. The model receives the user's input images; you do not see them, only the user's instruction. Rewrite the instruction as one precise English editing instruction.
+- Start with the operation (Change, Replace, Remove, Add, Turn, Place, ...) and say exactly what changes and what it becomes, with concrete colours, materials, light and style for the new parts. Make the change complete and clearly visible.
+- Never describe or guess what is already in the images: refer to things only as the user names them ("the car", "the woman on the left", "the background").
+- End with one sentence such as "Keep everything else in the image unchanged." People keep their face and identity and the image keeps its medium (photo, painting, illustration) unless the user asks otherwise.
+- When something is removed or moved, its shadow and reflection go with it; say briefly what fills the empty area so the result looks natural.
+- Text in the image: write the exact new text in double quotes, in the language the user gave.
+- For a style or mood change (painting, season, night, ...), apply it fully to the whole image and end with "Keep the composition and the subjects unchanged." instead.
+- With several input images, refer to them as image 1, image 2, ...: start with Place or Combine and say what is taken from each image and where it goes in the result.
+- Write in English whatever language the user writes in, as one paragraph with no resolution or aspect ratio: about 20 to 60 words for one change; for several changes, one sentence each, up to about 150 words.
+Output only the instruction."#;
+
 /// Step 1 of a composition: each reference seen alone, with the user's request, and labelled by
 /// what the request takes from it (a list of features, which the 8B keeps free of the photo's
 /// context better than a sentence). With the request it labels the bowl a person holds, or a
@@ -99,12 +113,15 @@ pub fn system_prompt(cfg: &AppConfig, mode: ResolvedMode) -> String {
 
 /// The `text_gen` request for a job: its seed (so the same seed writes the same prompt, and
 /// Regenerate writes a new one) and, for edits and compositions, the references as the image
-/// model gets them.
-pub fn request(cfg: &AppConfig, mode: ResolvedMode, prompt: &str, images: Vec<String>, seed: i64) -> TextGenRequest {
+/// model gets them. `vision`: the text encoder can see images in the engine
+/// (`RecommendedSettings::prompt_vision`); without it edits are rewritten from the words alone.
+pub fn request(cfg: &AppConfig, mode: ResolvedMode, prompt: &str, images: Vec<String>, seed: i64, vision: bool) -> TextGenRequest {
+    let blind_edit = !vision && mode != ResolvedMode::Generate;
     TextGenRequest {
         prompt: prompt.trim().to_string(),
-        system_prompt: system_prompt(cfg, mode),
-        images: if mode == ResolvedMode::Generate { Vec::new() } else { images },
+        // The user's own edit instructions (Settings) still win; the built-in ones need the images.
+        system_prompt: if blind_edit && cfg.enhancer_edit_prompt.trim().is_empty() { EDIT_BLIND_SYSTEM_PROMPT.into() } else { system_prompt(cfg, mode) },
+        images: if mode == ResolvedMode::Generate || !vision { Vec::new() } else { images },
         max_tokens: MAX_TOKENS,
         sampling: TextSampling { seed, ..SAMPLING },
         stream: true,
@@ -197,11 +214,11 @@ mod tests {
     #[test]
     fn request_uses_job_seed_and_images_only_for_edits() {
         let cfg = AppConfig::default();
-        let r = request(&cfg, ResolvedMode::Edit, " rendi la macchina nera ", vec!["PNG".into()], 1234);
+        let r = request(&cfg, ResolvedMode::Edit, " rendi la macchina nera ", vec!["PNG".into()], 1234, true);
         assert_eq!((r.prompt.as_str(), r.images.len(), r.sampling.seed, r.max_tokens), ("rendi la macchina nera", 1, 1234, MAX_TOKENS));
         assert_eq!((r.sampling.temperature, r.sampling.top_p, r.sampling.top_k, r.sampling.presence_penalty), (0.7, 0.8, 20, 1.5));
         assert!(r.stream);
-        let r = request(&cfg, ResolvedMode::Generate, "un gatto", vec!["PNG".into()], 1);
+        let r = request(&cfg, ResolvedMode::Generate, "un gatto", vec!["PNG".into()], 1, true);
         assert!(r.images.is_empty() && r.system_prompt == T2I_SYSTEM_PROMPT);
         // Compose: each reference labelled alone, then the scene from the labels, without images.
         let l = label_request("A".into(), " la ciotola su un tavolo ", 5);
@@ -212,6 +229,22 @@ mod tests {
         assert!(r.images.is_empty() && r.system_prompt == COMPOSE_SYSTEM_PROMPT && r.sampling.seed == 5);
         assert_eq!(r.prompt, "References:\n<image1>: person, female, dark hair; style: photo\n<image2>: cat, orange tabby; style: photo\n\nRequest: lei sul divano con il gatto");
         assert_eq!(clean_label(" cat,\n orange tabby.\n"), "cat, orange tabby");
+    }
+
+    #[test]
+    fn edits_without_vision_are_rewritten_from_the_words() {
+        // FLUX.3 / Krea 2: the engine can't show images to their text encoder.
+        let mut cfg = AppConfig::default();
+        let r = request(&cfg, ResolvedMode::Edit, "make it winter", vec!["PNG".into()], 7, false);
+        assert!(r.images.is_empty(), "no images: the engine would refuse the request");
+        assert_eq!(r.system_prompt, EDIT_BLIND_SYSTEM_PROMPT);
+        assert!(EDIT_BLIND_SYSTEM_PROMPT.contains("you do not see them") && !EDIT_BLIND_SYSTEM_PROMPT.contains("<image1>"));
+        let r = request(&cfg, ResolvedMode::MultiReference, "put the cat on the sofa", vec!["A".into(), "B".into()], 7, false);
+        assert!(r.images.is_empty() && r.system_prompt == EDIT_BLIND_SYSTEM_PROMPT);
+        // New images are the same either way, and the user's own edit instructions still win.
+        assert_eq!(request(&cfg, ResolvedMode::Generate, "a cat", vec![], 1, false).system_prompt, T2I_SYSTEM_PROMPT);
+        cfg.enhancer_edit_prompt = "My own rules.".into();
+        assert_eq!(request(&cfg, ResolvedMode::Edit, "x", vec!["PNG".into()], 1, false).system_prompt, "My own rules.");
     }
 
     #[test]
