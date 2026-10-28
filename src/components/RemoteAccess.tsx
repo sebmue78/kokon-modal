@@ -102,7 +102,7 @@ export function RemoteAccess() {
   return (
     <>
       <span className="muted">
-        Open Kokon in a browser on your phone, tablet or another computer on the same network. Images are made on this computer and saved in its gallery; each device can download
+        Open Kokon Modal in a browser on your phone, tablet or another computer on the same network. Images are made on this computer and saved in its gallery; each device can download
         them.
       </span>
       {!st.password_set ? (
@@ -120,7 +120,7 @@ export function RemoteAccess() {
               <div className="setting-card-text">
                 <strong>Scan it with your phone's camera</strong>
                 <span className="muted">
-                  Or open <span className="remote-url">{st.url}</span> on the other device. To keep Kokon on the home screen like an app: on iPhone, Share → Add to Home Screen; on
+                  Or open <span className="remote-url">{st.url}</span> on the other device. To keep Kokon Modal on the home screen like an app: on iPhone, Share → Add to Home Screen; on
                   Android, the browser's menu → Add to Home screen. The router can give this computer another address later: reserve it in the router's settings (DHCP
                   reservation) so the icon keeps working.
                 </span>
@@ -149,8 +149,8 @@ export function RemoteAccess() {
         <div className="setting-card-text">
           <strong>Good to know</strong>
           <span className="muted">
-            It works while Kokon is open on this computer. Use it on a network you trust, like your home Wi-Fi: the connection is not encrypted, so avoid public or shared networks. To
-            reach Kokon from outside, use a private network such as Tailscale, never port forwarding on your router. The first time, your system may ask to allow Kokon on the
+            It works while Kokon Modal is open on this computer. Use it on a network you trust, like your home Wi-Fi: the connection is not encrypted, so avoid public or shared networks. To
+            reach Kokon Modal from outside, use a private network such as Tailscale, never port forwarding on your router. The first time, your system may ask to allow Kokon Modal on the
             network: allow it on private networks.
           </span>
         </div>

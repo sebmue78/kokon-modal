@@ -5,9 +5,9 @@ name: Windows alpha (fork)
 # the branch alpha-release (or by hand in the Actions tab).
 #
 # Differences to the maintainer's scripts\build-release.ps1:
+# - Kokon Modal is its own app (identifier app.kokonmodal.desktop), installed next to Kokon;
 # - no updater signing key: the installer is built without updater artifacts, and the in-app
-#   updater points at this fork (which publishes no latest.json), so an alpha is never replaced
-#   by an upstream Kokon release;
+#   updater points at this fork (which publishes no latest.json yet);
 # - the installer is not code-signed (Windows SmartScreen asks once).
 on:
   push:
@@ -107,8 +107,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cat > notes.md <<EOF
-          **Alpha, not tested on a GPU yet.** Kokon (fork kokon-modal) with two more models to choose in
-          Settings → Models, next to Qwen-Image 2.1:
+          **Alpha, not tested on a GPU yet.** Kokon Modal is a fork of [Kokon](https://github.com/GabrieleLozupone/kokon)
+          by Gabriele Lozupone, with two more models to choose in Settings → Models, next to Qwen-Image 2.1:
 
           - **Krea 2 Turbo** (12.9B, 8 steps, up to 2K; Krea 2 Community License)
           - **MOSS-Image SFT** (5B, 20 steps with CFG and negative prompts; Apache-2.0)
@@ -118,7 +118,8 @@ jobs:
           time it is chosen (Settings → Models → Download…).
 
           Notes:
-          - Installs over an existing Kokon (same app); settings, gallery and models are kept.
+          - Its own app: installs next to Kokon (own folders, settings, gallery, models and ports), both can run at the same time.
+            Models are downloaded again for Kokon Modal, or point it at Kokon's files with Settings → Models → Use my own files.
           - Not code-signed: Windows SmartScreen may ask once (More info → Run anyway).
           - No automatic updates for this alpha.
 

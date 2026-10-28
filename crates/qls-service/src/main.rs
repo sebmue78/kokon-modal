@@ -147,9 +147,9 @@ Usage: kokon-service [--port <n>] [--persistent] [--remote]
        kokon-service --set-password
 
 Options:
-  --port <n>      Port of the local API (default: the configured service_port, 39151)
+  --port <n>      Port of the local API (default: the configured service_port, 39161)
   --persistent    Keep sd-server running after the last client disconnects
-  --remote        Open the browser UI to other devices (the configured remote_port, 39152,
+  --remote        Open the browser UI to other devices (the configured remote_port, 39162,
                   on all interfaces) for this run. Needs a password first
   --set-password  Set the password other devices sign in with (asked on the terminal, or
                   one line on stdin), then exit. A running service picks it up
@@ -315,7 +315,7 @@ async fn run(args: Vec<String>) {
         started: Instant::now(),
         remote: remote::RemoteState::new(&dir, forced_remote),
     });
-    say(&format!("Kokon {APP_VERSION} is running."));
+    say(&format!("Kokon Modal {APP_VERSION} is running."));
     // In the Docker image (KOKON_CONTAINER, docker/Dockerfile) the loopback port and the container's
     // own address mean nothing outside: name the published port instead (remote.rs).
     if !in_container() {
@@ -367,7 +367,7 @@ async fn run(args: Vec<String>) {
         let _ = std::fs::remove_file(service_info_path());
     }
     tracing::info!("kokon-service exited");
-    say("Kokon stopped.");
+    say("Kokon Modal stopped.");
 }
 
 /// Ctrl+C in a terminal, `systemctl stop` or `docker stop` (SIGTERM): shut down like a client
@@ -387,7 +387,7 @@ async fn stop_on_signal(state: Arc<AppState>) {
         return;
     }
     tracing::info!("stop signal received — shutting down");
-    say("Stopping Kokon…");
+    say("Stopping Kokon Modal…");
     state.shutdown.notify_waiters();
 }
 

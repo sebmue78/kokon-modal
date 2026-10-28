@@ -1,3 +1,4 @@
+import { FORK_REPO_URL } from "./lib/fork";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Star, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -30,7 +31,7 @@ import { TopBar } from "./components/TopBar";
 import { autoCheckForUpdate } from "./lib/updates";
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|bmp|gif|tiff?|heic|heif)$/i;
-const REPO_URL = "https://github.com/GabrieleLozupone/kokon";
+const REPO_URL = FORK_REPO_URL;
 
 /** Same breathing mark as the HTML splash in index.html, so startup looks like one step;
  * a line of text appears if connecting to the local service takes a while. */
@@ -43,7 +44,7 @@ function BootSplash() {
   return (
     <div className="boot-splash">
       <KokonMark size={56} />
-      <span className={`muted boot-text ${slow ? "on" : ""}`}>Starting Kokon…</span>
+      <span className={`muted boot-text ${slow ? "on" : ""}`}>Starting Kokon Modal…</span>
     </div>
   );
 }
@@ -86,7 +87,7 @@ function StarPrompt() {
   return (
     <div className="star-prompt">
       <div className="body">
-        <strong>Enjoying Kokon?</strong>
+        <strong>Enjoying Kokon Modal?</strong>
         <div className="sugg">A star on GitHub helps other people find it. This is the only time we ask.</div>
         <div className="star-actions">
           <button className="btn primary" onClick={star}>
@@ -333,7 +334,7 @@ export default function App() {
           <BootSplash />
         ) : (
           <div className="failed">
-            <strong>{inBrowser ? "Could not reach Kokon" : "Could not start the local service"}</strong>
+            <strong>{inBrowser ? "Could not reach Kokon Modal" : "Could not start the local service"}</strong>
             <span>{boot}</span>
             <button className="btn" onClick={() => location.reload()}>
               Try again

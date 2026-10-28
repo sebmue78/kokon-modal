@@ -96,7 +96,7 @@ struct StFile {
 }
 
 fn read_header(path: &Path) -> AppResult<StFile> {
-    let unreadable = |why: &str| AppError::invalid(format!("This file isn't a LoRA Kokon can read ({why}). Choose a .safetensors LoRA file."));
+    let unreadable = |why: &str| AppError::invalid(format!("This file isn't a LoRA Kokon Modal can read ({why}). Choose a .safetensors LoRA file."));
     let mut f = File::open(path).map_err(|e| AppError::io("open", path, e))?;
     let len = f.metadata().map_err(|e| AppError::io("read", path, e))?.len();
     let mut b = [0u8; 8];
@@ -162,7 +162,7 @@ pub struct LoraCheck {
 pub fn check(lora: &Path, model: &HashMap<String, Vec<u64>>) -> AppResult<LoraCheck> {
     let ext = lora.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if ext != "safetensors" {
-        return Err(AppError::invalid("Kokon only loads LoRAs in .safetensors files (.ckpt, .pt and .bin files can run code when loaded)."));
+        return Err(AppError::invalid("Kokon Modal only loads LoRAs in .safetensors files (.ckpt, .pt and .bin files can run code when loaded)."));
     }
     let st = read_header(lora)?;
     check_header(&st, model)
@@ -190,7 +190,7 @@ fn check_header(st: &StFile, model: &HashMap<String, Vec<u64>>) -> AppResult<Lor
     }
     if modules.is_empty() {
         return Err(if text_encoder > 0 {
-            AppError::invalid("This LoRA only changes the text encoder, which Kokon doesn't support. Use a LoRA for the image model.")
+            AppError::invalid("This LoRA only changes the text encoder, which Kokon Modal doesn't support. Use a LoRA for the image model.")
         } else {
             AppError::invalid("No LoRA weights found in this file. Is it a LoRA? Full models and other files go in Settings → Models.")
         });
@@ -246,7 +246,7 @@ fn check_header(st: &StFile, model: &HashMap<String, Vec<u64>>) -> AppResult<Lor
         let why = if wrong_shape > 0 {
             "This LoRA was made for another model (its layers have other sizes, e.g. Qwen-Image 1.x, 2512 or Edit). On Qwen-Image 2.1 it would do nothing."
         } else {
-            "None of this LoRA's layers exist in the model Kokon runs (Qwen-Image 2.1), so it would do nothing. It was made for another model."
+            "None of this LoRA's layers exist in the model Kokon Modal runs (Qwen-Image 2.1), so it would do nothing. It was made for another model."
         };
         return Err(AppError::invalid(why));
     }
@@ -370,7 +370,7 @@ pub fn new_id(stem: &str, taken: &HashSet<String>, dir: &Path) -> String {
 pub fn import(cfg: &AppConfig, src: &Path, existing: Option<&LoraEntry>) -> AppResult<LoraEntry> {
     let model_path = &cfg.profile().diffusion_model;
     let model = crate::modelfile::diffusion_tensor_shapes(model_path).map_err(|e| {
-        AppError::new(ErrorCode::InvalidInput, "Kokon needs its image model to check a LoRA, and couldn't read it.").detail(format!("{}: {e}", model_path.display())).suggest("Finish the setup in Settings → Models first.")
+        AppError::new(ErrorCode::InvalidInput, "Kokon Modal needs its image model to check a LoRA, and couldn't read it.").detail(format!("{}: {e}", model_path.display())).suggest("Finish the setup in Settings → Models first.")
     })?;
     let checked = check(src, &model)?;
     let dir = cfg.lora_dir();
@@ -439,7 +439,7 @@ pub fn resolve(cfg: &AppConfig, requested: Option<&[String]>) -> (Vec<AppliedLor
     let mut applied = Vec::new();
     for l in chosen {
         if !dir.join(l.file_name()).is_file() {
-            notes.push(format!("The LoRA \"{}\" is missing from Kokon's LoRA folder; load it again in Settings → LoRA.", l.name));
+            notes.push(format!("The LoRA \"{}\" is missing from Kokon Modal's LoRA folder; load it again in Settings → LoRA.", l.name));
         } else if applied.len() == MAX_ACTIVE {
             notes.push(format!("At most {MAX_ACTIVE} LoRAs at once; made without \"{}\".", l.name));
         } else if l.weight != 0.0 {

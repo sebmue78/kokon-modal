@@ -263,7 +263,7 @@ pub async fn login(State(s): State<Arc<AppState>>, req: Request) -> Response {
         return err(ErrorCode::InvalidInput, "Send the password as JSON: {\"password\": \"...\"}.");
     };
     let Some(hash) = s.remote.hash() else {
-        return err(ErrorCode::Forbidden, "No password is set. Set one in Kokon on the computer it runs on.");
+        return err(ErrorCode::Forbidden, "No password is set. Set one in Kokon Modal on the computer it runs on.");
     };
     if let Err(wait) = s.remote.limiter.check(ip, Instant::now()) {
         return locked(wait);
@@ -324,7 +324,7 @@ pub async fn ui(method: Method, req: Request<Body>) -> Response {
     let path = if path.is_empty() { "index.html" } else { path };
     let Some(file) = Ui::get(path) else {
         if Ui::get("index.html").is_none() {
-            return (StatusCode::NOT_FOUND, "The Kokon UI is not part of this build (run npm run build, then build kokon-service).").into_response();
+            return (StatusCode::NOT_FOUND, "The Kokon Modal UI is not part of this build (run npm run build, then build kokon-service).").into_response();
         }
         return StatusCode::NOT_FOUND.into_response();
     };

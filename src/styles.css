@@ -1093,3 +1093,25 @@ kbd { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; display
   .gallery-bar { padding: 0 10px 10px; flex-wrap: wrap; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; padding: 4px 10px calc(20px + env(safe-area-inset-bottom)); }
 }
+
+/* Fork: "Based on Kokon" credit under the title of the welcome and setup screens. */
+.based-on {
+  display: block;
+  margin-top: -6px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.based-on a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.based-on a:hover {
+  color: var(--text);
+}
+.wordmark .based-on-tag {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  opacity: 0.55;
+}

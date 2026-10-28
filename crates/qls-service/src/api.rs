@@ -621,7 +621,7 @@ async fn diagnostics_json(State(s): St) -> ApiResult<Json<Value>> {
         let args = qls_core::process::build_server_args(&cfg, cfg.profile());
         let mut text = String::new();
         use std::fmt::Write;
-        let _ = writeln!(text, "Kokon {APP_VERSION} — diagnostics ({})", qls_core::store::now_rfc3339());
+        let _ = writeln!(text, "Kokon Modal {APP_VERSION} — diagnostics ({})", qls_core::store::now_rfc3339());
         let _ = writeln!(text, "\n[GPU]");
         match &gpus {
             Some(g) => {
@@ -658,7 +658,7 @@ async fn diagnostics_json(State(s): St) -> ApiResult<Json<Value>> {
         let _ = writeln!(text, "\n[Configuration]");
         let _ = writeln!(text, "sdcpp dir: {}", cfg.sdcpp_dir.display());
         let official = cfg.profile().is_official();
-        let _ = writeln!(text, "Preset: {}, profile: {} ({})", cfg.hardware_preset, cfg.profile().display_name, if official { "official files" } else { "the user's own files, not tested by Kokon" });
+        let _ = writeln!(text, "Preset: {}, profile: {} ({})", cfg.hardware_preset, cfg.profile().display_name, if official { "official files" } else { "the user's own files, not tested by Kokon Modal" });
         if cfg.vram_override_mib > 0 {
             let _ = writeln!(text, "Simulated VRAM for planning: {} MiB", cfg.vram_override_mib);
         }

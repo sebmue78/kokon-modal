@@ -20,7 +20,7 @@ Register it with Claude Code:
 Environment variables:
   QLS_MCP_ALLOWED_DIRS  extra folders the tools may read and write, separated by semicolons
   QLS_SERVICE_EXE       path to kokon-service, if Kokon is installed in an unusual place
-  QLS_DATA_DIR          Kokon's data folder (default: the app's KokonData folder)
+  QLS_DATA_DIR          Kokon Modal's data folder (default: the app's KokonModalData folder)
   CLAUDE_PROJECT_DIR    project folder the tools may use (set by Claude Code; default: the
                         working directory)
 `;

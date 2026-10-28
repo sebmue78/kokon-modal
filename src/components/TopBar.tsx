@@ -83,16 +83,16 @@ function UpdatePill() {
   const busy = update.phase !== "available";
   const click = async () => {
     const running = Object.values(getState().jobs).some((j) => !["done", "failed", "cancelled"].includes(j.status));
-    const msg = `Install Kokon ${update.version} now? Kokon closes and restarts in a few seconds${running ? "; the images being made now are stopped" : ""}. Your images, settings and models stay.`;
+    const msg = `Install Kokon Modal ${update.version} now? Kokon Modal closes and restarts in a few seconds${running ? "; the images being made now are stopped" : ""}. Your images, settings and models stay.`;
     if (await native.confirm(update.notes ? `${msg}
 
 What's new:
-${update.notes}` : msg, "Update Kokon")) installUpdate();
+${update.notes}` : msg, "Update Kokon Modal")) installUpdate();
   };
   const label =
     update.phase === "downloading" ? `Downloading${update.progress != null ? ` ${Math.round(update.progress * 100)}%` : "…"}` : update.phase === "installing" ? "Installing…" : `Update to ${update.version}`;
   return (
-    <button className="update-pill" onClick={click} disabled={busy} title={`Kokon ${update.version} is available`}>
+    <button className="update-pill" onClick={click} disabled={busy} title={`Kokon Modal ${update.version} is available`}>
       <ArrowDownToLine size={14} /> {label}
     </button>
   );

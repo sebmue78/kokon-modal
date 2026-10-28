@@ -7,12 +7,12 @@ import { deleteProject, deleteProjects, newProject, renameProject, setState, swi
 import { IconButton, NameField } from "./ui";
 import { KokonMark } from "./Welcome";
 
-/** The Kokon mark and name: the sidebar's head, and the top bar's while the sidebar is hidden. */
+/** The Kokon Modal mark and name: the sidebar's head, and the top bar's while the sidebar is hidden. */
 export function Wordmark() {
   return (
     <span className="wordmark" data-tauri-drag-region>
       <KokonMark size={18} />
-      Kokon
+      Kokon Modal
     </span>
   );
 }

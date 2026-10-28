@@ -1,3 +1,4 @@
+import { BasedOnKokon } from "./BasedOn";
 import { ArrowLeft, ArrowLeftRight, Bug, Check, ChevronDown, CircleAlert, Download, ExternalLink, FileSearch, FolderOpen, Loader2, Pause, Play, RefreshCw, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
@@ -97,7 +98,7 @@ function Repair(props: { models: ModelsStatus; busy: string | null; note: string
   const n = models.missing.length;
   return (
     <div className="setup-note setup-repair">
-      <strong>{n === 1 ? "Kokon can't find a model file" : `Kokon can't find ${n} model files`}</strong>
+      <strong>{n === 1 ? "Kokon Modal can't find a model file" : `Kokon Modal can't find ${n} model files`}</strong>
       {models.missing.map((m) => (
         <div className="missing" key={m.path}>
           {m.label}: {m.path}
@@ -105,7 +106,7 @@ function Repair(props: { models: ModelsStatus; busy: string | null; note: string
       ))}
       <span>
         If they are on a drive that is not connected, connect it first.
-        {models.scan_dir ? ` Kokon checks again and also looks for them in ${models.scan_dir}, in case they were moved.` : ""}
+        {models.scan_dir ? ` Kokon Modal checks again and also looks for them in ${models.scan_dir}, in case they were moved.` : ""}
       </span>
       <div className="actions">
         <button className="btn primary" onClick={props.onLookAgain} disabled={!!props.busy}>
@@ -363,7 +364,7 @@ export function Setup() {
       repairOptions.push({ icon: <Download size={16} />, title: "Download MOSS-Image", detail: `${models.downloadable.join(", ")}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("moss") });
     }
     if (!inBrowser) {
-      repairOptions.push({ icon: <FolderOpen size={16} />, title: "Find them in another folder", detail: "If you moved your models: Kokon looks for the same files there.", run: searchElsewhere });
+      repairOptions.push({ icon: <FolderOpen size={16} />, title: "Find them in another folder", detail: "If you moved your models: Kokon Modal looks for the same files there.", run: searchElsewhere });
       repairOptions.push({ icon: <FileSearch size={16} />, title: "Choose other files", detail: "Pick the files yourself, below.", run: showOwn });
     }
     if (userActive && models.downloadable.length > 0) {
@@ -373,7 +374,7 @@ export function Setup() {
       repairOptions.push(
         models.official_installed
           ? { icon: <ArrowLeftRight size={16} />, title: "Use the official model", detail: "Already downloaded: switch to it. Your files stay set up.", run: () => switchTo("official") }
-          : { icon: <Download size={16} />, title: "Download the official model", detail: `${formatBytes(modelBytes)}, tested with Kokon, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("official") },
+          : { icon: <Download size={16} />, title: "Download the official model", detail: `${formatBytes(modelBytes)}, tested with Kokon Modal, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("official") },
       );
     } else {
       repairOptions.push({ icon: <Download size={16} />, title: "Download the official model", detail: `${formatBytes(modelBytes)}, into ${hw?.sdcpp_dir ?? "the install folder"}.`, run: () => download("official") });
@@ -391,7 +392,8 @@ export function Setup() {
     <div className="setup">
       <div className="setup-inner">
         <div>
-          <h1>{setupDone ? "Models" : "Welcome to Kokon"}</h1>
+          <h1>{setupDone ? "Models" : "Welcome to Kokon Modal"}</h1>
+          {!setupDone && <BasedOnKokon />}
           <p className="setup-lead">
             {own
               ? "Everything runs on this PC. Use the Qwen-Image 2.1 files you already have, for example from ComfyUI: Setup only downloads the engine and what you don't have."
@@ -405,7 +407,7 @@ export function Setup() {
 
         {setupDone && engineUpdate?.update_needed && engineMissing.length > 0 && !running && (
           <div className="setup-note">
-            This version of Kokon brings Prompt+, which needs Kokon&apos;s updated engine: press Install to download it (
+            This version of Kokon Modal brings Prompt+, which needs Kokon Modal&apos;s updated engine: press Install to download it (
             {formatBytes(engineMissing.reduce((a, i) => a + Math.max(0, i.size - i.received), 0))}). Until then, everything else works as before and Prompt+ stays hidden.
           </div>
         )}
@@ -426,13 +428,13 @@ export function Setup() {
             </div>
             {!hw.gpu && (
               <div className="setup-note">
-                Kokon needs a graphics card with at least 12 GB of VRAM: NVIDIA (RTX 20 series or newer), or AMD / Intel through Vulkan (beta), or a Mac with Apple Silicon. Make sure its driver is installed.
+                Kokon Modal needs a graphics card with at least 12 GB of VRAM: NVIDIA (RTX 20 series or newer), or AMD / Intel through Vulkan (beta), or a Mac with Apple Silicon. Make sure its driver is installed.
               </div>
             )}
             {hw.gpu?.unified ? (
               hw.gpu.memory_total_mib < 23 * 1024 ? (
                 <div className="setup-note">
-                  With {gb(hw.gpu.memory_total_mib)} of unified memory Kokon works, but slowly: model weights are read from disk as needed and images are made at about 1 megapixel, which takes about 4 to 5 minutes on an M2 Pro. 32 GB or more and a Pro, Max or Ultra chip are recommended. Close other apps while generating.
+                  With {gb(hw.gpu.memory_total_mib)} of unified memory Kokon Modal works, but slowly: model weights are read from disk as needed and images are made at about 1 megapixel, which takes about 4 to 5 minutes on an M2 Pro. 32 GB or more and a Pro, Max or Ultra chip are recommended. Close other apps while generating.
                 </div>
               ) : (
                 hw.gpu.memory_total_mib < 31 * 1024 && (
@@ -443,7 +445,7 @@ export function Setup() {
               )
             ) : (
               <>
-                {vram !== null && vram < 7 * 1024 && <div className="setup-note">Your GPU has {gb(vram)} of VRAM. 8 GB is the smallest size Kokon runs on (in beta); it may fail or run slowly.</div>}
+                {vram !== null && vram < 7 * 1024 && <div className="setup-note">Your GPU has {gb(vram)} of VRAM. 8 GB is the smallest size Kokon Modal runs on (in beta); it may fail or run slowly.</div>}
                 {vram !== null && vram >= 7 * 1024 && vram < 10 * 1024 && (
                   <div className="setup-note">
                     8 GB graphics cards are in beta: images are made at about 1 megapixel, and an edit takes 1–2 minutes on an RTX 5050 Laptop. Tell us how it runs on yours.
@@ -467,7 +469,7 @@ export function Setup() {
                       <Download size={20} />
                       <div>
                         <strong>Download the model</strong>
-                        <span>Qwen-Image 2.1 Turbo, tested with Kokon{modelBytes ? ` · ${formatBytes(modelBytes)}` : ""}</span>
+                        <span>Qwen-Image 2.1 Turbo, tested with Kokon Modal{modelBytes ? ` · ${formatBytes(modelBytes)}` : ""}</span>
                       </div>
                     </button>
                     {!inBrowser && (
@@ -519,7 +521,7 @@ export function Setup() {
                         </option>
                       ))}
                     </select>
-                    <span className="muted">Kokon runs on one card. The preset is sized for the card you pick; you can change it later in Settings → Performance.</span>
+                    <span className="muted">Kokon Modal runs on one card. The preset is sized for the card you pick; you can change it later in Settings → Performance.</span>
                   </label>
                 )}
                 {hw.gpu && (
@@ -539,7 +541,7 @@ export function Setup() {
                 <div className="field">
                   <span>{hw.gpu?.unified ? "Preset for your Mac's memory" : "Preset for your graphics card"}</span>
                   <Seg<string> value={preset ?? hw.recommended} options={hw.presets.map((p) => ({ value: p.id, label: p.label }))} onChange={setPreset} />
-                  {chosen && own && <span className="muted">How Kokon runs the model on your card: memory use and image sizes. Your files are kept.</span>}
+                  {chosen && own && <span className="muted">How Kokon Modal runs the model on your card: memory use and image sizes. Your files are kept.</span>}
                   {chosen && !own && (
                     <span className="muted">
                       {chosen.summary}.{chosen.id === hw.recommended ? " Recommended for your GPU." : ""}
@@ -682,7 +684,7 @@ export function Setup() {
             while own files are still being chosen, and not twice with the missing-files card. */}
         {report && !report.ready && !running && !paused && presetInstalled && !repair && !checking && (
           <div className="setup-note">
-            <div style={{ marginBottom: 6 }}>Kokon can't start yet:</div>
+            <div style={{ marginBottom: 6 }}>Kokon Modal can't start yet:</div>
             {report.checks
               .filter((c) => !c.ok)
               .map((c, i) => (

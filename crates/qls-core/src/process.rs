@@ -864,7 +864,7 @@ mod tests {
         let a = build_server_args(&cfg, cfg.profile());
         let s = a.join(" ");
         let m = |f: &str| crate::catalog::join_rel(&cfg.sdcpp_dir, &format!("models/qwen21/{f}")).display().to_string();
-        assert!(s.starts_with("--listen-ip 127.0.0.1 --listen-port 39150"));
+        assert!(s.starts_with("--listen-ip 127.0.0.1 --listen-port 39160"));
         assert!(s.contains(&format!("--diffusion-model {}", m("qwen-image-2.1-turbo-Q4_K_M.gguf"))));
         assert!(s.contains(&format!("--vae {}", m("texture_fix_vae_for_qwen_image_2.1_bf16.safetensors"))));
         assert!(s.contains(&format!("--llm {}", m("Qwen3VL-8B-Instruct-Q4_K_M.gguf"))));

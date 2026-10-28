@@ -38,10 +38,8 @@ export function localDataBase(platform: NodeJS.Platform, env: NodeJS.ProcessEnv,
 export function dataDir(): string {
   if (process.env.QLS_DATA_DIR) return process.env.QLS_DATA_DIR;
   const base = localDataBase(process.platform, process.env, os.homedir());
-  // The service moves the folder of the app's old name (QwenLocalStudio) to KokonData on its
-  // first start; until then the old one is read.
-  const [next, old] = [path.join(base, "KokonData"), path.join(base, "QwenLocalStudio")];
-  return !fs.existsSync(next) && fs.existsSync(old) ? old : next;
+  // Fork: Kokon Modal's own data folder, never Kokon's KokonData.
+  return path.join(base, "KokonModalData");
 }
 
 function readInfo(): ServiceInfo | null {
@@ -64,10 +62,10 @@ async function ping(port: number): Promise<boolean> {
 export function findServiceExe(): string | null {
   const installed = WIN
     ? [
-        path.join(process.env.LOCALAPPDATA ?? "", "Kokon", SERVICE_EXE),
-        path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Kokon", SERVICE_EXE),
+        path.join(process.env.LOCALAPPDATA ?? "", "Kokon Modal", SERVICE_EXE),
+        path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Kokon Modal", SERVICE_EXE),
       ]
-    : [path.join("/Applications", "Kokon.app", "Contents", "MacOS", SERVICE_EXE), path.join(os.homedir(), "Applications", "Kokon.app", "Contents", "MacOS", SERVICE_EXE)];
+    : [path.join("/Applications", "Kokon Modal.app", "Contents", "MacOS", SERVICE_EXE), path.join(os.homedir(), "Applications", "Kokon Modal.app", "Contents", "MacOS", SERVICE_EXE)];
   const candidates = [
     process.env.QLS_SERVICE_EXE,
     // Next to kokon-mcp (Windows install folder, Kokon.app/Contents/MacOS)

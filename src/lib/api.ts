@@ -54,7 +54,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
       headers: { ...authHeaders(init.method), ...(init.body && typeof init.body === "string" ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}) },
     });
   } catch (e) {
-    throw new ApiError({ code: "server_unavailable", message: inBrowser ? "Kokon is not reachable." : "The local service is not reachable.", detail: String(e) }, 0);
+    throw new ApiError({ code: "server_unavailable", message: inBrowser ? "Kokon Modal is not reachable." : "The local service is not reachable.", detail: String(e) }, 0);
   }
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;

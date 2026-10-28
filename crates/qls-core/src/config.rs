@@ -1,5 +1,5 @@
 //! Persistent configuration and model profiles. Stored as JSON in
-//! `%APPDATA%\Kokon\config.json`; every field has a default so older or
+//! `%APPDATA%\Kokon Modal\config.json`; every field has a default so older or
 //! partial files keep loading.
 
 use std::path::{Path, PathBuf};
@@ -8,17 +8,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, ErrorCode};
 
-pub const APP_NAME: &str = "Kokon";
-/// Folder names before the app was renamed Kokon (2026-10-08); moved on first start.
-const LEGACY_CONFIG_DIR: &str = "Qwen Local Studio";
-const LEGACY_DATA_DIR: &str = "QwenLocalStudio";
-/// Distinct from the installer's program folder `%LOCALAPPDATA%\Kokon`, so uninstalling
+/// Fork: Kokon Modal is its own app next to Kokon (the original, github.com/GabrieleLozupone/kokon):
+/// its own folders and ports, so both can be installed and run at the same time.
+pub const APP_NAME: &str = "Kokon Modal";
+/// Kokon renamed its folders from Qwen Local Studio's; Kokon Modal never had other names, and it
+/// must never move Kokon's folders, so "legacy" is its own name (nothing to migrate).
+const LEGACY_CONFIG_DIR: &str = APP_NAME;
+const LEGACY_DATA_DIR: &str = DATA_DIR_NAME;
+/// Distinct from the installer's program folder `%LOCALAPPDATA%\Kokon Modal`, so uninstalling
 /// never touches the gallery or the models.
-pub const DATA_DIR_NAME: &str = "KokonData";
-pub const DEFAULT_SERVER_PORT: u16 = 39150;
-pub const DEFAULT_SERVICE_PORT: u16 = 39151;
+pub const DATA_DIR_NAME: &str = "KokonModalData";
+/// Kokon uses 39150-39152; Kokon Modal 39160-39162, so neither talks to the other's servers.
+pub const DEFAULT_SERVER_PORT: u16 = 39160;
+pub const DEFAULT_SERVICE_PORT: u16 = 39161;
 /// Port for access from other devices (`remote_access`); the token API stays on loopback.
-pub const DEFAULT_REMOTE_PORT: u16 = 39152;
+pub const DEFAULT_REMOTE_PORT: u16 = 39162;
 /// Schema 8 (2026-10-12): the upscalers folder setting is gone (always `<sdcpp>/models/upscalers`)
 /// and ESRGAN tile sizes reset to automatic.
 /// Schema 9 (2026-10-16, #14): profiles record their model and source; model paths edited by

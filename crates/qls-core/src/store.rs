@@ -99,7 +99,7 @@ impl GenerationRecord {
         if self.mode == "lut" {
             let lut = &self.request["lut"];
             let pct = (lut["intensity"].as_f64().unwrap_or(1.0) * 100.0).round();
-            return format!("Colour LUT: {}, Intensity: {pct}%, Size: {}x{}, Version: Kokon {}", lut["name"].as_str().unwrap_or("?"), self.width, self.height, self.app_version);
+            return format!("Colour LUT: {}, Intensity: {pct}%, Size: {}x{}, Version: Kokon Modal {}", lut["name"].as_str().unwrap_or("?"), self.width, self.height, self.app_version);
         }
         let mut s = self.prompt.clone();
         if !self.negative_prompt.is_empty() {
@@ -136,7 +136,7 @@ impl GenerationRecord {
                 s.push_str(&format!(", Hires denoising strength: {d}"));
             }
         }
-        s.push_str(&format!(", Mode: {}, Version: Kokon {}", self.mode, self.app_version));
+        s.push_str(&format!(", Mode: {}, Version: Kokon Modal {}", self.mode, self.app_version));
         s
     }
 
@@ -149,7 +149,7 @@ impl GenerationRecord {
         vec![
             ("parameters", self.parameters_text()),
             ("qls:generation", serde_json::to_string(&slim).unwrap_or_default()),
-            ("Software", format!("Kokon {}", self.app_version)),
+            ("Software", format!("Kokon Modal {}", self.app_version)),
         ]
     }
 

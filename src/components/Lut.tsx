@@ -55,7 +55,7 @@ function LutList({ current, onPick, close }: { current?: string; onPick: (lut: L
           </button>
         </div>
       ))}
-      {presets.length > 0 && <span className="muted lut-list-title">Kokon presets</span>}
+      {presets.length > 0 && <span className="muted lut-list-title">Kokon Modal presets</span>}
       {presets.map((e) => (
         <div key={e.name} className="lut-row">
           {row(e)}

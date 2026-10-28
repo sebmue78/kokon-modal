@@ -2,7 +2,7 @@
 ;  - Before installing, updating or uninstalling: stop the background processes (MCP servers,
 ;    kokon-service, sd-server) that keep Kokon's files locked. Tauri itself only closes Kokon.exe.
 ;  - After uninstalling: offer to delete the downloaded models and app data. Images in the
-;    output folder (Pictures\Kokon) are never touched. The WebView's cache (hundreds of MB,
+;    output folder (Pictures\Kokon Modal) are never touched. The WebView's cache (hundreds of MB,
 ;    rebuilt on demand) always goes; its small UI preferences go with the app data.
 
 ; This folder, captured now (inside a macro, __FILEDIR__ is the file that uses it).
@@ -18,7 +18,7 @@
   ${IfNot} ${FileExists} "$1"
     StrCpy $1 "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
   ${EndIf}
-  DetailPrint "Stopping Kokon's background processes..."
+  DetailPrint "Stopping Kokon Modal's background processes..."
   nsExec::Exec '"$1" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\kokon-stop.ps1" -InstDir "$INSTDIR"'
   Pop $0
   Pop $1
@@ -40,26 +40,25 @@
   ${AndIfNot} ${Silent}
     SetShellVarContext current
     ; WebView2 user data folder (named after the bundle identifier).
-    RMDir /r "$LOCALAPPDATA\app.kokon.desktop\EBWebView\Default\Cache"
-    RMDir /r "$LOCALAPPDATA\app.kokon.desktop\EBWebView\Default\Code Cache"
-    RMDir /r "$LOCALAPPDATA\app.kokon.desktop\EBWebView\Default\GPUCache"
-    ${IfNot} ${FileExists} "$LOCALAPPDATA\KokonData\*.*"
-      RMDir /r "$LOCALAPPDATA\app.kokon.desktop"
+    RMDir /r "$LOCALAPPDATA\app.kokonmodal.desktop\EBWebView\Default\Cache"
+    RMDir /r "$LOCALAPPDATA\app.kokonmodal.desktop\EBWebView\Default\Code Cache"
+    RMDir /r "$LOCALAPPDATA\app.kokonmodal.desktop\EBWebView\Default\GPUCache"
+    ${IfNot} ${FileExists} "$LOCALAPPDATA\KokonModalData\*.*"
+      RMDir /r "$LOCALAPPDATA\app.kokonmodal.desktop"
     ${EndIf}
-    ${If} ${FileExists} "$LOCALAPPDATA\KokonData\*.*"
-      ${GetSize} "$LOCALAPPDATA\KokonData" "/S=0M /G=1" $0 $1 $2
+    ${If} ${FileExists} "$LOCALAPPDATA\KokonModalData\*.*"
+      ${GetSize} "$LOCALAPPDATA\KokonModalData" "/S=0M /G=1" $0 $1 $2
       IntOp $1 $0 / 1024
       IntOp $2 $0 % 1024
       IntOp $2 $2 * 10
       IntOp $2 $2 / 1024
-      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Also delete the AI models Kokon downloaded and its app data ($1.$2 GB)?$\r$\n$\r$\nThis frees the disk space. If you install Kokon again, it downloads the models again.$\r$\n$\r$\nYour images in the Kokon output folder (Pictures\Kokon by default) are kept either way.$\r$\n$\r$\nChoose No if you are reinstalling or updating Kokon." IDNO kokon_keep_data
-      DetailPrint "Deleting Kokon's models and data..."
-      RMDir /r "$LOCALAPPDATA\KokonData"
-      RMDir /r "$LOCALAPPDATA\QwenLocalStudio"
-      RMDir /r "$APPDATA\Kokon"
-      RMDir /r "$LOCALAPPDATA\app.kokon.desktop"
-      ${If} ${FileExists} "$LOCALAPPDATA\KokonData\*.*"
-        MessageBox MB_OK|MB_ICONEXCLAMATION "Some files could not be deleted. You can delete this folder yourself:$\r$\n$LOCALAPPDATA\KokonData"
+      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Also delete the AI models Kokon Modal downloaded and its app data ($1.$2 GB)?$\r$\n$\r$\nThis frees the disk space. If you install Kokon Modal again, it downloads the models again.$\r$\n$\r$\nYour images in the Kokon Modal output folder (Pictures\Kokon Modal by default) are kept either way.$\r$\n$\r$\nChoose No if you are reinstalling or updating Kokon Modal." IDNO kokon_keep_data
+      DetailPrint "Deleting Kokon Modal's models and data..."
+      RMDir /r "$LOCALAPPDATA\KokonModalData"
+      RMDir /r "$APPDATA\Kokon Modal"
+      RMDir /r "$LOCALAPPDATA\app.kokonmodal.desktop"
+      ${If} ${FileExists} "$LOCALAPPDATA\KokonModalData\*.*"
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Some files could not be deleted. You can delete this folder yourself:$\r$\n$LOCALAPPDATA\KokonModalData"
       ${EndIf}
       kokon_keep_data:
     ${EndIf}

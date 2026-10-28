@@ -48,7 +48,7 @@ function LoraRow({ l }: { l: LoraItem }) {
     timer.current = window.setTimeout(() => update(l.id, { weight: w }), 400);
   };
   const remove = async () => {
-    if (!(await native.confirm(`Remove "${l.name}" from Kokon? Your own file stays where it is.`, "Remove LoRA"))) return;
+    if (!(await native.confirm(`Remove "${l.name}" from Kokon Modal? Your own file stays where it is.`, "Remove LoRA"))) return;
     try {
       await api.removeLora(l.id);
     } catch (e) {
@@ -66,7 +66,7 @@ function LoraRow({ l }: { l: LoraItem }) {
       </div>
       {!l.available && (
         <span className="lora-warn">
-          <CircleAlert size={13} /> Kokon's copy of this LoRA is missing. Remove it and load the file again.
+          <CircleAlert size={13} /> Kokon Modal's copy of this LoRA is missing. Remove it and load the file again.
         </span>
       )}
       {l.warning && (
@@ -123,7 +123,7 @@ export function LoraSettings() {
         <div className="setting-card-text">
           <strong>Your LoRA files (beta)</strong>
           <span className="muted">
-            Load LoRAs made for Qwen-Image 2.1 (.safetensors). Kokon checks each file and keeps its own prepared copy; your file is not changed. Turn them on or off for each project with the
+            Load LoRAs made for Qwen-Image 2.1 (.safetensors). Kokon Modal checks each file and keeps its own prepared copy; your file is not changed. Turn them on or off for each project with the
             LoRA button next to the prompt, up to {MAX_LORAS} at a time.
           </span>
         </div>
@@ -137,7 +137,7 @@ export function LoraSettings() {
         Beta: tested on Windows with an NVIDIA card. It should work the same on Mac and Linux, but it hasn't been tested there yet: please tell us how it goes on GitHub.
       </span>
       <span className="muted">
-        Most LoRAs are trained on the full Qwen-Image 2.1 model, while Kokon runs the faster Turbo model. The popular ones we tested didn't improve on what Turbo does with a good prompt, so compare
+        Most LoRAs are trained on the full Qwen-Image 2.1 model, while Kokon Modal runs the faster Turbo model. The popular ones we tested didn't improve on what Turbo does with a good prompt, so compare
         with the LoRA on and off. A LoRA makes each image about 20 % slower.
       </span>
       {loras.map((l) => (
