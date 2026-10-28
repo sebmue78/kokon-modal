@@ -41,6 +41,11 @@ pub struct LayoutBox {
     pub h: f32,
     /// What should appear in the box.
     pub text: String,
+    /// An outline drawn point by point (fractions, like the box), when the area is not a
+    /// rectangle; the box is then its bounding box. Drawn as a shape in the sketch; FLUX.3 and
+    /// the words use the bounding box.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub points: Vec<[f32; 2]>,
 }
 
 impl LayoutBox {
@@ -48,9 +53,20 @@ impl LayoutBox {
     fn clean(&self) -> Option<LayoutBox> {
         let text = self.text.split_whitespace().collect::<Vec<_>>().join(" ");
         let f = |v: f32| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 };
-        let (x, y) = (f(self.x), f(self.y));
-        let (w, h) = (f(self.w).min(1.0 - x), f(self.h).min(1.0 - y));
-        (!text.is_empty() && w > 0.005 && h > 0.005).then_some(LayoutBox { x, y, w, h, text })
+        let points: Vec<[f32; 2]> = self.points.iter().map(|[px, py]| [f(*px), f(*py)]).collect();
+        // An outline needs three points; its box is its bounding box.
+        let points = if points.len() >= 3 { points } else { Vec::new() };
+        let (x, y, w, h) = if points.is_empty() {
+            let (x, y) = (f(self.x), f(self.y));
+            (x, y, f(self.w).min(1.0 - x), f(self.h).min(1.0 - y))
+        } else {
+            let (mut x0, mut y0, mut x1, mut y1) = (1.0f32, 1.0f32, 0.0f32, 0.0f32);
+            for [px, py] in &points {
+                (x0, y0, x1, y1) = (x0.min(*px), y0.min(*py), x1.max(*px), y1.max(*py));
+            }
+            (x0, y0, x1 - x0, y1 - y0)
+        };
+        (!text.is_empty() && w > 0.005 && h > 0.005).then_some(LayoutBox { x, y, w, h, text, points })
     }
 
     /// `[top, left, bottom, right]` on 0..1000 (FLUX.3's box format).
@@ -168,9 +184,9 @@ fn words_prompt(scene: &str, boxes: &[LayoutBox]) -> String {
 
 fn sketch_prompt(scene: &str, boxes: &[LayoutBox]) -> String {
     format!(
-        "{scene}<image1> is only a layout plan: each numbered rectangle marks where something goes and how much space it takes. \
-         Place each element at the position and size of its rectangle: {}. \
-         Do not draw the rectangles, numbers, labels or the plain background of <image1>; make a finished, natural image of the scene.",
+        "{scene}<image1> is only a layout plan: each numbered area marks where something goes, how much space it takes and its rough shape. \
+         Place each element at the position, size and shape of its area: {}. \
+         Do not draw the outlines, numbers, labels or the plain background of <image1>; make a finished, natural image of the scene.",
         placements(boxes, true)
     )
 }
@@ -180,7 +196,25 @@ mod tests {
     use super::*;
 
     fn b(x: f32, y: f32, w: f32, h: f32, t: &str) -> LayoutBox {
-        LayoutBox { x, y, w, h, text: t.into() }
+        LayoutBox { x, y, w, h, text: t.into(), points: vec![] }
+    }
+
+    #[test]
+    fn outlines_take_their_bounding_box() {
+        let shape = LayoutBox { text: "a lake".into(), points: vec![[0.2, 0.5], [0.6, 0.4], [0.7, 1.4], [0.1, 0.9]], ..Default::default() };
+        let c = &clean_boxes(&[shape])[0];
+        for (got, want) in [(c.x, 0.1), (c.y, 0.4), (c.w, 0.6), (c.h, 0.6)] {
+            assert!((got - want).abs() < 1e-6, "{got} vs {want}");
+        }
+        assert_eq!(c.points[2], [0.7, 1.0], "clamped into the image");
+        assert_eq!(c.bbox_1000(), [400, 100, 1000, 700]);
+        // Two points are no outline: the box as given.
+        let line = LayoutBox { x: 0.1, y: 0.1, w: 0.2, h: 0.2, text: "x".into(), points: vec![[0.0, 0.0], [1.0, 1.0]] };
+        let c = &clean_boxes(&[line])[0];
+        assert!(c.points.is_empty() && c.w == 0.2);
+        // Older apps send no points.
+        let old: LayoutBox = serde_json::from_str(r#"{"x":0.1,"y":0.1,"w":0.2,"h":0.2,"text":"x"}"#).unwrap();
+        assert!(old.points.is_empty());
     }
 
     #[test]
@@ -219,7 +253,7 @@ mod tests {
     fn sketch_prompt_names_the_plan() {
         let boxes = [b(0.0, 0.0, 0.3, 0.3, "a seagull")];
         let p = prompt(LayoutStyle::Sketch, "a beach", &boxes, true);
-        assert!(p.contains("<image1> is only a layout plan") && p.contains("1. a seagull: in the top left") && p.contains("Do not draw the rectangles"), "{p}");
+        assert!(p.contains("<image1> is only a layout plan") && p.contains("1. a seagull: in the top left") && p.contains("Do not draw the outlines"), "{p}");
         // Without the sketch (an older app), the words.
         assert!(prompt(LayoutStyle::Sketch, "a beach", &boxes, false).contains("Composition:"));
         assert_eq!(prompt(LayoutStyle::Native, " a beach. ", &[], false), "a beach");

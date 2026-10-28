@@ -9,7 +9,11 @@ export interface LayoutBox {
   w: number;
   h: number;
   text: string;
+  /** An outline drawn point by point (polygonal lasso); the box is then its bounding box. */
+  points?: [number, number][];
 }
+
+export type Point = [number, number];
 
 /** How the model in use is told about a layout (the service's `LayoutStyle`). */
 export type LayoutStyle = "sketch" | "native" | "words" | "none";
@@ -20,8 +24,30 @@ export const MIN_BOX = 0.03;
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
 
+/** The area of an outline: its bounding box, with the points kept. */
+export function shapeBox(points: Point[], text = ""): LayoutBox {
+  const ps = points.map(([x, y]) => [clamp01(x), clamp01(y)] as Point);
+  const xs = ps.map((p) => p[0]);
+  const ys = ps.map((p) => p[1]);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y, text, points: ps };
+}
+
+/** Whether a point (fractions) is within `px` screen pixels of another, on a canvas `cw`×`ch`. */
+export function near(a: Point, b: Point, cw: number, ch: number, px = 10): boolean {
+  return Math.hypot((a[0] - b[0]) * cw, (a[1] - b[1]) * ch) <= px;
+}
+
+/** The outline with one point moved. */
+export function moveVertex(b: LayoutBox, index: number, x: number, y: number): LayoutBox {
+  const pts = (b.points ?? []).map((p, i) => (i === index ? ([x, y] as Point) : p));
+  return shapeBox(pts, b.text);
+}
+
 /** The box kept inside the image and at least `MIN_BOX` in each direction. */
 export function clampBox(b: LayoutBox): LayoutBox {
+  if (b.points && b.points.length >= 3) return shapeBox(b.points, b.text);
   const w = Math.min(1, Math.max(MIN_BOX, clamp01(b.w)));
   const h = Math.min(1, Math.max(MIN_BOX, clamp01(b.h)));
   return { ...b, x: Math.min(clamp01(b.x), 1 - w), y: Math.min(clamp01(b.y), 1 - h), w, h };
@@ -49,12 +75,19 @@ export function resizeBox(b: LayoutBox, corner: Corner, dx: number, dy: number):
   // Not past the opposite corner: the box keeps its minimum size instead of flipping.
   const px = left ? Math.min(mx, ax - MIN_BOX) : Math.max(mx, ax + MIN_BOX);
   const py = top ? Math.min(my, ay - MIN_BOX) : Math.max(my, ay + MIN_BOX);
-  return boxFromPoints(ax, ay, px, py, b.text);
+  const next = boxFromPoints(ax, ay, px, py, b.text);
+  if (!b.points?.length) return next;
+  // An outline is stretched with its box.
+  const sx = b.w > 0 ? next.w / b.w : 1;
+  const sy = b.h > 0 ? next.h / b.h : 1;
+  return { ...next, points: b.points.map(([x, y]) => [next.x + (x - b.x) * sx, next.y + (y - b.y) * sy] as Point) };
 }
 
 /** The box moved by (dx, dy), staying inside the image. */
 export function moveBox(b: LayoutBox, dx: number, dy: number): LayoutBox {
-  return { ...b, x: Math.min(1 - b.w, Math.max(0, b.x + dx)), y: Math.min(1 - b.h, Math.max(0, b.y + dy)) };
+  const x = Math.min(1 - b.w, Math.max(0, b.x + dx));
+  const y = Math.min(1 - b.h, Math.max(0, b.y + dy));
+  return { ...b, x, y, ...(b.points?.length ? { points: b.points.map(([px, py]) => [px + x - b.x, py + y - b.y] as Point) } : {}) };
 }
 
 /** Boxes worth sending: with text, inside the image, at most `MAX_BOXES`. */
@@ -65,7 +98,9 @@ export function usableBoxes(boxes: LayoutBox[] | undefined): LayoutBox[] {
     .map((b) => {
       const c = clampBox(b);
       const r = (v: number) => Math.round(v * 10000) / 10000;
-      return { x: r(c.x), y: r(c.y), w: r(c.w), h: r(c.h), text: c.text.trim() };
+      const out: LayoutBox = { x: r(c.x), y: r(c.y), w: r(c.w), h: r(c.h), text: c.text.trim() };
+      if (c.points && c.points.length >= 3) out.points = c.points.map(([x, y]) => [r(x), r(y)]);
+      return out;
     });
 }
 
@@ -107,10 +142,19 @@ export function drawSketch(ctx: CanvasRenderingContext2D, width: number, height:
     const w = b.w * width;
     const h = b.h * height;
     ctx.fillStyle = `${color}26`;
-    ctx.fillRect(x, y, w, h);
     ctx.lineWidth = 4 * unit;
     ctx.strokeStyle = color;
-    ctx.strokeRect(x + 2 * unit, y + 2 * unit, w - 4 * unit, h - 4 * unit);
+    if (b.points && b.points.length >= 3) {
+      ctx.beginPath();
+      b.points.forEach(([px, py], k) => (k ? ctx.lineTo(px * width, py * height) : ctx.moveTo(px * width, py * height)));
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    } else {
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x + 2 * unit, y + 2 * unit, w - 4 * unit, h - 4 * unit);
+    }
     const pad = 10 * unit;
     let size = Math.max(12 * unit, Math.min(30 * unit, h / 5));
     ctx.textBaseline = "top";
@@ -124,7 +168,18 @@ export function drawSketch(ctx: CanvasRenderingContext2D, width: number, height:
       if (lines.length * size * 1.2 <= h - 2 * pad) break;
     }
     const max = Math.max(1, Math.floor((h - 2 * pad) / (size * 1.2)));
-    lines.slice(0, max).forEach((l, k) => ctx.fillText(l, x + pad, y + pad + k * size * 1.2, w - 2 * pad));
+    const shown = lines.slice(0, max);
+    if (b.points && b.points.length >= 3) {
+      // An outline: the label in the middle of its area, on a light backing.
+      const tw = Math.min(w - 2 * pad, Math.max(...shown.map((l) => ctx.measureText(l).width)));
+      const th = shown.length * size * 1.2;
+      const tx = x + (w - tw) / 2;
+      const ty = y + (h - th) / 2;
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.fillRect(tx - pad / 2, ty - pad / 2, tw + pad, th + pad / 2);
+      ctx.fillStyle = "#111";
+      shown.forEach((l, k) => ctx.fillText(l, tx, ty + k * size * 1.2, w - 2 * pad));
+    } else shown.forEach((l, k) => ctx.fillText(l, x + pad, y + pad + k * size * 1.2, w - 2 * pad));
   });
 }
 
