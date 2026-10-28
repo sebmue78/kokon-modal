@@ -297,6 +297,7 @@ export function Settings() {
   const [upscaler, setUpscaler] = useState<Check | null>(null);
   // The saved model setup: what is missing, whether the official files are downloaded.
   const [ms, setMs] = useState<ModelsStatus | null>(null);
+  const statusProfiles = useStore((s) => s.status?.profiles) ?? [];
   const [legacy, setLegacy] = useState<{ files: string[]; bytes: number } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [theme, setTheme] = useState(themeChoice);
@@ -571,11 +572,16 @@ export function Settings() {
                 <label className="field-row">
                   <span>Model</span>
                   <select className="select" value={profile.id} onChange={(e) => set({ activeProfile: e.target.value })}>
-                    {cfg.profiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.displayName}
-                      </option>
-                    ))}
+                    {cfg.profiles.map((p) => {
+                      // Fork: say which models still need their download (choosing one here only switches).
+                      const there = statusProfiles.find((q) => q.id === p.id)?.installed;
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {p.displayName}
+                          {there === false ? " · not downloaded" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
               ) : (

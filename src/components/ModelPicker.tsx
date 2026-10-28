@@ -1,7 +1,7 @@
 // Fork: the model in use, always visible in the top bar, and a menu to switch between
 // Qwen-Image 2.1 and the models of `lib/models.ts` (and the user's own files). A model that is not
 // downloaded yet starts its download in the Models screen.
-import { ChevronDown, Layers } from "lucide-react";
+import { ChevronDown, Download, Layers } from "lucide-react";
 import { useState } from "react";
 import { api } from "../lib/api";
 import { native } from "../lib/native";
@@ -28,21 +28,27 @@ export function ModelPicker() {
   const current = profiles.find((p) => p.id === active);
   const label = current ? modelLabel(current) : null;
 
+  /** Starts downloading `p`'s missing files; Setup shows the progress and Kokon Modal switches to
+   * it when done. Own files that are missing are found or chosen again in Setup instead. */
+  const download = async (p: Entry) => {
+    const target = installTarget(p);
+    if (!target) {
+      openModelSetup("own");
+      return;
+    }
+    const cfg = await api.config();
+    await api.install(cfg.hardwarePreset, cfg.gpuBackend, true, undefined, target);
+    openModelSetup(null);
+  };
+
   const choose = async (id: string) => {
     const p = profiles.find((q) => q.id === id);
     if (!p || id === active) return;
     const { name } = modelLabel(p);
     try {
       if (!p.installed) {
-        const target = installTarget(p);
-        if (!target) {
-          openModelSetup("own");
-          return;
-        }
         if (!(await native.confirm(`${name} is not downloaded yet. Download it now? Kokon Modal switches to it when the download is done.`, `Download ${name}`))) return;
-        const cfg = await api.config();
-        await api.install(cfg.hardwarePreset, cfg.gpuBackend, true, undefined, target);
-        openModelSetup(null);
+        await download(p);
         return;
       }
       setSwitching(true);
@@ -59,7 +65,10 @@ export function ModelPicker() {
   };
 
   const disabled = busy || switching || serverState === "starting";
+  // The model in use is not downloaded (chosen in Settings, or its files were moved or deleted).
+  const missing = current && !current.installed;
   return (
+    <>
     <label
       className="model-picker"
       title={
@@ -82,5 +91,11 @@ export function ModelPicker() {
         ))}
       </select>
     </label>
+    {missing && current && (
+      <button className="model-download" onClick={() => download(current).catch(toastError)} title={`${label?.name ?? "This model"} is not downloaded yet: download it now`}>
+        <Download size={14} aria-hidden /> Download
+      </button>
+    )}
+    </>
   );
 }

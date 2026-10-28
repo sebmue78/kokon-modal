@@ -1150,10 +1150,13 @@ impl AppConfig {
             1 => String::new(),
             n => format!(" (and {} more)", n - 1),
         };
-        Some(
-            AppError::new(ErrorCode::MissingModel, format!("{label} not found: {}{more}", path.display()))
-                .suggest("If it is on a drive that is not connected, connect it and try again. Otherwise open Setup to find the file again, choose other files, or download the missing ones."),
-        )
+        // Fork: a catalog model chosen before it was downloaded (Settings → Models) just needs its download.
+        let suggestion = if self.profile().from_catalog() && !self.profile().is_official() {
+            "It is not downloaded yet: press Download next to the model menu at the top (or click here to open Setup)."
+        } else {
+            "If it is on a drive that is not connected, connect it and try again. Otherwise open Setup to find the file again, choose other files, or download the missing ones."
+        };
+        Some(AppError::new(ErrorCode::MissingModel, format!("{label} not found: {}{more}", path.display())).suggest(suggestion))
     }
 
     /// VRAM (MiB) the user's own files take beyond the official ones, which the planner's
