@@ -621,10 +621,10 @@ export function Settings() {
                     <strong>Official model</strong>
                     <span className="muted">
                       {ms === null
-                        ? "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial)."
+                        ? "Qwen-Image 2.1 Turbo: new images, every kind of edit and combining images (Qwen Research License, non-commercial)."
                         : ms.official_installed
-                          ? "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial). Downloaded."
-                          : "Qwen-Image 2.1 Turbo: new images, every kind of edit, combining images and LoRAs (Qwen Research License, non-commercial). Not downloaded into this folder yet: Download… gets it, or use model files you already have."}
+                          ? "Qwen-Image 2.1 Turbo: new images, every kind of edit and combining images (Qwen Research License, non-commercial). Downloaded."
+                          : "Qwen-Image 2.1 Turbo: new images, every kind of edit and combining images (Qwen Research License, non-commercial). Not downloaded into this folder yet: Download… gets it, or use model files you already have."}
                     </span>
                     <details className="model-files">
                       <summary>Files</summary>
