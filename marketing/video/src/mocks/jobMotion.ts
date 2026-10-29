@@ -8,6 +8,12 @@ import { useCard } from "./card";
 export const PROMPT_HOLD_MS = 2200;
 export const PROMPT_FADE_MS = 700;
 
+// The card never leaves the stage in a video: a fresh memory each time, read by nothing here.
+export type { CardMemory } from "../../../../src/components/jobMotion";
+export function cardMemory(): import("../../../../src/components/jobMotion").CardMemory {
+  return { startedAt: null, runningAt: null, phase: { key: "", at: 0 }, step: { key: "", at: 0 }, target: 0, value: 0, typed: 0, typingFrom: null, promptDoneAt: null, promptGone: false, progressShown: false, formStart: { at: null } };
+}
+
 export function useJobPercent(_job: JobView, request: GenerationRequest | null | undefined, _learn = false): { pct: number; clock: JobClock } {
   const c = useCard();
   const clock: JobClock = { elapsed: c.t, inPhase: c.t, inRunning: c.t, sinceStep: 0, enhance: !!request?.enhance, loadSeconds: 20, enhancerSecondsPerWord: 0.015 };

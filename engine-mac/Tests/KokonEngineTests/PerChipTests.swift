@@ -1,5 +1,6 @@
 import CoreVideo
 import Metal
+import QuartzCore
 import XCTest
 @testable import KokonEngine
 
@@ -102,5 +103,71 @@ extension PerChipTests {
             }
             XCTAssertLessThan(worst, 2e-3, "\(rows)×\(k)×\(n): fp16 output of a sum bounded by 127²")
         }
+    }
+}
+
+extension PerChipTests {
+    /// The release made visible at once (`KOKON_FLUSH_READY`): chosen by measuring this Mac, once per process.
+    func testFlushReleaseSelection() throws {
+        guard ProcessInfo.processInfo.environment["KOKON_FLUSH_READY"] == nil else { throw XCTSkip("KOKON_FLUSH_READY is set") }
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        if device.name.contains("Paravirtual") { throw XCTSkip("a virtual GPU's timing says nothing") }
+        let context = try MetalContext()
+        let start = CACurrentMediaTime()
+        let late = Coexecutor.signalArrivesLate(context)
+        let seconds = CACurrentMediaTime() - start
+        print("\(Chip.current): signals arrive \(late ? "late (flush on)" : "on time (flush off)"), measured in \(Int(seconds * 1000)) ms")
+        XCTAssertEqual(Coexecutor.flushReleaseSelected(context), late)
+        XCTAssertLessThan(seconds, 0.5)
+    }
+
+    /// With the flush, the CPU sees the release while the GPU's work after it is still running, not at the command
+    /// buffer's end (on the M5 Pro without it: at the end). Any Mac: the flush is a wait on a value already reached.
+    func testFlushedReleaseReachesTheCPUBeforeTheEnd() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        if device.name.contains("Paravirtual") { throw XCTSkip("a virtual GPU's timing says nothing") }
+        let context = try MetalContext()
+        let source = """
+        #include <metal_stdlib>
+        using namespace metal;
+        kernel void spin(device float *o [[buffer(0)]], constant uint &n [[buffer(1)]], uint i [[thread_position_in_grid]]) {
+            float x = float(i);
+            for (uint k = 0; k < n; k++) { x = fma(x, 1.0000001f, 0.5f); }
+            o[i] = x;
+        }
+        """
+        let pipeline = try device.makeComputePipelineState(function: try XCTUnwrap(
+            device.makeLibrary(source: source, options: nil).makeFunction(name: "spin")))
+        let out = try context.scratch(4 << 20, label: "spin")
+        func spin(_ commands: MTLCommandBuffer, _ n: UInt32) {
+            var n = n
+            let e = commands.makeComputeCommandEncoder()!
+            e.setComputePipelineState(pipeline); e.setBuffer(out, offset: 0, index: 0); e.setBytes(&n, length: 4, index: 1)
+            e.dispatchThreads(MTLSize(width: 1 << 20, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 256, height: 1, depth: 1))
+            e.endEncoding()
+        }
+        // About 60 ms of GPU work on each side of the release.
+        var n: UInt32 = 1000
+        for _ in 0..<3 {
+            let c = context.queue.makeCommandBuffer()!
+            spin(c, n)
+            try MetalContext.finish(c, "spin")
+            n = UInt32(min(Double(1 << 24), Double(n) * 0.06 / max(c.gpuEndTime - c.gpuStartTime, 1e-4)))
+        }
+        let event = try XCTUnwrap(device.makeSharedEvent())
+        let commands = context.queue.makeCommandBuffer()!
+        // GPU work before the release too, as in the engine (a signal first in its command buffer is seen at once).
+        spin(commands, n)
+        Coexecutor.release(event, 1, flush: true, commands)
+        spin(commands, n)
+        nonisolated(unsafe) var seen = 0.0
+        let watcher = Thread {
+            _ = event.wait(untilSignaledValue: 1, timeoutMS: 10_000)
+            seen = CACurrentMediaTime()
+        }
+        watcher.start()
+        try MetalContext.finish(commands, "release")
+        while seen == 0 { usleep(100) }
+        XCTAssertLessThan(seen, commands.gpuEndTime - 0.02, "the release reached the CPU only at the command buffer's end")
     }
 }

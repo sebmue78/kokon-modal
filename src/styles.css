@@ -103,8 +103,14 @@ textarea, input[type="text"], input[type="number"] { user-select: text; }
 button { cursor: pointer; background: none; border: 0; padding: 0; }
 button:disabled { cursor: default; opacity: 0.4; }
 :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-/* Colour set too: WebKitGTK (Linux) otherwise draws a dark theme's selection near-black (#41). */
-::selection, input::selection, textarea::selection { background: var(--selection); color: var(--text); }
+/* Written out, and with alpha 0.99: WebKitGTK (Linux) ignores var() inside ::selection and turns an opaque selection
+   background into its own colour (a dark theme's grey came out near-black, #41); a translucent one it draws as given.
+   Keep them in step with --selection and --text above. */
+::selection, input::selection, textarea::selection { background: rgba(196, 196, 196, 0.99); color: #0d0d0d; }
+:root[data-theme="dark"] ::selection, :root[data-theme="dark"] input::selection,
+:root[data-theme="dark"] textarea::selection { background: rgba(90, 90, 90, 0.99); color: #f2f2f2; }
+:root[data-theme="dark"][data-platform="mac"] ::selection, :root[data-theme="dark"][data-platform="mac"] input::selection,
+:root[data-theme="dark"][data-platform="mac"] textarea::selection { background: rgba(99, 99, 99, 0.99); }
 svg { display: block; flex: none; }
 
 .app { display: flex; height: 100%; }
@@ -242,6 +248,7 @@ svg { display: block; flex: none; }
    fits above it and the percentage under it at any card size, in container units. */
 .progress-phase { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 3.5cqh 6cqw 5.5cqh; color: var(--text-2); font-size: 13px; text-align: center; animation: phase-in 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes phase-in { from { opacity: 0; filter: blur(4px); } to { opacity: 1; filter: none; } }
+.progress-phase.resumed { animation: none; }
 .progress-phase .stop-corner { position: absolute; top: 3.5cqh; right: 3cqw; height: 28px; font-size: 12px; }
 .progress-foot { display: flex; flex-direction: column; align-items: center; gap: clamp(4px, 1.6cqh, 8px); width: 100%; }
 .progress-detail { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -275,6 +282,8 @@ svg { display: block; flex: none; }
 .enhanced-label { display: flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 12px; letter-spacing: 0.02em; }
 /* each word arrives out of a soft blur */
 .prompt-text .w { animation: word-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+/* Already read before the card came back (Stage.tsx PromptPhase). */
+.prompt-text .w.seen { animation: none; }
 @keyframes word-in { from { opacity: 0; filter: blur(6px); } 40% { opacity: 0.55; } to { opacity: 1; filter: blur(0); } }
 .shimmer { background: linear-gradient(90deg, var(--text-3) 0%, var(--text-3) 35%, var(--text) 50%, var(--text-3) 65%, var(--text-3) 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2s linear infinite; }
 .shimmer svg { color: var(--text-2); }
@@ -471,7 +480,12 @@ input[type="range"] { width: 100%; accent-color: var(--text); }
 .overlay-head h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .overlay-head .spacer { flex: 1; }
 .modal-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(13, 13, 12, 0.34); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: grid; place-items: center; animation: fade 0.25s ease-out both; }
-.modal { width: min(760px, 92vw); height: min(640px, 88vh); background: var(--bg); border-radius: 22px; animation: welcome-in 0.35s var(--ease) both; box-shadow: var(--shadow); display: flex; overflow: hidden; }
+.modal { width: min(760px, 92vw); height: min(640px, 88vh); background: var(--bg); border-radius: 22px; animation: welcome-in 0.35s var(--ease) both; box-shadow: var(--shadow); display: flex; overflow: hidden; position: relative; }
+/* Settings: leaving with unsaved changes (Settings.tsx). */
+.modal-ask { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 16px; background: rgba(13, 13, 12, 0.28); animation: fade 0.15s ease-out both; }
+.modal-ask-box { width: min(360px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 20px; background: var(--bg); border-radius: 16px; box-shadow: var(--shadow); font-size: 13px; }
+.modal-ask-box strong { font-size: 15px; font-weight: 600; }
+.modal-ask-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; flex-wrap: wrap; }
 .modal-nav { width: 190px; padding: 14px 8px; background: var(--ground); display: flex; flex-direction: column; gap: 2px; }
 .modal-nav button { text-align: left; padding: 8px 12px; border-radius: 11px; transition: background 0.15s, box-shadow 0.2s, color 0.15s; color: var(--text-2); display: flex; gap: 10px; align-items: center; }
 .modal-nav button:hover:not(.on) { background: var(--surface); color: var(--text); }
@@ -616,7 +630,8 @@ pre.diag { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font
 .setup-file .state { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .setup-file.is-present, .setup-file.is-done { color: var(--text-2); }
 .setup-file.is-failed .state { color: var(--text); font-weight: 600; }
-.setup-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* Always in view at the foot of the window (Start/Done was below the fold), the page scrolling under it. */
+.setup-actions { position: sticky; bottom: 0; z-index: 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 -24px; padding: 12px 24px calc(12px + env(safe-area-inset-bottom)); background: var(--ground); border-top: 1px solid var(--border); }
 .btn.big { height: 42px; padding: 0 20px; font-size: 14px; border-radius: 12px; }
 .btn.ghost { background: transparent; color: var(--text-2); }
 .setup-foot { margin: 0; line-height: 1.5; }
@@ -1018,7 +1033,7 @@ kbd { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; display
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes toast-in { from { opacity: 0; filter: blur(6px); transform: translateY(10px) scale(0.98); } to { opacity: 1; filter: none; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .overlay, .modal-scrim, .modal, .upscaler-compare, .toast, .star-prompt, .card { animation: none; }
+  .overlay, .modal-scrim, .modal, .modal-ask, .upscaler-compare, .toast, .star-prompt, .card { animation: none; }
   .card:hover { transform: none; }
 }
 

@@ -1,9 +1,9 @@
 # Status
 
-**Updated 2026-10-27.** What is in progress, what comes next, and where help is welcome. Kept current at the end
+**Updated 2026-10-28.** What is in progress, what comes next, and where help is welcome. Kept current at the end
 of every task (see [AGENTS.md](../AGENTS.md#keeping-docsstatusmd-current)); GitHub is the source of truth.
 
-## Current version: [0.11.1](https://github.com/GabrieleLozupone/kokon/releases/tag/v0.11.1) (2026-10-26)
+## Current version: [0.11.2](https://github.com/GabrieleLozupone/kokon/releases/tag/v0.11.2) (2026-10-28)
 
 Windows, macOS (Apple Silicon, 15+) and Linux (`.deb`, `.rpm`). Installed copies update from the app.
 
@@ -54,6 +54,11 @@ Windows, macOS (Apple Silicon, 15+) and Linux (`.deb`, `.rpm`). Installed copies
 
 ## Recently shipped
 
+- **0.11.2** (2026-10-28): Mac engine 0.1.1 (on macOS 26 the matrix unit and the Neural Engine work beside the GPU,
+  found by @CesareDavidePace in [#46](https://github.com/GabrieleLozupone/kokon/pull/46); on M3, M4 and M5 Macs 8–18 %
+  faster steps), the progress card keeps its place when you come back to it, Settings ask before closing with unsaved
+  changes, setup buttons always in view and readable file names while downloading, visible selection on Linux with
+  WebKitGTK ([#41](https://github.com/GabrieleLozupone/kokon/issues/41)), Android full screen.
 - **0.11.1** (2026-10-26): Kokon's own Mac engine inside Kokon.app, offered once at start on Macs with 16 GB or
   more (experimental, off until tried, rollback in Settings → Performance), with a Benchmark button
   ([Discussion #43](https://github.com/GabrieleLozupone/kokon/discussions/43)); Unsloth's Qwen-Image 2.1 Turbo

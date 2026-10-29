@@ -2364,7 +2364,7 @@ dependencies = [
 
 [[package]]
 name = "kokon"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "dirs",
  "image",
@@ -3384,7 +3384,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "qls-core"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "anyhow",
  "argon2",
@@ -3413,7 +3413,7 @@ dependencies = [
 
 [[package]]
 name = "qls-service"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "axum",
  "futures-util",

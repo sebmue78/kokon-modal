@@ -210,8 +210,9 @@ export function drawCocoon(ctx: CanvasRenderingContext2D, threads: Thread[], o: 
 
 /** The cocoon behind a job in progress (`pct` 0..100). For an edit the source shows in black
  * and white inside it, coming into focus, until the silk fills in. `form` turns the filled
- * cocoon into the whole logo (set just before the image is ready). */
-export function Cocoon({ src, pct, form, dim }: { src?: string; pct: number; form?: boolean; dim?: boolean }) {
+ * cocoon into the whole logo (set just before the image is ready); `formStart` keeps when that
+ * began across mounts, so a card coming back does not form the logo again. */
+export function Cocoon({ src, pct, form, dim, formStart: formAt }: { src?: string; pct: number; form?: boolean; dim?: boolean; formStart?: { at: number | null } }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -238,7 +239,7 @@ export function Cocoon({ src, pct, form, dim }: { src?: string; pct: number; for
     const still = reducedMotion();
     let ink = getComputedStyle(document.documentElement).getPropertyValue("--mark").trim() || "#9a9a9a";
     let lastInk = 0;
-    let formStart: number | null = null;
+    const formed = formAt ?? { at: null };
     let raf = 0;
     const t0 = performance.now();
 
@@ -249,10 +250,10 @@ export function Cocoon({ src, pct, form, dim }: { src?: string; pct: number; for
         lastInk = now;
       }
       const { pct: pctNow, form: formNow } = live.current;
-      if (formNow && formStart === null) formStart = now;
-      if (formStart !== null && now - formStart >= FORM_MS) logoFormedAt = now;
-      drawCocoon(ctx, threads, { w: size.w, h: size.h, dpr, ink, t, pct: pctNow, formMs: formStart === null ? null : now - formStart, still });
-      if (!still || formStart === null) raf = requestAnimationFrame(draw);
+      if (formNow && formed.at === null) formed.at = now;
+      if (formed.at !== null && now - formed.at >= FORM_MS) logoFormedAt = now;
+      drawCocoon(ctx, threads, { w: size.w, h: size.h, dpr, ink, t, pct: pctNow, formMs: formed.at === null ? null : now - formed.at, still });
+      if (!still || formed.at === null) raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);

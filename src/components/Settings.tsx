@@ -1,5 +1,5 @@
 import { Activity, Copy, Cpu, Download, FolderOpen, HardDrive, Heart, Layers, MonitorSmartphone, RefreshCw, RotateCcw, Settings2, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { api } from "../lib/api";
 import { native } from "../lib/native";
@@ -361,9 +361,15 @@ export function Settings() {
   const improveVae = () => switchFile(api.improveVae, setVaeProgress, "The new decoder is in use");
   const newImageModel = () => switchFile(api.newImageModel, setDitProgress, "The Q4_K_M image model is in use");
 
-  const close = () => setState({ overlay: null });
+  // Leaving with unsaved changes asks first (people forgot Save): `then` runs after Save or
+  // Discard, Cancel stays here.
+  const [leaving, setLeaving] = useState<(() => void) | null>(null);
+  const leave = (then: () => void) => (dirty ? setLeaving(() => then) : then());
+  const close = () => leave(() => setState({ overlay: null }));
+  const onEscape = useRef(close);
+  onEscape.current = () => (leaving ? setLeaving(null) : close());
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onEscape.current();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
@@ -392,15 +398,17 @@ export function Settings() {
     }
   };
 
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     try {
       const r = await api.saveConfig(cfg);
       setDirty(false);
       api.setup().then((s: SetupReport) => setUpscaler(s.checks.find((c) => c.id === "upscaler") ?? null), () => {});
       toastInfo(r.backend_restart_needed ? "Saved. The model reloads with the new settings on the next generation." : "Saved");
       refreshStatus();
+      return true;
     } catch (e) {
       toastError(e);
+      return false;
     }
   };
 
@@ -492,19 +500,19 @@ export function Settings() {
               )}
               <div className="field-row">
                 <span>What's new in Kokon Modal {WHATS_NEW_VERSION}</span>
-                <button className="btn" onClick={() => setState({ overlay: "whats-new" })}>
+                <button className="btn" onClick={() => leave(() => setState({ overlay: "whats-new" }))}>
                   Show
                 </button>
               </div>
               <div className="field-row">
                 <span>Welcome screen: what Kokon Modal is and how it keeps your work private</span>
-                <button className="btn" onClick={() => setState({ overlay: "welcome" })}>
+                <button className="btn" onClick={() => leave(() => setState({ overlay: "welcome" }))}>
                   Show
                 </button>
               </div>
               <div className="field-row">
                 <span>Tour: a short walk through an example project (adds the examples again if you removed them)</span>
-                <button className="btn" onClick={startTour}>
+                <button className="btn" onClick={() => leave(startTour)}>
                   Start
                 </button>
               </div>
@@ -559,10 +567,7 @@ export function Settings() {
                 </div>
                 <button
                   className="btn primary"
-                  onClick={() => {
-                    if (dirty && !window.confirm("Discard the unsaved changes and open the model setup?")) return;
-                    setState({ overlay: null, needsSetup: true });
-                  }}
+                  onClick={() => leave(() => setState({ overlay: null, needsSetup: true }))}
                 >
                   <Download size={15} /> Set up models…
                 </button>
@@ -908,6 +913,41 @@ export function Settings() {
             </div>
           )}
         </div>
+        {leaving && (
+          <div className="modal-ask" role="alertdialog" aria-label="Unsaved changes">
+            <div className="modal-ask-box">
+              <strong>Save your changes?</strong>
+              <span className="muted">Some settings were changed and not saved.</span>
+              <div className="modal-ask-actions">
+                <button className="btn ghost" onClick={() => setLeaving(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    const then = leaving;
+                    setLeaving(null);
+                    setDirty(false);
+                    then();
+                  }}
+                >
+                  Discard
+                </button>
+                <button
+                  className="btn primary"
+                  autoFocus
+                  onClick={async () => {
+                    const then = leaving;
+                    setLeaving(null);
+                    if (await save()) then();
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

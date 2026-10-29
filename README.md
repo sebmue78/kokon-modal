@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sebmue78/kokon-modal/releases"><b>Download (Windows)</b></a> ·
+  <a href="https://github.com/sebmue78/kokon-modal/releases"><b>Download (Windows, Mac)</b></a> ·
   <a href="#models">Models</a> ·
   <a href="#whats-different-from-kokon">What's different</a> ·
   <a href="#install">Install</a> ·
@@ -97,9 +97,15 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
 
 ## Install
 
-1. Download `Kokon-modal_<version>_x64-setup.exe` from the
-   [releases](https://github.com/sebmue78/kokon-modal/releases) (the SHA-256 is in the notes).
-2. The installer is not code-signed: Windows SmartScreen may ask once (**More info → Run anyway**).
+1. Download from the [latest release](https://github.com/sebmue78/kokon-modal/releases/latest)
+   (the SHA-256 is in the notes):
+   - **Windows:** `Kokon-modal_<version>_x64-setup.exe`. The installer is not code-signed:
+     Windows SmartScreen may ask once (**More info → Run anyway**).
+   - **Mac (Apple Silicon, macOS 15+):** `Kokon-modal_<version>_aarch64.dmg`. Open it and drag
+     Kokon Modal to Applications. The app is not notarized by Apple: the first time, open System
+     Settings → Privacy & Security and click **Open Anyway** (or run
+     `xattr -dr com.apple.quarantine "/Applications/Kokon Modal.app"`).
+2. Both update themselves from then on (Settings → General).
 3. On first start, Setup checks your GPU and downloads the engine and Qwen-Image 2.1.
    Already have Kokon's model files? **Use models I already have** can point Kokon Modal at them
    (in `%LOCALAPPDATA%\KokonData\sdcpp\models\qwen21`) instead of downloading them again.
@@ -108,7 +114,9 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
 **Requirements** are Kokon's: Windows 10/11 64-bit, an NVIDIA card with 12 GB of VRAM (8 GB in
 beta) or AMD/Intel through Vulkan (beta), 16 GB of RAM (32 GB recommended), and an SSD with room
 for the models you use. Krea 2 is the largest model; 24 GB of VRAM gets the 8-bit files of every
-model. macOS and Linux builds work as in Kokon but are not built for this fork yet.
+model. On a Mac, Kokon's requirements apply (M1 or newer, 16 GB of unified memory, 32 GB
+recommended); the new models have not been tried on a Mac yet. Linux builds work as in Kokon but
+are not built for this fork yet.
 
 ## Build from source
 
@@ -122,11 +130,12 @@ npm test                                # UI logic
 npx tauri dev                           # run the app (Windows)
 ```
 
-The Windows release is built by [`.github/workflows/alpha-windows.yml`](.github/workflows/alpha-windows.yml)
-on every push to the `release` branch: tests, the service, the MCP server, the app and the
-NSIS installer, then the release `v<version>`. With the repository secret
+The release is built by [`.github/workflows/alpha-windows.yml`](.github/workflows/alpha-windows.yml)
+on every push to the `release` branch: on Windows the tests, the service, the MCP server, the app and
+the NSIS installer; on macOS 26 (Apple Silicon) the service, Kokon's Mac engine, the MCP server, the app
+and the disk image; then the release `v<version>` with both. With the repository secret
 `TAURI_SIGNING_PRIVATE_KEY` (the fork's updater key; its public half is in `src-tauri/tauri.conf.json`)
-the installer is signed for the updater and `latest.json` goes to the release `updates`, the address
+both builds are signed for the updater and `latest.json` goes to the release `updates`, the address
 the app checks. Without the secret the build works the same, without an update. The release notes
 start with `.github/release-notes.md` (what's new, written for each release) and the commits since the
 previous release.

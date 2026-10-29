@@ -229,8 +229,9 @@ packed once per layer to fp16, heads first (`attention_pack_kv`, 1.1 ms), and th
 M1/M2 shape (4 SIMD groups × 8 rows, 128-key tiles, the head in chunks of 32) on the same packed operands: 105 ms;
 8 × 8 rows with 128-key tiles in chunks of 32: 94; 64-key tiles in chunks of 64: 104; so the kernel keeps 8 × 8
 rows, 64-key tiles, K and V loaded together. MFA's shapes rest on its async copies, which run-time compiled Metal
-cannot use. On Apple9+ GPUs (M3 and later) the engine picks `flash_attention_direct`, each SIMD group reading the
-packed K and V straight from memory as MFA's tables prefer there: 142 ms on the M2 Pro, not yet measured on an M3+.
+cannot use. `flash_attention_direct` (`KOKON_ATTENTION_DIRECT=1`), each SIMD group reading the packed K and V
+straight from memory as MFA's tables prefer on Apple9+ GPUs, is off on every chip since engine 0.1.1: 142 ms on the
+M2 Pro, and slower on every M3, M4 and M5 measured (a step at 1024² in the bench reports of [Discussion #43](https://github.com/GabrieleLozupone/kokon/discussions/43): M3 Max 5.45 → 4.83 s without it, M4 Pro 7.27 → 5.96, M4 Max 4.57 → 3.88, M5 Pro 5.79 → 5.34).
 
 **Prefix K/V cache** (`KOKON_PREFIX_CACHE=0` turns it off): the prefix (text; later the reference images) sees only
 its own keys and the modulation of t = 0, so its K and V are saved per layer during the first evaluation of a
@@ -428,13 +429,20 @@ correctness test that runs on any Mac (`PerChipTests`). Only the M2 Pro has meas
   run on the GPU's neural accelerators, before it on the shader cores). Its source compiles at run time on macOS 27,
   so it is on wherever Metal 4 runs (`KOKON_NA=0` off). M2 Pro: 6.3 TFLOP/s against MPS's 5.6 at 1536 × 4096 × 4096,
   bit for bit the same result (`check-na`); per evaluation at 1024², 3 alternated rounds: 7.57 → 7.48 s.
-- **int8 products on the Neural Engine** (libnnc's M3/M4 path; `KOKON_ANE_INT8=w8` int8 weights, `=1` int8 weights and
-  rows). Opt-in on every chip, as their error does not depend on the chip. M2 Pro: one 1792 × 4096 × 4096 tile 10.1 ms
-  in fp16, 8.3 ms with int8 weights, 7.0 ms in int8 (`check-ane8`); per evaluation 7.42 → 7.20 / 7.00 s; but the
-  velocity at 896² goes from 7.6e-4 to 1.1e-2 / 4.1e-2 (one int8 scale per 4 096 weights where Q4_K has one per 32;
+- **int8 products on the Neural Engine** (libnnc's M3/M4 path; `KOKON_ANE_INT8=1`, int8 weights and rows). Opt-in on
+  every chip, as their error does not depend on the chip. M2 Pro: one 1792 × 4096 × 4096 tile 10.1 ms in fp16, 7.0 ms
+  in int8 (`check-ane8`); per evaluation 7.42 → 7.00 s; but the velocity at 896² goes from 7.6e-4 to 4.1e-2 (one int8 scale per 4 096 weights where Q4_K has one per 32;
   activation rows with outliers). **Finer scales do not fix it** (2026-10-25, below): int8 stays opt-in.
-- **Attention reading K and V straight from memory** (`flash_attention_direct`) on Apple9+ GPUs (M3 and later), as
-  MFA's tables prefer there (`KOKON_ATTENTION_DIRECT=0` off); 142 ms on the M2 Pro against 91, unmeasured on an M3+.
+- **Each product released at once** where signals arrive late (`KOKON_FLUSH_READY=0` off, `=1` on): a wait on
+  `ready` right after its signal, chosen by a ~50 ms measurement at the engine's start (`Coexecutor.signalArrivesLate`),
+  every start, so a macOS update is seen. On the M5 Pro (macOS 26.6) a signal inside a command buffer reaches the CPU only at the next wait the
+  command buffer encodes, which was after the GPU's own rows: the AMX and the Neural Engine ran after the GPU instead of
+  beside it, and the balancer, reading ~1 ms for the GPU's rows, gave them almost nothing. M5 Pro 20-core, 24 GB,
+  `time-dit` at 1024², 3 alternated rounds (third evaluation): 5.50–5.89 → 4.44–4.46 s. An M2 Max on macOS 26.2 shows
+  the same starved shares; the Macs on macOS 27 do not, and there the wait costs ~2.5 % (M2 Pro, macOS 27.2: 6.83 →
+  7.00 s), so it is not on by default.
+- **Attention reading K and V straight from memory** (`flash_attention_direct`): off on every chip since engine 0.1.1
+  (`KOKON_ATTENTION_DIRECT=1` to try it); a step at 1024² in the bench reports of [Discussion #43](https://github.com/GabrieleLozupone/kokon/discussions/43): M3 Max 5.45 → 4.83 s without it, M4 Pro 7.27 → 5.96, M4 Max 4.57 → 3.88, M5 Pro 5.79 → 5.34.
 - **Starting shares per chip**: the balancer's M2 Pro rates scaled by the chip's estimated units (GPU cores × clock,
   the Neural Engine's published TOPS, performance cores; `Chip.unitScale`), so the first image starts near balanced;
   the loop measures the real rates from the first evaluation on.
