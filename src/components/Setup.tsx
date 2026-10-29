@@ -3,7 +3,7 @@ import { CATALOG_IDS, CATALOG_MODELS } from "../lib/models";
 import { ArrowLeft, ArrowLeftRight, Bug, Check, ChevronDown, CircleAlert, Download, ExternalLink, FileSearch, FolderOpen, Loader2, Pause, Play, RefreshCw, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { formatBytes, installItemShort, installProgress, installStep, installTimeLeft } from "../lib/logic";
+import { formatBytes, installItemShort, installProgress, installStep, installTarget, installTimeLeft } from "../lib/logic";
 import { native } from "../lib/native";
 import { inBrowser } from "../lib/platform";
 import { afterStartScreens, refreshStatus, setState, toastError, toastInfo, useStore } from "../lib/store";
@@ -210,7 +210,9 @@ export function Setup() {
   const install = async () => {
     if (!preset) return;
     try {
-      setInst(await api.install(preset, backend ?? hw?.backend ?? "cuda", true, card ?? undefined, mode === "own" ? "user" : "official"));
+      // Fork: an unfinished download of an extra model (paused, or a file failed) goes on with that model.
+      const target = installTarget(inst?.preset, preset, CATALOG_IDS, live && missing.length > 0, mode === "own");
+      setInst(await api.install(preset, backend ?? hw?.backend ?? "cuda", true, card ?? undefined, target));
     } catch (e) {
       toastError(e);
     }
@@ -341,7 +343,10 @@ export function Setup() {
   // While (or after) installing this preset, show the live list; otherwise what is on disk.
   const installKey = own ? `user:${preset}` : preset;
   // Fork: a Krea 2 download (started from Settings or below) shows its own live list.
-  const kreaInstall = !!inst && CATALOG_IDS.some((id) => inst.preset === `${id}:${preset}`);
+  // Fork: the extra model of the download shown (FLUX.3, Fibo 2.0, Krea 2, MOSS-Image), if it is one: Resume
+  // continues that download, not the Qwen files of the preset.
+  const extraId = inst ? CATALOG_IDS.find((id) => inst.preset === `${id}:${preset}`) ?? null : null;
+  const kreaInstall = extraId !== null;
   const live = !!inst && (inst.preset === installKey || kreaInstall) && inst.items.length > 0 && (running || inst.items.some((i) => i.state !== "pending" && i.state !== "present"));
   const items = live ? inst!.items : own ? (ownActive ? hw!.user_files!.files : []) : chosen?.files ?? [];
   const missing = items.filter((i) => i.state !== "present" && i.state !== "done");
@@ -459,6 +464,7 @@ export function Setup() {
 
             {running || paused ? (
               <div className="muted">
+                {extraId ? `${CATALOG_MODELS[extraId]?.full ?? extraId} · ` : ""}
                 {chosen?.label} preset · {hw.sdcpp_dir}
               </div>
             ) : (

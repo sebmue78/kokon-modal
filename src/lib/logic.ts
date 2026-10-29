@@ -1006,3 +1006,12 @@ export function starPromptDue(made: number, busy: boolean): boolean {
 export function pageOutdated(pageVersion: string, serviceVersion: string | undefined, reloadedFor: string | null): boolean {
   return !!pageVersion && !!serviceVersion && pageVersion !== serviceVersion && reloadedFor !== serviceVersion;
 }
+
+/** Fork: what Setup's Install / Resume / Try again downloads. An unfinished download of an extra model
+ * (`<id>:<preset>`: FLUX.3, Fibo 2.0, Krea 2, MOSS-Image; paused or with a failed file) goes on with that
+ * model; otherwise the official files, or the user's own. */
+export function installTarget(installing: string | null | undefined, preset: string, extraIds: readonly string[], unfinished: boolean, own: boolean): string {
+  const extra = extraIds.find((id) => installing === `${id}:${preset}`);
+  if (extra && unfinished) return extra;
+  return own ? "user" : "official";
+}
