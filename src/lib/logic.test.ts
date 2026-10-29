@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { installTarget } from "./logic";
 import {
   lorasFor,
   toggleModelLora,
@@ -708,5 +709,19 @@ describe("fork: LoRAs per model", () => {
     // Defaults: q1 and f2 on. Turning f1 on keeps q1 for Qwen.
     expect(toggleModelLora({ loras: null }, [...all], flux, "f1").sort()).toEqual(["f1", "f2", "q1"]);
     expect(toggleModelLora({ loras: ["q1", "f2"] }, [...all], flux, "f2")).toEqual(["q1"]);
+  });
+});
+
+describe("installTarget", () => {
+  const ids = ["flux3_klein", "krea2_turbo"];
+  it("resumes a paused extra model, not the Qwen files", () => {
+    expect(installTarget("flux3_klein:24gb", "24gb", ids, true, false)).toBe("flux3_klein");
+    expect(installTarget("flux3_klein:24gb", "24gb", ids, true, true)).toBe("flux3_klein");
+  });
+  it("otherwise installs the official or the user's files", () => {
+    expect(installTarget("flux3_klein:24gb", "24gb", ids, false, false)).toBe("official");
+    expect(installTarget("24gb", "24gb", ids, true, false)).toBe("official");
+    expect(installTarget("flux3_klein:16gb", "24gb", ids, true, true)).toBe("user");
+    expect(installTarget(null, "24gb", ids, true, false)).toBe("official");
   });
 });
