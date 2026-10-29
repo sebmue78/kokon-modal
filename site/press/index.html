@@ -33,7 +33,7 @@
       "description": "Everything you need to write about or make a video on Kokon: one-line and short descriptions, key facts, requirements, videos, before/after images, logos and contact.",
       "image": "https://kokon.app/assets/img/app-screenshot.webp?v=2",
       "datePublished": "2026-10-21",
-      "dateModified": "2026-10-21",
+      "dateModified": "2026-10-28",
       "author": {
         "@type": "Person",
         "name": "Gabriele Lozupone",
@@ -130,22 +130,23 @@
     <p><strong>Kokon is a free, open-source app that edits photos with AI from a sentence, entirely on your own computer. A free, local alternative to Nano Banana and Generative Fill: photos stay on the computer and there is no daily limit.</strong></p>
 
     <h2>Short description</h2>
-    <p>Kokon lets anyone edit photos with AI on their own PC or Mac. Drop a photo, brush an area or just describe the change ("remove the scooter", "make it a snowy night"), and it's done. There is nothing to configure: Kokon picks the best open image model (today Qwen-Image 2.1), downloads it and tunes it for the computer's graphics card. No Python, no ComfyUI, no cloud, no account. It also ships an MCP server, so AI agents like Claude Code can create and edit images locally.</p>
+    <p>Kokon lets anyone edit photos with AI on their own PC or Mac. Drop a photo, brush an area or just describe the change ("remove the scooter", "make it a snowy night"), and it's done. There is nothing to configure: Kokon downloads an open image model (today Qwen-Image 2.1) and sets it up for the computer's graphics card. No Python, no ComfyUI, no cloud, no account. The computer with the graphics card can also serve Kokon to a phone, tablet or laptop in the browser, or run as a server (Linux or Docker). It also ships an MCP server, so AI agents like Claude Code can create and edit images locally.</p>
 
     <h2>Key facts</h2>
     <ul class="fact-list">
       <li><strong>Price:</strong> free and open source (AGPL-3.0). Images are for non-commercial use because of the model's license (Qwen Research License).</li>
       <li><strong>Platforms:</strong> Windows 10/11, macOS 15+ on Apple Silicon (beta), Linux x86-64 .deb and .rpm (beta).</li>
-      <li><strong>Hardware:</strong> NVIDIA with 12 GB of VRAM (8 GB in beta); AMD and Intel Arc with 12 GB through Vulkan (beta); Apple Silicon, 32 GB recommended.</li>
+      <li><strong>Hardware:</strong> NVIDIA with 12 GB of VRAM (8 GB in beta); AMD and Intel Arc with 12 GB through Vulkan (beta); Apple Silicon with 16 GB or more (32 GB recommended).</li>
       <li><strong>Model:</strong> Qwen-Image 2.1 Turbo (8 steps), run through Kokon's own build of stable-diffusion.cpp. About 12 GB, downloaded once.</li>
-      <li><strong>Speed:</strong> about 24 s per edit at 1.5K and 36 s per new image at native 2K on an RTX 5070 Ti.</li>
-      <li><strong>Features:</strong> edit with a sentence; paint an area and Change, Remove, Replace or Add; combine photos; expand beyond the borders; create from text; Prompt+ (writes the detailed prompt from a few words); your own LoRAs (beta); 2× and 4K upscaling; versions with before/after; private mode; MCP server and local API.</li>
+      <li><strong>Speed:</strong> about 24 s per edit at 1.5K and 36 s per new image at native 2K on an RTX 5070 Ti; from first launch to the first edit in under 4 minutes there, including the 12 GB download on a fast connection (see the demo). Macs are slower: about 4 minutes for 1 MP on an M2 Pro 16 GB, or about 65 s for a new 1 MP image (about 106 s for an edit) with Kokon's experimental Mac engine (Settings → Performance).</li>
+      <li><strong>Features:</strong> edit with a sentence; paint an area and Change, Remove, Replace or Add; combine photos; expand beyond the borders; create from text; Prompt+ (writes the detailed prompt from a few words); your own LoRAs (beta); 2× and 4K upscaling; versions with before/after; private mode; use from your phone or another device in the browser; a server mode for Linux and Docker; MCP server and local API.</li>
       <li><strong>Made by:</strong> Gabriele Lozupone, an AI researcher in Italy, with the help of Claude Code. Independent project.</li>
       <li><strong>Released:</strong> October 2026. Current version on the <a href="https://github.com/GabrieleLozupone/kokon/releases/latest" rel="noopener">releases page</a>.</li>
     </ul>
 
     <h2>Videos</h2>
     <ul>
+      <li><a href="https://youtu.be/5wqd9jus8C0" rel="noopener"><strong>Demo: from setup to the first edit</strong></a> (58 s, real time on screen, RTX 5070 Ti)</li>
       <li><a href="https://youtu.be/y2NAJkZ4vH0" rel="noopener">Kokon 0.10 film</a> (85 s, 4K)</li>
       <li><a href="https://youtu.be/qGiGXasJJNI" rel="noopener">What's new in 0.10</a> (42 s, 4K)</li>
       <li><a href="../assets/kokon.mp4">Download the film as MP4</a></li>
@@ -168,7 +169,7 @@
     </ul>
 
     <h2>Contact</h2>
-    <p>Questions, a test build, or help with a video: open a <a href="https://github.com/GabrieleLozupone/kokon/discussions" rel="noopener">GitHub Discussion</a> or write to <a href="https://x.com/g_lozupone" rel="noopener">@g_lozupone on X</a>.</p>
+    <p>Questions, a test build, or help with a video: write to <a href="mailto:hello@kokon.app">hello@kokon.app</a>, open a <a href="https://github.com/GabrieleLozupone/kokon/discussions" rel="noopener">GitHub Discussion</a> or write to <a href="https://x.com/g_lozupone" rel="noopener">@g_lozupone on X</a>.</p>
 
     <div class="cta-box">
       <h2>Try Kokon</h2>

@@ -1,4 +1,4 @@
-import { AppWindow, CircleAlert, Copy, Cpu, Expand, Image, Layers, MousePointerClick } from "lucide-react";
+import { AppWindow, CircleAlert, Cpu, Hourglass, Layers, LayoutTemplate, MousePointerClick, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { formatBytes, installProgress, installStep, installTimeLeft, modelChoiceUi, modelOfferDue, whatsNewDue as due } from "../lib/logic";
@@ -8,15 +8,20 @@ import type { GpuBackend, InstallItem, InstallStatus, ModelsStatus } from "../li
 import { KokonMark } from "./Welcome";
 
 /** The release these notes describe. Shown once to people updating from an earlier version. */
-export const WHATS_NEW_VERSION = "0.11.1";
+export const WHATS_NEW_VERSION = "0.11.2";
 
 const MAC_NEWS = {
   icon: Cpu,
-  title: "Kokon's own Mac engine",
-  text: "An engine made by Kokon for Apple Silicon: about 4 times faster on an M2 Pro, for new images, edits, brushed edits, extending and Prompt+. It's experimental and off until you try it; switch back any time in Settings → Performance.",
+  title: "A faster Mac engine",
+  text: "Kokon's Mac engine 0.1.1: on macOS 26 the CPU's matrix unit and the Neural Engine now work beside the GPU too (about a fifth faster on an M5 Pro), and on M3, M4 and M5 Macs each step is 8–18 % faster. Still experimental, in Settings → Performance.",
 };
 
 const NEWS = [
+  {
+    icon: LayoutTemplate,
+    title: "Layout: say where things go",
+    text: "For a new image, Layout (next to the aspect ratio) opens a canvas in the image's shape: draw rectangles, or outlines point by point, and write in each what goes there. FLUX.3 reads the areas directly, Qwen-Image 2.1 and Fibo 2.0 Dev follow them as a sketch, Krea 2 and MOSS-Image get the positions in words.",
+  },
   {
     icon: Layers,
     title: "More models: FLUX.3, Fibo 2.0, Krea 2 and MOSS-Image",
@@ -24,28 +29,23 @@ const NEWS = [
   },
   {
     icon: AppWindow,
-    title: "Its own app, based on Kokon",
-    text: "Kokon Modal installs next to Kokon with its own folders, models and settings, so both can run at the same time. It is built on Kokon by Gabriele Lozupone.",
+    title: "Its own app, based on Kokon 0.11.2",
+    text: "Kokon Modal installs next to Kokon with its own folders, models and settings, so both can run at the same time. It is built on Kokon by Gabriele Lozupone and now includes Kokon 0.11.2.",
   },
   {
-    icon: Image,
-    title: "A new copy of the Qwen model",
-    text: "New installs get unsloth's Q4_K_M of Qwen-Image 2.1 Turbo: the same model in the same 4-bit size, better supported and slightly better. If you have the earlier file, Kokon Modal asks before changing it.",
+    icon: Hourglass,
+    title: "The progress card keeps its place",
+    text: "Look at another version while an image is being made, then come back: the card goes on from where it is instead of starting over, and the Prompt+ text you already read stays on screen.",
   },
   {
-    icon: Expand,
-    title: "Expand to a ratio and a size",
-    text: "Expand can lock the aspect ratio and offers 1080p, 1440p and 4K. The size menu has the same sizes, and an exact size you typed can be picked again.",
-  },
-  {
-    icon: Copy,
-    title: "Copy from the info panel",
-    text: "The prompt, seed and settings of an image can be selected, and each has a copy button.",
+    icon: Save,
+    title: "Settings ask before closing",
+    text: "Close Settings with changes you haven't saved and Kokon Modal asks whether to save them, instead of dropping them.",
   },
   {
     icon: MousePointerClick,
     title: "Smaller fixes",
-    text: "Reuse keeps a fixed seed instead of picking a new one, and selected text is visible again in the dark theme on Linux.",
+    text: "Setup keeps its buttons in view and shows every file name while downloading, selected text is visible on Linux with WebKitGTK, and the page draws properly after leaving full screen on Android phones.",
   },
 ];
 

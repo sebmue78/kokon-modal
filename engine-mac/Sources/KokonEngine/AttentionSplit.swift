@@ -112,7 +112,7 @@ extension Coexecutor {
                           shape(g, rows: slot.program.queries, valid: min(slot.program.queries, queries - row0), row0: row0, factor: scale))
             }
         }
-        if split.ane > 0 || split.cpu > 0 { commands.encodeSignalEvent(ready, value: p) }
+        if split.ane > 0 || split.cpu > 0 { release(p, commands) }
         if split.cpu > 0 {
             nonisolated(unsafe) let (pq, pk, pv, po) = (q.pointer, k.pointer, v.pointer, out.pointer)
             let range = (split.gpu + split.ane)..<QwenDiT.heads

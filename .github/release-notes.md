@@ -1,8 +1,13 @@
-- **Outlines on top of other areas.** With the **Outline** tool, the points of an outline can now
-  be set anywhere, including on top of rectangles and other outlines (a horse on a meadow, a
-  saddle on the horse). Clicks go through the existing areas to the canvas.
-  - With the Outline tool, an area's **bar** still works: drag it to move the area, or click it to
-    write in its text field. The corners and points of the selected area also still work.
-  - To edit areas by clicking straight into them, switch back to **Rectangle**.
-- Setting a point closes a text field that is still open, so Backspace takes back the point
-  instead of deleting text.
+- **Now for Mac too (Apple Silicon).** Kokon Modal is also published as a disk image for Macs with an
+  M1 chip or newer, on macOS 15 or newer: `Kokon-modal_<version>_aarch64.dmg`. Open it and drag
+  Kokon Modal to Applications. The app is not notarized by Apple, so macOS blocks it the first time:
+  open System Settings → Privacy & Security and click **Open Anyway**. Like the Windows version, it
+  updates itself from then on. The new models have not been tried on a Mac yet.
+- **Based on Kokon 0.11.2.** This version brings in Kokon's latest changes:
+  - The progress card keeps its place when you look at another version and come back.
+  - Settings ask before closing with changes you haven't saved.
+  - Setup keeps its buttons in view.
+  - A faster Mac engine (Kokon's own, for Qwen-Image 2.1).
+  - Smaller fixes.
+- What's new in the app (Settings → General → What's new) now also describes Layout.
+- Versions now count from Kokon 0.11.2: 0.11.2017 is Kokon 0.11.2, build 17.

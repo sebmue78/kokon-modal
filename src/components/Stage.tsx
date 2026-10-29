@@ -14,7 +14,7 @@ import {
 import type { GenerationRecord, GenerationRequest, JobView, LutEntry, Mode, Size } from "../lib/types";
 import { Cocoon, Hatch } from "./Cocoon";
 import { CompareFrame, CompareFullscreen } from "./Compare";
-import { PROMPT_FADE_MS, usePromptLeave, useTypewriter, useJobPercent, wordStyle } from "./jobMotion";
+import { PROMPT_FADE_MS, cardMemory, usePromptLeave, useTypewriter, useJobPercent, wordStyle, type CardMemory } from "./jobMotion";
 import { DevelopImg } from "./Develop";
 import { LutBar, LutButton, LutOverlay } from "./Lut";
 import { IconButton, Popover, useFit } from "./ui";
@@ -70,7 +70,8 @@ function Empty() {
 
 /** A version in progress. With the prompt enhancer, the prompt it writes first takes the whole
  * frame, appearing word by word; a couple of seconds after the last word it fades and the
- * completion percentage takes over, over the cocoon (components/Cocoon.tsx). */
+ * completion percentage takes over, over the cocoon (components/Cocoon.tsx). Looking at another
+ * version unmounts the card; coming back continues from where it is (`cardMemory`). */
 function Pending({ job, item, labels }: { job: JobView; item: SessionItem; labels: Record<string, string> }) {
   const o = job.plan?.output;
   const { ref, box } = useFit(o ? o.width / o.height : 1);
@@ -84,12 +85,13 @@ function Pending({ job, item, labels }: { job: JobView; item: SessionItem; label
   // The source keeps its own shape inside an expansion; elsewhere it fills the frame.
   const outpaint = item.request?.outpaint;
   const { pct, clock } = useJobPercent(job, item.request, true);
-  const [promptGone, setPromptGone] = useState(false);
+  const [card] = useState(() => cardMemory(job.id));
+  const [promptGone, setPromptGone] = useState(card.promptGone);
   const promptPhase = job.enhanced_prompt != null && !promptGone;
   return (
     <div className="stage-frame" ref={ref}>
       <div className={`pending ${promptPhase ? "prompt-phase" : ""}`} style={{ width: box.w, height: box.h }}>
-        <Cocoon src={src && !outpaint ? urls.source(src) : undefined} pct={pct} form={pct >= 92} dim={promptPhase} />
+        <Cocoon src={src && !outpaint ? urls.source(src) : undefined} pct={pct} form={pct >= 92} formStart={card.formStart} dim={promptPhase} />
         {promptPhase ? (
           <PromptPhase
             title={title}
@@ -97,19 +99,28 @@ function Pending({ job, item, labels }: { job: JobView; item: SessionItem; label
             streaming={job.status === "enhancing_prompt"}
             withImage={!!src || item.request?.mode === "compose"}
             budget={job.plan?.estimated_seconds || null}
+            card={card}
             onCancel={() => cancelJob(job.id)}
-            onGone={() => setPromptGone(true)}
+            onGone={() => {
+              card.promptGone = true;
+              setPromptGone(true);
+            }}
           />
         ) : (
-          <ProgressPhase job={job} title={title} pct={pct} clock={clock} />
+          <ProgressPhase job={job} title={title} pct={pct} clock={clock} card={card} />
         )}
       </div>
     </div>
   );
 }
 
-function ProgressPhase({ job, title, pct, clock }: { job: JobView; title: string; pct: number; clock: JobClock }) {
+function ProgressPhase({ job, title, pct, clock, card }: { job: JobView; title: string; pct: number; clock: JobClock; card: CardMemory }) {
   const o = job.plan?.output;
+  // It fades in the first time only, not when the card comes back.
+  const [resumed] = useState(card.progressShown);
+  useEffect(() => {
+    card.progressShown = true;
+  }, [card]);
   const remain = remainingSeconds(job, clock);
   const canCancel = !["done", "failed", "cancelled"].includes(job.status);
   const notes = job.notes.join(" ");
@@ -117,7 +128,7 @@ function ProgressPhase({ job, title, pct, clock }: { job: JobView; title: string
   // Stop keeps its icon, the size and the notes hide (styles.css, @container pending). Hover
   // still shows the whole title and the notes.
   return (
-    <div className="progress-phase">
+    <div className={`progress-phase ${resumed ? "resumed" : ""}`}>
       <span className="pending-title" title={title}>
         {title}
       </span>
@@ -152,19 +163,21 @@ function ProgressPhase({ job, title, pct, clock }: { job: JobView; title: string
  * model writes it in a second or two and the image starts right away, so the text keeps
  * appearing while the image is made: reading it fills the wait. It never runs ahead of the text
  * that has arrived. */
-function PromptPhase(props: { title: string; text: string; streaming: boolean; withImage: boolean; budget: number | null; onCancel: () => void; onGone: () => void }) {
+function PromptPhase(props: { title: string; text: string; streaming: boolean; withImage: boolean; budget: number | null; card: CardMemory; onCancel: () => void; onGone: () => void }) {
   const { text, streaming } = props;
-  const shown = useTypewriter(text, streaming, props.budget);
+  const shown = useTypewriter(text, streaming, props.budget, props.card);
+  // Words already on screen when the card came back don't fade in again.
+  const [seen] = useState(shown);
   const ref = useRef<HTMLDivElement>(null);
   const words = useMemo(() => text.split(/(\s+)/), [text]);
   const writing = streaming || shown < text.length;
-  const leave = usePromptLeave(writing, text, props.onGone);
+  const leave = usePromptLeave(writing, text, props.onGone, props.card);
   // Whole words up to the revealed length; each new one fades in once (stable keys).
   const visible: React.ReactNode[] = [];
   let at = 0;
   for (let i = 0; i < words.length && at < shown; i++) {
     const w = words[i];
-    visible.push(/^\s+$/.test(w) ? w : <span key={i} className="w" style={wordStyle(at, shown)}>{w}</span>);
+    visible.push(/^\s+$/.test(w) ? w : <span key={i} className={at < seen ? "w seen" : "w"} style={wordStyle(at, shown)}>{w}</span>);
     at += w.length;
   }
   // Follow the new words only while the reader is at the bottom; scrolling up to reread stays put.
@@ -948,7 +961,7 @@ export function Stage() {
     ) : job.status === "failed" || job.status === "cancelled" ? (
       <Failed job={job} item={item} />
     ) : (
-      <Pending job={job} item={item} labels={labels} />
+      <Pending key={job.id} job={job} item={item} labels={labels} />
     );
   } else {
     const src = item.gen ? urls.gen(item.gen.id) : urls.input(item.input!.id);

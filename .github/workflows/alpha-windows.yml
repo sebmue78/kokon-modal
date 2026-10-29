@@ -1,25 +1,29 @@
-name: Windows release (fork)
+name: Release (fork)
 
-# Fork (kokon-modal): builds the Windows installer with FLUX.3, Fibo 2.0, Krea 2 and MOSS-Image on GitHub's Windows
-# runner and publishes it as the release v<version>. Started by a push to the branch release (or
-# alpha-release, its old name; or by hand in the Actions tab).
+# Fork (kokon-modal): builds Kokon Modal for Windows (NSIS installer, on GitHub's Windows runner) and
+# for Macs with Apple Silicon (disk image, on GitHub's macOS runner), then publishes both in the
+# release v<version>. Started by a push to the branch release (or alpha-release, its old name; or by
+# hand in the Actions tab).
 #
 # The file keeps its old name on purpose: versions count GitHub's run number of this workflow,
 # which a renamed file would start again at 1 (a lower version: no update offered).
 #
 # Versions: every build gets its own, higher version, so the in-app updater can offer it:
-# <major>.<minor>.<patch * 1000 + run number> of the version in tauri.conf.json (0.11.1, run 12 →
-# 0.11.1012). It is set for the build only, not committed.
+# <major>.<minor>.<patch * 1000 + run number> of the version in tauri.conf.json (0.11.2, run 17 →
+# 0.11.2017). It is set for the build only (scripts/release/set-version.sh), not committed.
 #
 # Updates: with the repository secret TAURI_SIGNING_PRIVATE_KEY (the fork's updater key; its public
-# half is in tauri.conf.json) the installer is signed for the updater and latest.json is uploaded
-# to the fixed release "updates", which the app checks once a day. Without the secret the build
-# works as before, just without an update.
+# half is in tauri.conf.json) both builds are signed for the updater and latest.json, with the
+# Windows and the Mac update, is uploaded to the fixed release "updates", which the app checks once a
+# day. Without the secret the builds work the same, just without an update.
 #
-# Differences to the maintainer's scripts\build-release.ps1:
+# Differences to the maintainer's scripts\build-release.ps1 and scripts/build-release-mac.sh:
 # - Kokon Modal is its own app (identifier app.kokonmodal.desktop), installed next to Kokon;
 # - its own updater key and update address (this repository);
-# - the installer is not code-signed (Windows SmartScreen asks once).
+# - the Windows installer is not code-signed (SmartScreen asks once); the Mac app is signed ad hoc
+#   and not notarized, like Kokon's (macOS asks once: Privacy & Security → Open Anyway).
+# - The Mac build runs no tests: the Windows build runs them on the same code; the Mac build still
+#   compiles everything for macOS.
 on:
   push:
     branches: [release, alpha-release]
@@ -33,32 +37,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 90
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
+      signed: ${{ steps.ver.outputs.signed }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The whole history and the tags: the release notes list the commits since the last release.
-          fetch-depth: 0
-
-      - name: Version
-        id: ver
-        shell: bash
+      - id: ver
         run: |
           base=$(node -p "require('./src-tauri/tauri.conf.json').version")
           IFS=. read -r major minor patch <<< "${base%%-*}"
           version="${major}.${minor}.$((patch * 1000 + GITHUB_RUN_NUMBER))"
-          node -e "const f='src-tauri/tauri.conf.json',fs=require('fs');const c=JSON.parse(fs.readFileSync(f));c.version='$version';fs.writeFileSync(f,JSON.stringify(c,null,2)+'\\n')"
-          node -e "const f='package.json',fs=require('fs');const c=JSON.parse(fs.readFileSync(f));c.version='$version';fs.writeFileSync(f,JSON.stringify(c,null,2)+'\\n')"
-          sed -i "0,/^version = \".*\"/s//version = \"$version\"/" Cargo.toml
-          grep -n '^version' Cargo.toml
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
           if [ -n "$HAS_KEY" ]; then echo "signed=true" >> "$GITHUB_OUTPUT"; else echo "signed=false" >> "$GITHUB_OUTPUT"; fi
-          node -e "const f='package-lock.json',fs=require('fs');const c=JSON.parse(fs.readFileSync(f));c.version='$version';if(c.packages&&c.packages['']){c.packages[''].version='$version'};fs.writeFileSync(f,JSON.stringify(c,null,2)+'\\n')"
           if [ -n "$HAS_KEY" ]; then echo "Kokon Modal $version, signed for the updater"; else echo "Kokon Modal $version, no updater key: no update manifest"; fi
         env:
           HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && 'yes' || '' }}
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -71,6 +75,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Version
+        shell: bash
+        run: bash scripts/release/set-version.sh "${{ needs.version.outputs.version }}"
 
       - name: Install dependencies
         shell: bash
@@ -108,35 +116,19 @@ jobs:
         run: |
           # Updater artifacts (the installer's .sig) only with the signing key.
           cat > src-tauri/build.conf.json <<JSON
-          { "bundle": { "createUpdaterArtifacts": ${{ steps.ver.outputs.signed }} } }
+          { "bundle": { "createUpdaterArtifacts": ${{ needs.version.outputs.signed }} } }
           JSON
           npx tauri build --config src-tauri/build.conf.json
 
       - name: Collect installer
-        id: art
         shell: bash
         run: |
           setup=$(ls -t target/release/bundle/nsis/*.exe | head -1)
           mkdir -p dist-release
-          version="${{ steps.ver.outputs.version }}"
-          tag="v${version}"
           # GitHub turns spaces in asset names into dots: a space-free name the manifest can point to.
-          name="Kokon-modal_${version}_x64-setup.exe"
+          name="Kokon-modal_${{ needs.version.outputs.version }}_x64-setup.exe"
           cp "$setup" "dist-release/$name"
-          if [ -f "$setup.sig" ]; then
-            node -e "
-              const fs = require('fs');
-              const m = { version: '$version', notes: 'Kokon Modal $version. See the release notes on GitHub.', pub_date: new Date().toISOString(),
-                platforms: { 'windows-x86_64': { signature: fs.readFileSync(process.argv[1], 'utf8').trim(), url: 'https://github.com/${GITHUB_REPOSITORY}/releases/download/$tag/$name' } } };
-              fs.writeFileSync('dist-release/latest.json', JSON.stringify(m, null, 2));
-            " "$setup.sig"
-            cat dist-release/latest.json
-          fi
-          cp target/release/kokon-service.exe dist-release/
-          sha=$(sha256sum "dist-release/$name" | cut -d' ' -f1)
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if [ -f "$setup.sig" ]; then cp "$setup.sig" "dist-release/$name.sig"; fi
           ls -la dist-release
 
       - uses: actions/upload-artifact@v4
@@ -144,14 +136,128 @@ jobs:
           name: kokon-modal-windows
           path: dist-release/
 
-      - name: Pre-release
-        shell: bash
+  mac:
+    needs: version
+    # Kokon's Mac engine uses the macOS 26 SDK (Metal 4): it needs Xcode 26 (as in engine-mac.yml).
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Version
+        run: bash scripts/release/set-version.sh "${{ needs.version.outputs.version }}"
+
+      - name: Install dependencies
+        run: |
+          swift --version
+          npm ci --no-audit --no-fund
+          (cd mcp && npm ci --no-audit --no-fund)
+
+      - name: UI (embedded in kokon-service)
+        run: npm run build
+
+      - name: kokon-service (release)
+        run: |
+          cargo build -p qls-service --release --target aarch64-apple-darwin
+          mkdir -p src-tauri/binaries
+          cp target/aarch64-apple-darwin/release/kokon-service src-tauri/binaries/kokon-service-aarch64-apple-darwin
+
+      - name: Kokon's Mac engine (Swift)
+        run: bash engine-mac/tools/stage-app.sh
+
+      - name: kokon-mcp
+        run: cd mcp && npm run build:exe
+
+      - name: Kokon Modal.app + disk image
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          cat > src-tauri/build.conf.json <<JSON
+          { "bundle": { "createUpdaterArtifacts": ${{ needs.version.outputs.signed }} } }
+          JSON
+          npx tauri build --target aarch64-apple-darwin --config src-tauri/build.conf.json
+
+      - name: Collect disk image
+        run: |
+          bundle=target/aarch64-apple-darwin/release/bundle
+          app=$(ls -d "$bundle"/macos/*.app | head -1)
+          codesign --verify --deep --strict "$app" && echo "signature (ad hoc) valid"
+          mkdir -p dist-release
+          v="${{ needs.version.outputs.version }}"
+          cp "$(ls -t "$bundle"/dmg/*.dmg | head -1)" "dist-release/Kokon-modal_${v}_aarch64.dmg"
+          # The updater installs the zipped app, not the disk image.
+          tgz=$(ls "$bundle"/macos/*.app.tar.gz 2>/dev/null | head -1 || true)
+          if [ -n "$tgz" ]; then
+            cp "$tgz" "dist-release/Kokon-modal_${v}_aarch64.app.tar.gz"
+            cp "$tgz.sig" "dist-release/Kokon-modal_${v}_aarch64.app.tar.gz.sig"
+          fi
+          ls -la dist-release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kokon-modal-mac
+          path: dist-release/
+
+  publish:
+    needs: [version, windows, mac]
+    # Windows is required; a Mac build that failed leaves the Mac out of this release (the notes say so).
+    if: ${{ !cancelled() && needs.windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history and the tags: the release notes list the commits since the last release.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
+          MAC_OK: ${{ needs.mac.result == 'success' }}
         run: |
+          mkdir -p out
+          cp artifacts/kokon-modal-windows/* out/
+          if [ "$MAC_OK" = true ]; then cp artifacts/kokon-modal-mac/* out/; fi
+          ls -la out
+          win="Kokon-modal_${VERSION}_x64-setup.exe"
+          dmg="Kokon-modal_${VERSION}_aarch64.dmg"
+          tgz="Kokon-modal_${VERSION}_aarch64.app.tar.gz"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG"
+
+          # Update manifest: every platform with a signed update.
+          node -e "
+            const fs = require('fs'); const [v, url, win, tgz] = process.argv.slice(1);
+            const platforms = {};
+            const sig = (f) => fs.existsSync('out/' + f + '.sig') ? fs.readFileSync('out/' + f + '.sig', 'utf8').trim() : null;
+            if (sig(win)) platforms['windows-x86_64'] = { signature: sig(win), url: url + '/' + win };
+            if (sig(tgz)) platforms['darwin-aarch64'] = { signature: sig(tgz), url: url + '/' + tgz };
+            if (Object.keys(platforms).length) fs.writeFileSync('latest.json', JSON.stringify({ version: v, notes: 'Kokon Modal ' + v + '. See the release notes on GitHub.', pub_date: new Date().toISOString(), platforms }, null, 2));
+          " "$VERSION" "$url" "$win" "$tgz"
+          [ -f latest.json ] && cat latest.json
+
           # What changed: .github/release-notes.md (written for each release), then every commit since
           # the previous release (alphas included).
-          prev=$(git tag --list 'v*' --sort=-creatordate | grep -vx "${{ steps.art.outputs.tag }}" | head -1)
+          prev=$(git tag --list 'v*' --sort=-creatordate | grep -vx "$TAG" | head -1)
           {
             echo "## What's new in this version"
             echo
@@ -160,16 +266,26 @@ jobs:
             if [ -n "$prev" ]; then
               echo "<details><summary>All changes since $prev</summary>"
               echo
-              git log --no-merges --format='- %s (%h)' "$prev..HEAD"
+              git log --no-merges --format='- %s (%h)' "$prev..$GITHUB_SHA"
               echo
               echo "</details>"
               echo
             fi
             echo "---"
             echo
-          } > changes.md
-          cat changes.md
-          cat > about.md <<EOF
+            echo "## Download"
+            echo
+            echo "- **Windows:** \`$win\`. Not code-signed: Windows SmartScreen may ask once (More info → Run anyway)."
+            if [ -f "out/$dmg" ]; then
+              echo "- **Mac (Apple Silicon, macOS 15 or newer):** \`$dmg\`. Open it and drag Kokon Modal to Applications."
+              echo "  The app is not notarized by Apple: the first time, macOS blocks it. Open System Settings → Privacy & Security"
+              echo "  and click **Open Anyway** (or run \`xattr -dr com.apple.quarantine \"/Applications/Kokon Modal.app\"\` in Terminal)."
+            else
+              echo "- **Mac:** not in this release (its build failed); the previous Mac release still works."
+            fi
+            echo
+          } > notes.md
+          cat >> notes.md <<EOF
           Kokon Modal is a fork of [Kokon](https://github.com/GabrieleLozupone/kokon)
           by Gabriele Lozupone, with more models to choose in the model menu at the top, next to Qwen-Image 2.1:
 
@@ -183,30 +299,28 @@ jobs:
           Krea 2 and MOSS make images from text and do brushed changes and Expand as plain inpainting. Each model
           downloads its files the first time it is chosen in the model menu, and each has its own LoRAs: load a LoRA
           for the model in use in Settings → LoRA (LoRAs for the new models are not tested yet).
-          **Layout** (next to the aspect ratio) draws boxes that say where things go in a new image.
+          **Layout** (next to the aspect ratio) draws areas that say where things go in a new image.
 
           Notes:
           - Its own app: installs next to Kokon (own folders, settings, gallery, models and ports), both can run at the same time.
             Models are downloaded again for Kokon Modal, or point it at Kokon's files with Settings → Models → Use my own files.
-          - Not code-signed: Windows SmartScreen may ask once (More info → Run anyway).
           - Updates: Kokon Modal checks this repository once a day and installs a new version in one click (it can be
-            turned off in Settings → General). Versions up to v0.11.1-modal-alpha.10 have no updater: install this one by hand once.
-          - Versions: Kokon's version with a build number (0.11.1014 = Kokon 0.11.1, build 14).
+            turned off in Settings → General).
+          - Versions: Kokon's version with a build number (0.11.2017 = Kokon 0.11.2, build 17).
 
-          SHA-256 of \`${{ steps.art.outputs.name }}\`: \`${{ steps.art.outputs.sha }}\`
+          SHA-256:
           EOF
-          cat changes.md about.md > notes.md
-          gh release create "${{ steps.art.outputs.tag }}" --target "$GITHUB_SHA" --latest --title "Kokon Modal ${{ steps.ver.outputs.version }}" \
-            --notes-file notes.md "dist-release/${{ steps.art.outputs.name }}"
+          (cd out && for f in "$win" "$dmg"; do [ -f "$f" ] && echo "- \`$f\`: \`$(sha256sum "$f" | cut -d' ' -f1)\`"; done) >> notes.md
+          cat notes.md
 
-      - name: Update manifest
-        if: steps.ver.outputs.signed == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # The fixed release "updates" holds latest.json, the address in tauri.conf.json (a pre-release
-          # is never "latest", so releases/latest/download would not find it).
-          gh release view updates >/dev/null 2>&1 || gh release create updates --prerelease --title "Update manifest" \
-            --notes "latest.json for Kokon Modal's in-app updater. Not an installer: download Kokon Modal from the other releases."
-          gh release upload updates dist-release/latest.json --clobber
+          files=("out/$win")
+          [ -f "out/$dmg" ] && files+=("out/$dmg")
+          [ -f "out/$tgz" ] && files+=("out/$tgz")
+          gh release create "$TAG" --target "$GITHUB_SHA" --latest --title "Kokon Modal $VERSION" --notes-file notes.md "${files[@]}"
+
+          # The fixed release "updates" holds latest.json, the address in tauri.conf.json.
+          if [ -f latest.json ]; then
+            gh release view updates >/dev/null 2>&1 || gh release create updates --prerelease --title "Update manifest" \
+              --notes "latest.json for Kokon Modal's in-app updater. Not an installer: download Kokon Modal from the other releases."
+            gh release upload updates latest.json --clobber
+          fi

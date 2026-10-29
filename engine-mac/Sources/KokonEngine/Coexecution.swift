@@ -1,6 +1,7 @@
 import Accelerate
 import Foundation
 import Metal
+import QuartzCore
 
 /// **One product on the GPU, the AMX and the Neural Engine at the same time**, cut by rows:
 ///
@@ -65,23 +66,96 @@ final class Coexecutor {
     let aneEnabled: Bool, amxEnabled: Bool
     /// **int8 products on the Neural Engine** (`NeuralEngineProduct.int8Program`, `ane8_*` in `ane.metal`), the path
     /// libnnc (ccv) takes on the M3 and M4: W per column (its scales once per weight, the weight at each use as in
-    /// fp16) and, with `KOKON_ANE_INT8=1`, A per row too; `KOKON_ANE_INT8=w8` keeps the rows fp16. Opt-in on every
+    /// fp16) and A per row (`KOKON_ANE_INT8=1`). Opt-in on every
     /// chip: the error does not depend on the chip, and on the M2 Pro (2026-10-25) one 1792 × 4096 × 4096 tile ran
-    /// 7.0 ms in int8, 8.3 ms with int8 weights, 10.1 ms in fp16 (`check-ane8`), but the velocity at 896² went from
-    /// 7.6e-4 to 4.1e-2 (int8) and 1.1e-2 (int8 weights; one scale per 4 096 values where Q4_K has one per 32).
+    /// 7.0 ms in int8, 10.1 ms in fp16 (`check-ane8`), but the velocity at 896² went from 7.6e-4 to 4.1e-2 (one scale
+    /// per 4 096 values where Q4_K has one per 32). int8 weights with fp16 rows (8.3 ms, 1.1e-2) were removed in 0.1.1:
+    /// a whole generation came out black on every Mac, cause not found.
     /// Finer scales do not close the gap (README, "Tried and not kept": 4.8e-3 with one per 32, and scales given as
     /// program inputs run slower than fp16).
     /// `bench` measures both on M3 and later. Falls back to fp16 when its programs cannot be built (macOS 26+).
     private(set) var aneInt8: Bool
-    /// With `aneInt8`, the rows stay fp16 (int8 weights only, W8A16: `KOKON_ANE_INT8=w8`).
-    let aneHalfRows: Bool
     static func int8Selected(_ chip: Chip) -> Bool {
         switch ProcessInfo.processInfo.environment["KOKON_ANE_INT8"] {
-        case "1", "w8": return true
+        case "1": return true
         default: return false
         }
     }
-    static var int8Rows: Bool { ProcessInfo.processInfo.environment["KOKON_ANE_INT8"] != "w8" }
+    /// **The release made visible at once**: a wait on `ready` right after its signal. On the M5 Pro (macOS 26.6) a
+    /// signal inside a command buffer reaches the CPU only at the command buffer's end or at the next wait it encodes
+    /// (a 3 × 20 ms test: the CPU saw the three signals at 60 / 60 / 60 ms, with a wait after each at 20 / 40 / 60).
+    /// Here the next wait is after the GPU's own rows, so the AMX and the Neural Engine started only when the GPU was
+    /// done, one after the other instead of together, and the timeline read the GPU's rows as ~1 ms. The wait is on a
+    /// value already reached, but it is not free where signals arrive on time: on the M2 Pro (macOS 27.2) an
+    /// evaluation 6.83 → 7.00 s. So it is chosen by measuring (`signalArrivesLate`), not by chip: the M5 Pro on
+    /// macOS 26.6 and an M2 Max on 26.2 show the late signal, the Macs on macOS 27 did not. `KOKON_FLUSH_READY=0` / `=1`.
+    let flushRelease: Bool
+    static func flushReleaseSelected(_ context: MetalContext) -> Bool {
+        switch ProcessInfo.processInfo.environment["KOKON_FLUSH_READY"] {
+        case "0": return false
+        case "1": return true
+        default: return signalArrivesLate(context)
+        }
+    }
+
+    nonisolated(unsafe) private static var lateSignal: Bool?
+    private static let lateSignalLock = NSLock()
+    /// **Whether this Mac delivers a signal inside a command buffer late** (at the command buffer's next wait or its
+    /// end): ~20 ms of GPU work, a signal, ~20 ms more; the CPU sees it about halfway when signals arrive on time, near
+    /// the end when they are late. Measured once per process (~50 ms, at the first co-executor), so a macOS update is
+    /// seen at the next start. A failed measurement counts as on time (the path before the flush existed).
+    static func signalArrivesLate(_ context: MetalContext) -> Bool {
+        lateSignalLock.withLock {
+            if let late = lateSignal { return late }
+            let late = (try? measureLateSignal(context)) ?? false
+            lateSignal = late
+            return late
+        }
+    }
+
+    private static func measureLateSignal(_ context: MetalContext) throws -> Bool {
+        let pipeline = try context.pipeline("spin")
+        let out = try context.scratch(4 << 20, label: "spin")
+        func spin(_ commands: MTLCommandBuffer, _ n: UInt32) {
+            var n = n
+            let e = commands.makeComputeCommandEncoder()!
+            e.setComputePipelineState(pipeline); e.setBuffer(out, offset: 0, index: 0); e.setBytes(&n, length: 4, index: 1)
+            e.dispatchThreads(MTLSize(width: 1 << 20, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 256, height: 1, depth: 1))
+            e.endEncoding()
+        }
+        // Sized to ~20 ms on this GPU.
+        var n: UInt32 = 64
+        for _ in 0..<3 {
+            guard let c = context.queue.makeCommandBuffer() else { return false }
+            spin(c, n)
+            let seconds = try MetalContext.finish(c, "spin")
+            n = UInt32(min(Double(1 << 24), Double(n) * 0.02 / max(seconds, 1e-5)))
+        }
+        guard let event = context.device.makeSharedEvent(), let commands = context.queue.makeCommandBuffer() else { return false }
+        spin(commands, n)
+        release(event, 1, flush: false, commands)
+        spin(commands, n)
+        let seen = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var at = 0.0
+        Thread {
+            _ = event.wait(untilSignaledValue: 1, timeoutMS: 10_000)
+            at = CACurrentMediaTime()
+            seen.signal()
+        }.start()
+        try MetalContext.finish(commands, "late signal probe")
+        guard seen.wait(timeout: .now() + 10) == .success else { return false }
+        let (start, end) = (commands.gpuStartTime, commands.gpuEndTime)
+        return at > end - 0.25 * (end - start)
+    }
+
+    /// Releases operation `p` to the AMX and the Neural Engine.
+    func release(_ p: UInt64, _ commands: MTLCommandBuffer) {
+        Coexecutor.release(ready, p, flush: flushRelease, commands)
+    }
+    static func release(_ event: MTLSharedEvent, _ p: UInt64, flush: Bool, _ commands: MTLCommandBuffer) {
+        commands.encodeSignalEvent(event, value: p)
+        if flush { commands.encodeWaitForEvent(event, value: p) }
+    }
     /// The reserves hold fp16 weights (`QwenDiT.halfWeights`): the AMX and the Neural Engine's packing read them so.
     let halfWeights: Bool
     /// **The GPU's and the AMX's rows of A read as fp16**, cast by the GPU into `aHalf` (`KOKON_ACTIVATIONS=fp32`: off).
@@ -112,7 +186,7 @@ final class Coexecutor {
         self.aneEnabled = ane
         self.amxEnabled = amx
         aneInt8 = ane && Coexecutor.int8Selected(Chip.current)
-        aneHalfRows = !Coexecutor.int8Rows
+        flushRelease = Coexecutor.flushReleaseSelected(context)
         // The first evaluation's shares from the cost model on this chip's estimated rates (`Chip.unitScale`; on the
         // M2 Pro its measured ones). Remembered shares replace them (`recall`).
         balancer = Balancer(aneAttention: ane && aneAttention, chip: Chip.current)
@@ -143,12 +217,12 @@ final class Coexecutor {
         guard rows > 0 else { return [[], []] }
         let device = context.device
         let first: [ProductSlot] = try (0..<3).map { _ in
-            let p = try NeuralEngineProduct(rows: rows, k: Coexecutor.tile, n: Coexecutor.tile, int8: aneInt8, halfActivations: aneHalfRows)
+            let p = try NeuralEngineProduct(rows: rows, k: Coexecutor.tile, n: Coexecutor.tile, int8: aneInt8)
             try p.run()
             return (p, try p.gpuBuffer(p.x, device: device), try p.gpuBuffer(p.w, device: device), try p.gpuBuffer(p.y, device: device))
         }
         let second: [ProductSlot] = try first.map { f in
-            let p = try NeuralEngineProduct(rows: rows, k: Coexecutor.tile, n: Coexecutor.tile, int8: aneInt8, halfActivations: aneHalfRows,
+            let p = try NeuralEngineProduct(rows: rows, k: Coexecutor.tile, n: Coexecutor.tile, int8: aneInt8,
                                             sharing: f.product, sharingOutput: false)
             try p.run()
             return (p, f.x, try p.gpuBuffer(p.w, device: device), try p.gpuBuffer(p.y, device: device))
@@ -273,7 +347,7 @@ final class Coexecutor {
             let bounds = shared && !aneInt8 ? readers.map { columnScales[$0]! } : [columns]   // L: fp16 only
             packedRows = shared ? (a.offset, readers) : nil
             if aneInt8 {
-                try kernel(aneHalfRows ? "ane8w_row_scales" : "ane8_row_scales") { e in
+                try kernel("ane8_row_scales") { e in
                     e.setBuffer(a.buffer, offset: a.offset, index: 0); e.setBuffer(scales, offset: sigma, index: 1)
                     e.setBytes(&sh, length: MemoryLayout<Shape>.stride, index: 2)
                     e.dispatchThreadgroups(MTLSize(width: s.ane, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 256, height: 1, depth: 1))
@@ -291,7 +365,7 @@ final class Coexecutor {
                 for np in 0..<nParts {
                     let slot = slots[kp * nParts + np]
                     var t = shape(kp: kp, np: np)
-                    try kernel(aneInt8 && !aneHalfRows ? "ane8_pack_rows" : "ane_pack_rows") { e in
+                    try kernel(aneInt8 ? "ane8_pack_rows" : "ane_pack_rows") { e in
                         e.setBuffer(a.buffer, offset: a.offset, index: 0); e.setBuffer(scales, offset: sigma, index: 1)
                         e.setBuffer(slot.x, offset: 0, index: 2)
                         e.setBytes(&t, length: MemoryLayout<Shape>.stride, index: 3)
@@ -312,7 +386,7 @@ final class Coexecutor {
                 e.dispatchThreads(MTLSize(width: Int(count), height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 256, height: 1, depth: 1))
             }
         }
-        if s.amx > 0 || s.ane > 0 { commands.encodeSignalEvent(ready, value: p) }
+        if s.amx > 0 || s.ane > 0 { release(p, commands) }
         // The next weight's own work while the AMX and the Neural Engine run this product.
         try ahead?(commands)
         if s.amx > 0 {
@@ -347,7 +421,7 @@ final class Coexecutor {
             for np in 0..<nParts {
                 var t = shape(np: np)
                 let ys = (0..<3).map { kp in slots[min(kp, kParts - 1) * nParts + np].y }
-                try kernel(aneInt8 ? aneHalfRows ? "ane8w_unpack" : "ane8_unpack" : "ane_unpack") { e in
+                try kernel(aneInt8 ? "ane8_unpack" : "ane_unpack") { e in
                     for (i, y) in ys.enumerated() { e.setBuffer(y, offset: 0, index: i) }
                     e.setBuffer(columns, offset: lambda, index: 3); e.setBuffer(scales, offset: sigma, index: 4)
                     e.setBuffer(c.buffer, offset: c.offset, index: 5)
@@ -534,7 +608,10 @@ final class Timeline: @unchecked Sendable {
     }
 }
 
-/// A thread running submitted jobs in order.
+/// A thread running submitted jobs in order, at `.userInitiated` like the engine's own work thread (`EngineServer`):
+/// under `.userInteractive`, the level of the apps' interface threads, the AMX's and the CPU's products (BNNS and
+/// `concurrentPerform` inherit it) competed with every window on the Mac as equals, and the interface stuttered while
+/// an image was made. The priority only matters when the CPU is contended; alone, the engine runs as fast.
 final class Worker: @unchecked Sendable {
     private var jobs: [() -> Void] = []
     private let lock = NSLock(), available = DispatchSemaphore(value: 0)
@@ -548,7 +625,7 @@ final class Worker: @unchecked Sendable {
             }
         }
         thread.name = name
-        thread.qualityOfService = .userInteractive
+        thread.qualityOfService = .userInitiated
         thread.start()
     }
 

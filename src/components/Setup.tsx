@@ -75,6 +75,7 @@ function FileList({ items }: { items: InstallItem[] }) {
   return (
     <div className="setup-files">
       {items.map((it) => (
+        // Prefixed: bare state names are other components' classes (.pending is the job card, .failed its error).
         <div className={`setup-file is-${it.state}`} key={it.id}>
           <ItemIcon it={it} />
           <span className="name">{it.label}</span>
