@@ -644,6 +644,10 @@ pub struct AppConfig {
     /// ggml device name for diffusion + VAE, e.g. "cuda0" (see `sd-server --list-devices`).
     /// A name of another engine (e.g. "cuda0" with Vulkan) means device 0 of the active one.
     pub device: String,
+    /// Fork: a second GPU (ggml device name, e.g. "cuda1") for the text encoder and the image
+    /// decoder (VAE), so the image model has the first card to itself and the text encoder is not
+    /// streamed from RAM (faster prompts and Prompt+). "" = off. See [`AppConfig::helper_device`].
+    pub second_gpu: String,
     pub text_encoder_placement: TextEncoderPlacement,
     /// VRAM kept free, in GiB (passed as a negative `--max-vram`).
     pub vram_reserve_gib: f32,
@@ -732,6 +736,7 @@ impl Default for AppConfig {
             remote_access: false,
             remote_port: DEFAULT_REMOTE_PORT,
             device: "cuda0".into(),
+            second_gpu: String::new(),
             text_encoder_placement: TextEncoderPlacement::Ram,
             vram_reserve_gib: 1.0,
             flash_attention: true,
@@ -1251,6 +1256,17 @@ impl AppConfig {
         }
     }
 
+    /// Fork: the second GPU for the text encoder and the decoder, when one is set, belongs to the
+    /// active engine (CUDA or Vulkan; not on a Mac) and is not the image model's card.
+    pub fn helper_device(&self) -> Option<String> {
+        if self.gpu_backend == GpuBackend::Metal {
+            return None;
+        }
+        let dev = self.second_gpu.trim().to_ascii_lowercase();
+        let i = dev.strip_prefix(self.gpu_backend.device_prefix())?;
+        (!i.is_empty() && i.chars().all(|c| c.is_ascii_digit()) && dev != self.effective_device()).then_some(dev)
+    }
+
     /// `--vae-tile-size` the engine runs with: the setting, at most
     /// [`crate::planner::VULKAN_VAE_TILE`] on Vulkan; 0 = no server-side tiling.
     pub fn server_vae_tile_size(&self) -> u32 {
@@ -1370,6 +1386,21 @@ fn mac_engine_in(app_dir: Option<&Path>, sdcpp_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn second_gpu_only_when_it_is_another_card_of_the_engine() {
+        let mut c = AppConfig { gpu_backend: GpuBackend::Cuda, device: "cuda0".into(), ..Default::default() };
+        assert_eq!(c.helper_device(), None, "off by default");
+        c.second_gpu = "CUDA1".into();
+        assert_eq!(c.helper_device().as_deref(), Some("cuda1"));
+        c.second_gpu = "cuda0".into();
+        assert_eq!(c.helper_device(), None, "the image model's own card");
+        c.second_gpu = "vulkan1".into();
+        assert_eq!(c.helper_device(), None, "a device of the other engine");
+        c.gpu_backend = GpuBackend::Vulkan;
+        c.device = "vulkan0".into();
+        assert_eq!(c.helper_device().as_deref(), Some("vulkan1"));
+    }
 
     #[test]
     fn mac_engine_inside_the_app_first() {
@@ -1567,6 +1598,9 @@ mod tests {
         c.gpu_backend = GpuBackend::Metal;
         c.device = "cuda0".into();
         assert_eq!(c.effective_device(), "mtl0", "matches MTL0 in --list-devices");
+        // Fork: no second GPU on a Mac.
+        c.second_gpu = "mtl1".into();
+        assert_eq!(c.helper_device(), None);
         assert_eq!(c.engine_dir(), c.sdcpp_dir.join("engine-metal"));
         assert!(!c.uses_sage_attention());
         // Configs written before the field existed keep this platform's engine.

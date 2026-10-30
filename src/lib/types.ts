@@ -295,6 +295,8 @@ export interface AppConfig {
   activeProfile: string;
   profiles: ModelProfile[];
   device: string;
+  /** Fork: a second GPU for the text encoder and the image decoder ("" = off). */
+  secondGpu?: string;
   textEncoderPlacement: TextEncoderPlacement;
   vramReserveGib: number;
   flashAttention: boolean;

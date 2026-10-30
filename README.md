@@ -89,6 +89,10 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   each area is changed, as its own text says (or as the prompt says, if it has none). Qwen-Image 2.1
   changes all areas at once (each marked in its own color in its guide image); FLUX.3, Fibo 2.0,
   Krea 2 and MOSS-Image paint one area per pass, each pass starting from the one before.
+- **A second GPU.** With several graphics cards, Settings → Performance → Second GPU runs the text
+  encoder and the image decoder on another card (`--backend diffusion=cuda0,vae=cuda1,te=cuda1`):
+  faster prompts and Prompt+, and the first card for the image model alone. One image still runs
+  on one card.
 - **Its own app next to Kokon.** Kokon Modal has its own name, app id (`app.kokonmodal.desktop`),
   install folder, settings (`%APPDATA%\Kokon Modal`), data and models (`%LOCALAPPDATA%\KokonModalData`),
   output folder (`Pictures\Kokon Modal`) and ports (39160-39162; Kokon uses 39150-39152). Both apps

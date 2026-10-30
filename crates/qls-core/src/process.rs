@@ -57,7 +57,13 @@ pub fn build_server_args(cfg: &AppConfig, profile: &ModelProfile) -> Vec<String>
         // text encoder in "RAM": on a Mac a second, staged copy in the same memory.
         a.extend(["--backend".into(), dev.clone(), "--auto-fit".into(), "off".into()]);
     }
+    // Fork: a second GPU takes the text encoder and the decoder; the image model has the first.
+    let helper = cfg.helper_device();
+    if let Some(h) = &helper {
+        a.extend(["--backend".into(), format!("diffusion={dev},vae={h},te={h}")]);
+    }
     match placement {
+        _ if helper.is_some() => {}
         TextEncoderPlacement::Ram => {
             // Weights in RAM, compute on the GPU. Explicit --params-backend disables
             // auto-fit, so DiT/VAE weights live on their compute device.
@@ -875,6 +881,13 @@ mod tests {
         assert!(s.contains(&format!("--llm {}", m("Qwen3VL-8B-Instruct-Q4_K_M.gguf"))));
         assert!(s.contains(&format!("--llm_vision {}", m("mmproj-Qwen3VL-8B-Instruct-F16.gguf"))));
         assert!(s.contains("--backend cuda0 --params-backend te=cpu"));
+        // Fork: a second GPU takes the text encoder and the decoder, in place of RAM.
+        let mut two = cfg.clone();
+        two.second_gpu = "cuda1".into();
+        let t = build_server_args(&two, two.profile()).join(" ");
+        assert!(t.contains("--backend diffusion=cuda0,vae=cuda1,te=cuda1"), "{t}");
+        assert_eq!(t.matches("--backend").count(), 1, "{t}");
+        assert!(!t.contains("--params-backend"), "{t}");
         assert!(s.contains("--fa --sage-attn --vae-tiling --vae-tile-size 768 --vae-tile-overlap 0.125"));
         assert!(s.contains("--model-args qwen_image_2_1_prefix_cache_type=q8_0 --eager-load"));
         assert!(s.ends_with("--diffusion-conv-direct --max-vram -1"));

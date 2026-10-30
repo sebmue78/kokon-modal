@@ -805,6 +805,27 @@ export function Settings() {
                   ))}
                 </select>
               </label>
+              {/* Fork: a second GPU for the text encoder and the image decoder. */}
+              {devices.length > 1 && (
+                <div className="field">
+                  <span>Second GPU</span>
+                  <select className="select" value={(cfg.secondGpu ?? "").toLowerCase()} onChange={(e) => set({ secondGpu: e.target.value })}>
+                    <option value="">Off</option>
+                    {devices
+                      .filter(([n]) => n.toLowerCase() !== cfg.device.toLowerCase())
+                      .map(([n, d]) => (
+                        <option key={n} value={n.toLowerCase()}>
+                          {n}
+                          {d ? ` — ${d}` : ""}
+                        </option>
+                      ))}
+                  </select>
+                  <span className="muted">
+                    Runs the text encoder and the image decoder on this card, so the image model has the GPU device above to itself. Prompts are read faster and Prompt+ writes faster (the text encoder is no longer streamed from system memory), and the image model has more room for large images. One image is not split across cards: each step still runs on the first GPU.
+                  </span>
+                </div>
+              )}
+              {!(devices.length > 1 && cfg.secondGpu) && (
               <div className="field">
                 <span>Text encoder weights</span>
                 <Seg<TextEncoderPlacement>
@@ -821,6 +842,7 @@ export function Settings() {
                   RAM (recommended): weights in system memory, computed on the GPU. CPU uses the least VRAM but makes image editing several times slower.
                 </span>
               </div>
+              )}
               <label className="field-row">
                 <span>VRAM reserve (GiB)</span>
                 <input className="input" type="number" min={0} max={16} step={0.5} style={{ width: 90 }} value={cfg.vramReserveGib} onChange={(e) => set({ vramReserveGib: Math.max(0, Number(e.target.value) || 0) })} />
