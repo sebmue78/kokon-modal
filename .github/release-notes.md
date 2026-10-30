@@ -1,7 +1,10 @@
-- **FLUX.3 and Fibo 2.0: subjects fit inside their area.** In Paint area, a subject that came out
-  larger than its area was cut off at the edge (the top of a head, the feet). The instruction now
-  says to fit it completely inside the marked area. Each area also reaches a little past the line
-  you drew (4% of its size), so something just past the edge is kept and blends in instead of being
-  cut hard.
-- Tip: for FLUX.3, rectangles fit best. FLUX.3 gets each area as a box, so with an outline it can
-  also fill the corners of the box outside your outline, and those parts are cut off.
+- **New: a second GPU.** On a PC with more than one graphics card, Settings → Performance → **Second
+  GPU** puts the text encoder and the image decoder (VAE) on another card. The image model then
+  has the first card to itself.
+  - Prompts are read faster, and Prompt+ writes faster: the text encoder no longer has to come
+    from system memory every time.
+  - The image model has more room for large images.
+  - One image is still computed on one card: each step runs on the first GPU, so a single image
+    gets only a little faster. Off by default; the engine restarts when you change it. Not
+    available on a Mac.
+- Not tried on a PC with several GPUs yet. Please report whether it starts and how fast it is.
