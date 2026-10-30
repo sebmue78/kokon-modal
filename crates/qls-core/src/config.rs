@@ -198,8 +198,9 @@ pub struct RecommendedSettings {
     /// combines and new images from references are not available.
     pub reference_edits: bool,
     /// Qwen-Image 2.1's prompt formats: brushed edits as an instruction with a marked guide image
-    /// (`<image1>`/`<image2>`), and its RGBA wording for transparency. Other models get plain
-    /// masked inpainting and the prompt as written.
+    /// (`<image1>`/`<image2>`), and its RGBA wording for transparency. Fork: the other edit models
+    /// (`reference_edits`: FLUX.3, Fibo 2.0) take brushed edits the same way, in their image naming;
+    /// the rest (Krea 2, MOSS-Image) plain masked inpainting. Otherwise the prompt as written.
     pub qwen_prompts: bool,
     /// Prompt+ can show the input images to the text encoder. The engine turns the text encoder's
     /// vision part on only for some models (Qwen-Image 2.1, not FLUX.3 Image Klein or Krea 2): for
