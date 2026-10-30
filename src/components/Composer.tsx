@@ -599,7 +599,9 @@ export function Composer() {
     : c.refs.length > 1
       ? "Describe how to combine image 1, image 2…"
       : c.mask
-        ? INPAINT_ACTIONS.find((a) => a.value === c.inpaintAction)!.placeholder
+        ? usableBoxes(c.mask.areas).length
+          ? "Optional: what changes in the painted areas without a text…"
+          : INPAINT_ACTIONS.find((a) => a.value === c.inpaintAction)!.placeholder
         : outPx
           ? "Describe the extended scene (optional details)…"
           : "Describe the change…";

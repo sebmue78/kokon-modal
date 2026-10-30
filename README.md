@@ -79,12 +79,16 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   and Fibo 2.0 only, so with FLUX.3 and Krea 2 Prompt+ rewrites edits and combinations from your
   words alone, with instructions written for that.
 - **Layout for new images.** The **Layout** button next to the aspect ratio opens a canvas in the
-  shape of the new image: draw rectangles, or outlines point by point (like a polygonal lasso:
-  the area closes on the first point), and write in each what goes there; the prompt describes
+  shape of the new image: draw rectangles, outlines point by point (like a polygonal lasso: the
+  area closes on the first point) or freehand, and write in each what goes there; the prompt describes
   the scene. Outlines are drawn as their shape in the sketch; FLUX.3, Krea 2 and MOSS-Image use
   the box around them. FLUX.3 reads the boxes natively (its `bbox` caption format); Qwen-Image 2.1 and Fibo 2.0
   Dev get the drawing as a reference image to follow as a plan; Krea 2 and MOSS-Image get the
   positions in words (approximate). Prompt+ writes the scene first, then the boxes are added.
+- **Areas when editing a photo.** Paint area has Rectangle, Outline and Freehand next to the brush:
+  each area is changed, as its own text says (or as the prompt says, if it has none). Qwen-Image 2.1
+  changes all areas at once (each marked in its own color in its guide image); FLUX.3, Fibo 2.0,
+  Krea 2 and MOSS-Image paint one area per pass, each pass starting from the one before.
 - **Its own app next to Kokon.** Kokon Modal has its own name, app id (`app.kokonmodal.desktop`),
   install folder, settings (`%APPDATA%\Kokon Modal`), data and models (`%LOCALAPPDATA%\KokonModalData`),
   output folder (`Pictures\Kokon Modal`) and ports (39160-39162; Kokon uses 39150-39152). Both apps
@@ -151,7 +155,7 @@ Where the fork's changes live:
 | Model menu, "Based on Kokon" | `src/components/ModelPicker.tsx`, `BasedOn.tsx` |
 | App identity | `src-tauri/tauri.conf.json`, `src-tauri/windows/`, `crates/qls-core/src/config.rs` |
 | Model names in the UI | `src/lib/models.ts` |
-| Layout | `crates/qls-core/src/layout.rs`, `src/lib/layout.ts`, `src/components/LayoutEditor.tsx` |
+| Layout, areas in Paint area | `crates/qls-core/src/layout.rs`, `src/lib/layout.ts`, `src/components/AreaLayer.tsx`, `LayoutEditor.tsx`, `InpaintEditor.tsx` |
 | Tests | `crates/qls-core/src/krea2_tests.rs`, `moss_tests.rs`, `flux3_tests.rs`, `fibo2_tests.rs` |
 
 ## Everything else

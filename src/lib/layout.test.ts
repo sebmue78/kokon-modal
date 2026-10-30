@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxFromPoints, clampBox, moveVertex, near, shapeBox, layoutHint, MAX_BOXES, MIN_BOX, moveBox, resizeBox, sketchSize, usableBoxes, wrapText } from "./layout";
+import { freehandOutline, simplifyPath, boxFromPoints, clampBox, moveVertex, near, shapeBox, layoutHint, MAX_BOXES, MIN_BOX, moveBox, resizeBox, sketchSize, usableBoxes, wrapText } from "./layout";
 import { buildRequest, composerFromRecord, emptyComposer, layoutInUse, layoutRatio, needsPrompt, type Ref } from "./logic";
 import type { GenerationRecord } from "./types";
 
@@ -104,5 +104,44 @@ describe("composer with a layout", () => {
     expect(c.refs).toEqual([]);
     expect(c.create).toBe(false);
     expect(c.layout).toEqual([box(0, 0, 0.3, 0.3, "a seagull")]);
+  });
+});
+
+describe("freehand", () => {
+  it("keeps the corners of a drawn shape and drops the points in between", () => {
+    const line: [number, number][] = Array.from({ length: 50 }, (_, i) => [i, 0]);
+    expect(simplifyPath(line, 1)).toEqual([[0, 0], [49, 0]]);
+    const l: [number, number][] = [...line, ...Array.from({ length: 50 }, (_, i) => [49, i + 1] as [number, number])];
+    expect(simplifyPath(l, 1)).toEqual([[0, 0], [49, 0], [49, 50]]);
+  });
+
+  it("turns a hand-drawn loop into an outline of a few points", () => {
+    // A wobbly circle drawn on a 500 px canvas, back to its start.
+    const path: [number, number][] = Array.from({ length: 400 }, (_, i) => {
+      const t = (i / 399) * Math.PI * 2;
+      const r = 0.3 + 0.002 * Math.sin(i * 7);
+      return [0.5 + r * Math.cos(t), 0.5 + r * Math.sin(t)];
+    });
+    const pts = freehandOutline(path, 500, 500);
+    expect(pts.length).toBeGreaterThan(8);
+    expect(pts.length).toBeLessThanOrEqual(60);
+    const b = shapeBox(pts);
+    expect(b.w).toBeCloseTo(0.6, 1);
+    // Too short, or a dot: no area.
+    expect(freehandOutline([[0.1, 0.1], [0.2, 0.2]], 500, 500)).toEqual([]);
+  });
+});
+
+describe("Paint area with areas", () => {
+  const ref = { key: "k", source: "input:a", width: 100, height: 100, name: "Image 1" };
+  it("sends the areas with a text as regions, and the boxes can be the whole description", () => {
+    const c = { ...emptyComposer(), refs: [ref], mask: { inputId: "m", refKey: "k", areas: [box(0, 0, 0.3, 0.3, "a cat"), box(0.5, 0.5, 0.2, 0.2, "")] } };
+    const r = buildRequest(c);
+    expect(r.mask).toBe("input:m");
+    expect(r.regions).toEqual([box(0, 0, 0.3, 0.3, "a cat")]);
+    expect(needsPrompt(c)).toBe(false);
+    const plain = { ...c, mask: { inputId: "m", refKey: "k" } };
+    expect(buildRequest(plain).regions).toBeUndefined();
+    expect(needsPrompt(plain)).toBe(true);
   });
 });

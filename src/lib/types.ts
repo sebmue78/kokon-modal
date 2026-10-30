@@ -71,6 +71,8 @@ export interface GenerationRequest {
   layout?: import("./layout").LayoutBox[];
   /** Fork: the drawn layout ("input:<id>"), image 1 for the models that read a sketch. */
   layout_sketch?: string | null;
+  /** Fork: areas with a text drawn on image 1 in Paint area (inside `mask`). */
+  regions?: import("./layout").LayoutBox[];
 }
 
 export interface WorkingCanvas { source: Size; content: Size; canvas: Size; content_offset: [number, number]; scale: number }

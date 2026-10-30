@@ -1,4 +1,7 @@
 import { Brush, Check, Contrast, Eraser, Hand, Redo2, Trash2, Undo2, X } from "lucide-react";
+import { MAX_REGIONS_UI, type LayoutBox } from "../lib/layout";
+import { AreaLayer, type AreaTool } from "./AreaLayer";
+import { AreaToolPicker, toolHint } from "./LayoutEditor";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, urls } from "../lib/api";
 import { inBrowser, shortcut } from "../lib/platform";
@@ -23,7 +26,11 @@ export function InpaintEditor() {
   const existingMask = useStore((s) => s.composer.mask);
   const [ops, setOps] = useState<Op[]>([]);
   const [redo, setRedo] = useState<Op[]>([]);
-  const [tool, setTool] = useState<"brush" | "eraser" | "pan">("brush");
+  const [tool, setTool] = useState<"brush" | "eraser" | "pan" | AreaTool>("brush");
+  // Fork: areas drawn with the Layout tools: part of the mask; with a text, what goes there.
+  const [areas, setAreasState] = useState<LayoutBox[]>(() => (existingMask && ref0 && existingMask.refKey === ref0.key ? existingMask.areas ?? [] : []));
+  const setAreas = useCallback((f: (bs: LayoutBox[]) => LayoutBox[]) => setAreasState(f), []);
+  const areaTool: AreaTool | null = tool === "rect" || tool === "lasso" || tool === "free" ? tool : null;
   const [spacePressed, setSpacePressed] = useState(false);
   // Right button held: the other tool is in use, and the toolbar shows it.
   const [swapped, setSwapped] = useState(false);
@@ -52,13 +59,16 @@ export function InpaintEditor() {
   const baseMask = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!existingMask || !ref0 || existingMask.refKey !== ref0.key) return;
+    // Fork: with areas, only the brushed strokes are a raster (the areas are drawn again as shapes).
+    const base = existingMask.areas?.length ? existingMask.brushInputId : existingMask.inputId;
+    if (!base) return;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       baseMask.current = img;
       redraw(ops);
     };
-    img.src = urls.input(existingMask.inputId);
+    img.src = urls.input(base);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -115,7 +125,7 @@ export function InpaintEditor() {
 
   const onDown = (e: React.PointerEvent) => {
     // If middle click or pan mode active, let event bubble to ZoomPan for panning
-    if (e.button === 1 || isPanningActive) return;
+    if (e.button === 1 || isPanningActive || areaTool) return;
     if (e.button !== 0 && e.button !== 2) return;
 
     e.stopPropagation();
@@ -259,13 +269,20 @@ export function InpaintEditor() {
 
     // Detect empty mask.
     const data = c.getContext("2d")!.getImageData(0, 0, mw, mh).data;
-    let any = false;
+    let brushed = false;
     for (let i = 3; i < data.length; i += 16) {
       if (data[i] > 16) {
-        any = true;
+        brushed = true;
         break;
       }
     }
+    // Fork: the strokes alone (to edit the areas again later), then the areas added to the mask.
+    const strokes = brushed && areas.length ? await toPng(out) : null;
+    ctx.filter = `blur(${FEATHER / 2}px)`;
+    ctx.fillStyle = "#fff";
+    for (const a of areas) fillArea(ctx, a, mw, mh);
+    ctx.filter = "none";
+    const any = brushed || areas.length > 0;
 
     if (!any) {
       updateComposer({ mask: null });
@@ -275,12 +292,10 @@ export function InpaintEditor() {
 
     setBusy(true);
     try {
-      const blob: Blob = await new Promise((res, rej) =>
-        out.toBlob((b) => (b ? res(b) : rej(new Error("export failed"))), "image/png"),
-      );
-      const rec = await api.upload(blob, "mask.png");
+      const rec = await api.upload(await toPng(out), "mask.png");
+      const brush = strokes ? await api.upload(strokes, "mask-strokes.png") : null;
       const refKey = getState().composer.refs[0]?.key;
-      if (refKey) updateComposer({ mask: { inputId: rec.id, refKey }, outpaint: null, mode: "auto" });
+      if (refKey) updateComposer({ mask: { inputId: rec.id, refKey, ...(areas.length ? { areas, brushInputId: brush?.id ?? null } : {}) }, outpaint: null, mode: "auto" });
       setState({ overlay: null });
       focusPrompt();
     } catch (e) {
@@ -302,6 +317,11 @@ export function InpaintEditor() {
     <div className="overlay">
       <div className="overlay-head">
         <h2>Paint the area to change</h2>
+        <span className="muted">
+          {areaTool
+            ? toolHint(areaTool, "what goes there (or leave it empty: then your prompt changes it)")
+            : "Paint over what should change, or mark areas with the Rectangle, Outline or Freehand tool and say what goes in each."}
+        </span>
         <span className="spacer" />
         <IconButton title="Cancel (Esc)" onClick={() => setState({ overlay: null })}>
           <X size={18} />
@@ -355,7 +375,16 @@ export function InpaintEditor() {
                 onPointerCancel={onUp}
                 onPointerLeave={() => setCursor(null)}
               />
-              {cursor && !isPanningActive && (
+              <AreaLayer
+                boxes={areas}
+                setBoxes={setAreas}
+                tool={areaTool && !isPanningActive ? areaTool : null}
+                full={areas.length >= MAX_REGIONS_UI}
+                zoom={k}
+                onPhoto
+                placeholder="What goes here (empty: your prompt)"
+              />
+              {cursor && !isPanningActive && !areaTool && (
                 <div
                   className="brush-cursor"
                   style={{
@@ -397,6 +426,8 @@ export function InpaintEditor() {
           </IconButton>
         </div>
 
+        <AreaToolPicker tool={areaTool} setTool={setTool} />
+
         <div className="group">
           <label className="slider" title="Brush size ( [ and ] )">
             Size
@@ -414,7 +445,7 @@ export function InpaintEditor() {
           <IconButton title="Invert mask" onClick={() => push({ kind: "invert" })}>
             <Contrast size={17} />
           </IconButton>
-          <IconButton title="Clear mask" onClick={() => push({ kind: "clear" })}>
+          <IconButton title="Clear the mask and the areas" onClick={() => (push({ kind: "clear" }), setAreasState([]))}>
             <Trash2 size={17} />
           </IconButton>
         </div>
@@ -425,6 +456,20 @@ export function InpaintEditor() {
       </div>
     </div>
   );
+}
+
+/** The canvas as a PNG. */
+function toPng(c: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("export failed"))), "image/png"));
+}
+
+/** Fills an area (fractions of the image) on a `w`×`h` mask canvas. */
+function fillArea(ctx: CanvasRenderingContext2D, a: LayoutBox, w: number, h: number) {
+  ctx.beginPath();
+  if (a.points && a.points.length >= 3) a.points.forEach(([x, y], k) => (k ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h)));
+  else ctx.rect(a.x * w, a.y * h, a.w * w, a.h * h);
+  ctx.closePath();
+  ctx.fill();
 }
 
 /** Draws a single operation incrementally (no clearing). */

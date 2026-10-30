@@ -18,7 +18,9 @@ export interface Composer {
   prompt: string;
   refs: Ref[];
   /** Mask painted on refs[0] (input id of the mask PNG). */
-  mask: { inputId: string; refKey: string } | null;
+  /** Fork: `areas` drawn in Paint area (each part of the mask; with a text, what goes there) and the
+   * brushed strokes alone (`brushInputId`, to edit the areas again without them baked in). */
+  mask: { inputId: string; refKey: string; brushInputId?: string | null; areas?: LayoutBox[] } | null;
   /** What to do in the painted area. */
   inpaintAction: InpaintAction;
   outpaint: OutpaintSpec | null;
@@ -179,6 +181,8 @@ export function buildRequest(c: Composer, parentId?: string | null): GenerationR
     mode: layout ? "generate" : composing(c) ? "compose" : c.mode,
     images: layout || (c.mode === "generate" && !composing(c)) ? [] : c.refs.map((r) => r.source),
     mask: maskValid ? `input:${c.mask!.inputId}` : null,
+    // Fork: the areas with a text, each changed as its text says (fractions of image 1).
+    ...(maskValid && usableBoxes(c.mask!.areas).length ? { regions: usableBoxes(c.mask!.areas) } : {}),
     ...(maskValid ? { inpaint_action: c.inpaintAction } : {}),
     outpaint: outpaintInUse(c) ? c.outpaint : null,
     quality: c.quality,
@@ -216,8 +220,8 @@ export function enhancerApplies(c: Composer): boolean {
 
 /** False only for a removal in a painted area, which needs no description. */
 export function needsPrompt(c: Composer): boolean {
-  // Fork: the boxes of a layout can be the whole description.
-  return !(maskInUse(c) && c.inpaintAction === "remove") && !layoutInUse(c);
+  // Fork: the boxes of a layout, or areas with a text in Paint area, can be the whole description.
+  return !(maskInUse(c) && c.inpaintAction === "remove") && !layoutInUse(c) && !(maskInUse(c) && usableBoxes(c.mask!.areas).length > 0);
 }
 
 /** Advanced fields that change how the model samples. They last for the session only: a value
@@ -262,7 +266,8 @@ export function composerFromRecord(g: GenerationRecord, base: Composer): Compose
     enhancedFrom: null,
     create: g.mode === "compose" && refs.length > 0,
     refs,
-    mask: g.mask_input_id && refs[0] ? { inputId: g.mask_input_id, refKey: refs[0].key } : null,
+    // Fork: with its areas (their outlines are in the stored mask too).
+    mask: g.mask_input_id && refs[0] ? { inputId: g.mask_input_id, refKey: refs[0].key, ...(req?.regions?.length ? { areas: req.regions } : {}) } : null,
     inpaintAction: req?.inpaint_action ?? "edit",
     outpaint: g.outpaint ? { ...g.outpaint, units: "pixels" } : null,
     // Upscales are started from the image toolbar, not the composer.

@@ -697,8 +697,8 @@ impl Engine {
         let upscale = request.mode == Mode::Upscale;
         // Removing a painted area needs no description (the planner writes the prompt).
         let removal = request.mask.is_some() && request.inpaint_action == planner::InpaintAction::Remove;
-        // Fork: a layout can be the whole description.
-        let layout = request.layout.iter().any(|b| !b.text.trim().is_empty());
+        // Fork: a layout, or areas with a text on a photo, can be the whole description.
+        let layout = request.layout.iter().chain(request.regions.iter()).any(|b| !b.text.trim().is_empty());
         if request.prompt.trim().is_empty() && !upscale && !removal && !layout {
             return Err(AppError::invalid("Describe what to generate or change."));
         }
@@ -721,6 +721,7 @@ impl Engine {
         }
         // Fork: a layout makes a new image, from the sketch for the models that read it.
         crate::layout::prepare_request(&mut request, self.config().profile().recommended_settings.layout)?;
+        crate::layout::prepare_regions(&mut request)?;
         let id = format!("job_{}", &uuid::Uuid::new_v4().simple().to_string()[..12]);
         let view = JobView {
             id: id.clone(),
@@ -1070,6 +1071,37 @@ impl Engine {
         .map_err(AppError::internal)??;
         self.check_cancel(id)?;
 
+        // Fork: an edit with areas (`GenerationRequest::regions`) on a model that paints one area at a
+        // time runs several passes, each from the result of the one before (`layout::passes`); only the
+        // last result is saved. Every other job is one pass, as before.
+        let passes: Vec<Option<crate::layout::Pass>> = match &mask {
+            Some((m, _)) if !request.regions.is_empty() && !self.config().profile().recommended_settings.qwen_prompts => {
+                let p = crate::layout::passes(&request, m);
+                if p.is_empty() { vec![None] } else { p.into_iter().map(Some).collect() }
+            }
+            _ => vec![None],
+        };
+        let n_passes = passes.len();
+        let original = request;
+        let mask_rec_orig = mask.as_ref().map(|(_, r)| r.clone());
+        let mask_orig = mask;
+        let mut images = images;
+        let mut records = Vec::new();
+        for (pass_ix, pass) in passes.into_iter().enumerate() {
+        let last_pass = pass_ix + 1 == n_passes;
+        let mut request = original.clone();
+        let mask: Option<(GrayImage, InputRecord)> = match pass {
+            Some(p) => {
+                request.prompt = p.prompt;
+                request.inpaint_action = p.action;
+                mask_rec_orig.clone().map(|r| (p.mask, r))
+            }
+            None => mask_orig.clone(),
+        };
+        if n_passes > 1 {
+            self.update(id, |j| j.view.stage = None);
+        }
+
         // 2. Plan.
         let cfg = self.config();
         let profile = cfg.profile().clone();
@@ -1098,6 +1130,10 @@ impl Engine {
             j.view.plan = Some(plan.clone());
             j.view.seed = Some(seed);
             j.view.notes = notes;
+            // Fork: which pass of an edit with areas is running.
+            if n_passes > 1 {
+                j.view.notes.push(format!("Pass {} of {n_passes}: this model paints one area at a time.", pass_ix + 1));
+            }
         });
 
         // 3. Backend.
@@ -1154,7 +1190,9 @@ impl Engine {
             let sketch = crate::layout::uses_sketch(&request, layout_style);
             let prompt = crate::layout::prompt(layout_style, &request.prompt, &request.layout, sketch);
             let mask_img: Option<GrayImage> = mask.as_ref().map(|(m, _)| m.clone());
-            let opts = pipeline::BackendOptions { server_vae_tile_size: cfg.server_vae_tile_size() };
+            // Fork: Qwen-Image 2.1 changes all areas at once (the others got one pass per area above).
+            let regions = if plan.qwen_prompts { request.regions.clone() } else { Vec::new() };
+            let opts = pipeline::BackendOptions { server_vae_tile_size: cfg.server_vae_tile_size(), regions };
             let prepared = tokio::task::spawn_blocking(move || pipeline::prepare(&plan2, &prompt, seed, &images, mask_img.as_ref(), &opts))
                 .await
                 .map_err(AppError::internal)??;
@@ -1311,8 +1349,26 @@ impl Engine {
         // 6. Enlarge (ESRGAN), post-process and save.
         let post = Arc::new(post);
         let duration_start = started;
-        let mask_rec = mask.map(|(_, r)| r);
-        let mut records = Vec::with_capacity(contents.len());
+        // Fork: a pass before the last one: its result is the photo of the next pass, not saved.
+        if !last_pass {
+            let content = contents.into_iter().next().ok_or_else(|| AppError::internal("no image from a pass"))?;
+            let target = pipeline::enlarge_target(&post);
+            let how = EnlargeOptions { tile: plan.upscale_tile, blend: cfg.upscale_blend, prescale: cfg.upscale_prescale };
+            let (content, _) = self.enlarge(id, &client, content, target, esrgan.as_deref(), how, (1, 1)).await?;
+            let p = post.clone();
+            let icc2 = icc.clone();
+            let next = blocking(move || {
+                let pixels = pipeline::finish(content, &p)?;
+                let has_transparency = pixels.pixels().any(|px| px[3] != 255);
+                Ok(LoadedImage { pixels, format: "png", exif_orientation: 1, icc_profile: icc2, has_transparency, text: vec![] })
+            })
+            .await?;
+            images = vec![next];
+            continue;
+        }
+        let mask_rec = mask_rec_orig.clone();
+        // The record keeps the user's request (with all areas), not the last pass's.
+        let request = if n_passes > 1 { original.clone() } else { request };
         let count = contents.len() as u32;
         for (i, content) in contents.into_iter().enumerate() {
             let before = Size::new(content.width(), content.height());
@@ -1356,6 +1412,9 @@ impl Engine {
             }
             records.push(rec);
         }
+        break;
+        }
+        let request = original;
         let gen_ids: Vec<String> = records.iter().map(|r| r.id.clone()).collect();
         self.update(id, |j| {
             j.view.status = JobStatus::Done;

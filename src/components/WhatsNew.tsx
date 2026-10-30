@@ -20,7 +20,7 @@ const NEWS = [
   {
     icon: LayoutTemplate,
     title: "Layout: say where things go",
-    text: "For a new image, Layout (next to the aspect ratio) opens a canvas in the image's shape: draw rectangles, or outlines point by point, and write in each what goes there. FLUX.3 reads the areas directly, Qwen-Image 2.1 and Fibo 2.0 Dev follow them as a sketch, Krea 2 and MOSS-Image get the positions in words.",
+    text: "For a new image, Layout (next to the aspect ratio) opens a canvas in the image's shape: draw rectangles, outlines point by point or freehand, and write in each what goes there. Paint area has the same tools for a photo you edit. FLUX.3 reads the areas directly, Qwen-Image 2.1 and Fibo 2.0 Dev follow them as a sketch, Krea 2 and MOSS-Image get the positions in words.",
   },
   {
     icon: Layers,
