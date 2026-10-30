@@ -19,6 +19,8 @@ export type Point = [number, number];
 export type LayoutStyle = "sketch" | "native" | "words" | "none";
 
 export const MAX_BOXES = 12;
+/** The most areas in Paint area (the service's `MAX_REGIONS`: each has its own guide color). */
+export const MAX_REGIONS_UI = 8;
 /** The smallest box, as a fraction of the image side. */
 export const MIN_BOX = 0.03;
 
@@ -37,6 +39,42 @@ export function shapeBox(points: Point[], text = ""): LayoutBox {
 /** Whether a point (fractions) is within `px` screen pixels of another, on a canvas `cw`×`ch`. */
 export function near(a: Point, b: Point, cw: number, ch: number, px = 10): boolean {
   return Math.hypot((a[0] - b[0]) * cw, (a[1] - b[1]) * ch) <= px;
+}
+
+/** Ramer–Douglas–Peucker: the path with the points that keep its shape within `eps` (same units). */
+export function simplifyPath(points: Point[], eps: number): Point[] {
+  if (points.length < 3) return points.slice();
+  const [a, b] = [points[0], points[points.length - 1]];
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy);
+  let far = 0;
+  let at = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const p = points[i];
+    const d = len > 0 ? Math.abs(dy * p[0] - dx * p[1] + b[0] * a[1] - b[1] * a[0]) / len : Math.hypot(p[0] - a[0], p[1] - a[1]);
+    if (d > far) {
+      far = d;
+      at = i;
+    }
+  }
+  if (far <= eps) return [a, b];
+  const left = simplifyPath(points.slice(0, at + 1), eps);
+  return [...left.slice(0, -1), ...simplifyPath(points.slice(at), eps)];
+}
+
+/** A freehand path (fractions of a `cw`×`ch` px canvas) as an outline: simplified to points
+ * `px` apart in shape, at most `max` of them, the closing point dropped. Empty when too small. */
+export function freehandOutline(path: Point[], cw: number, ch: number, px = 3.5, max = 48): Point[] {
+  if (path.length < 3 || cw <= 0 || ch <= 0) return [];
+  const screen = path.map(([x, y]) => [x * cw, y * ch] as Point);
+  let eps = px;
+  let out = simplifyPath(screen, eps);
+  while (out.length > max) out = simplifyPath(screen, (eps *= 1.5));
+  // The path ends where it started (or near): one point for both.
+  if (out.length > 3 && Math.hypot(out[0][0] - out[out.length - 1][0], out[0][1] - out[out.length - 1][1]) <= px * 4) out = out.slice(0, -1);
+  const pts = out.map(([x, y]) => [x / cw, y / ch] as Point);
+  return pts.length >= 3 ? pts : [];
 }
 
 /** The outline with one point moved. */

@@ -302,6 +302,10 @@ pub struct GenerationRequest {
     /// (`LayoutStyle::Sketch`); unused by the others. Consumed by `layout::prepare_request`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout_sketch: Option<String>,
+    /// Fork: areas drawn on image 1 in Paint area, each with what goes there (fractions of image
+    /// 1). They are inside `mask`, which also holds any brushed rest (changed by `prompt`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub regions: Vec<crate::layout::LayoutBox>,
 }
 
 // ---------------------------------------------------------------------------------------

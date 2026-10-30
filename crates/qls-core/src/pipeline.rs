@@ -18,11 +18,15 @@ use crate::sdcpp::{Guidance, ImgGenRequest, SampleParams, VaeTilingParams, b64};
 pub struct BackendOptions {
     /// `--vae-tile-size` the server was launched with (0 = no server-side tiling).
     pub server_vae_tile_size: u32,
+    /// Fork: areas with a text on image 1 (`GenerationRequest::regions`), changed at once by
+    /// Qwen-Image 2.1's brushed edit (each marked in its own color). Other models paint them one
+    /// pass at a time (the engine), so they never get them here.
+    pub regions: Vec<crate::layout::LayoutBox>,
 }
 
 impl Default for BackendOptions {
     fn default() -> Self {
-        Self { server_vae_tile_size: 0 }
+        Self { server_vae_tile_size: 0, regions: Vec::new() }
     }
 }
 
@@ -312,9 +316,41 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             // Image 2 (guide): the area marked in a color named in the prompt. The model gets
             // no mask otherwise; the latent mask only discards changes outside it.
             let gc = plan.references.get(1).map(|r| r.canvas).ok_or_else(|| AppError::internal("missing inpaint guide plan"))?;
-            let (color_name, color) = imaging::pick_highlight(&content, &m_content);
             let guide_mask = imaging::resize_mask(&m_work, gc.content.width, gc.content.height);
-            let guide = imaging::highlight(&imaging::resize(&image1, gc.content.width, gc.content.height), &guide_mask, color);
+            // Fork: areas with a text, each in its own color; the brushed rest in the last one.
+            let regions_prompt = if opts.regions.is_empty() {
+                None
+            } else {
+                let (gw, gh) = (gc.content.width, gc.content.height);
+                let at_guide = |boxes: &[&crate::layout::LayoutBox]| {
+                    let full = crate::layout::rasterize(boxes, src_size.width, src_size.height);
+                    imaging::resize_mask(&imaging::crop_mask(&full, region), gw, gh)
+                };
+                let mut guide = imaging::resize(&image1, gw, gh);
+                // The brushed rest first (the user's own stroke, not the grown backend mask), kept a
+                // little away from the areas, so their colored outlines stay on top and unmixed.
+                let all: Vec<&crate::layout::LayoutBox> = opts.regions.iter().collect();
+                let areas = at_guide(&all);
+                let margin = (gw.max(gh) / 100).max(3);
+                let rest = crate::layout::subtract(&imaging::resize_mask(&m_content, gw, gh), &imaging::dilate(&areas, margin));
+                let has_rest = imaging::mask_coverage(&rest, 127) > 0.0005 && (!prompt.trim().is_empty() || action == InpaintAction::Remove);
+                let rest_color = crate::layout::REGION_COLORS[crate::layout::MAX_REGIONS];
+                if has_rest {
+                    guide = imaging::highlight(&guide, &rest, rest_color.1);
+                }
+                let mut named: Vec<(&str, &str)> = Vec::new();
+                for (k, r) in opts.regions.iter().take(crate::layout::MAX_REGIONS).enumerate() {
+                    let (name, color) = crate::layout::REGION_COLORS[k];
+                    guide = imaging::highlight(&guide, &at_guide(&[r]), color);
+                    named.push((name, r.text.as_str()));
+                }
+                Some((guide, crate::layout::regions_inpaint_prompt(&named, has_rest.then_some((rest_color.0, action, prompt)))))
+            };
+            let (color_name, color) = imaging::pick_highlight(&content, &m_content);
+            let guide = match &regions_prompt {
+                Some((g, _)) => g.clone(),
+                None => imaging::highlight(&imaging::resize(&image1, gc.content.width, gc.content.height), &guide_mask, color),
+            };
             drop(content);
 
             let image1_b64 = png_b64(&pad(&image1))?;
@@ -327,7 +363,10 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             if plan.reference_detail == Some(ReferenceDetail::Standard) {
                 req.ref_image_args = Some("resize_before_vae=false".into());
             }
-            req.prompt = inpaint_prompt(action, prompt, color_name);
+            req.prompt = match regions_prompt {
+                Some((_, p)) => p,
+                None => inpaint_prompt(action, prompt, color_name),
+            };
             req.mask_image = Some(gray_png_b64(&m_canvas)?);
             req.strength = plan.strength;
             req.image_preprocess = vec!["target=init,mode=none".into(), "target=mask,mode=none,filter=nearest-exact".into(), "target=ref,mode=none".into()];
@@ -616,7 +655,7 @@ mod tests {
         PlanInputs { image_sizes: sizes, vram_total_mib: Some(16303), upscaler: Some("4xNomos2_hq_mosr".into()), ..Default::default() }
     }
     fn esrgan_opts() -> BackendOptions {
-        BackendOptions { server_vae_tile_size: 768 }
+        BackendOptions { server_vae_tile_size: 768, ..Default::default() }
     }
 
     #[test]
@@ -900,6 +939,38 @@ mod tests {
         let p = plan(&r, &inputs, &RecommendedSettings::default()).unwrap();
         let j = prepare(&p, &r.prompt, 1, std::slice::from_ref(&img), Some(&m), &BackendOptions::default()).unwrap();
         (img, m, j)
+    }
+
+    #[test]
+    fn qwen_marks_each_area_in_its_own_color() {
+        // Two areas side by side plus a brushed stroke below them, all in the mask.
+        let img = photo(900, 700);
+        let left = crate::layout::LayoutBox { x: 0.4, y: 0.4, w: 0.05, h: 0.1, text: "a red apple".into(), points: vec![] };
+        let right = crate::layout::LayoutBox { x: 0.5, y: 0.4, w: 0.05, h: 0.1, text: "a blue cup".into(), points: vec![] };
+        let mut m = crate::layout::rasterize(&[&left, &right], 900, 700);
+        for y in 360..420 {
+            for x in 300..600 {
+                m.put_pixel(x, y, Luma([255]));
+            }
+        }
+        let mut r = req("make the table wooden");
+        r.mask = Some("input:m".into());
+        let inputs = PlanInputs {
+            image_sizes: vec![img.size()],
+            mask: Some((Size::new(900, 700), imaging::mask_bbox(&m, 127), imaging::mask_coverage(&m, 127))),
+            vram_total_mib: Some(16303),
+            ..Default::default()
+        };
+        let p = plan(&r, &inputs, &RecommendedSettings::default()).unwrap();
+        let opts = BackendOptions { regions: vec![left, right], ..Default::default() };
+        let j = prepare(&p, &r.prompt, 1, std::slice::from_ref(&img), Some(&m), &opts).unwrap();
+        let g = decode(&j.request.ref_images[1]);
+        let has = |c: [u8; 3]| g.pixels().any(|p| p[0] == c[0] && p[1] == c[1] && p[2] == c[2]);
+        assert!(has([255, 0, 0]) && has([0, 80, 255]) && has([255, 255, 255]), "red, blue and the rest in white");
+        let pr = &j.request.prompt;
+        assert!(pr.contains("marked in red, a red apple; inside the area marked in blue, a blue cup; in the area marked in white, make the table wooden"), "{pr}");
+        // Without areas: the usual single color.
+        assert!(!prepare(&p, &r.prompt, 1, std::slice::from_ref(&img), Some(&m), &BackendOptions::default()).unwrap().request.prompt.contains("blue"));
     }
 
     #[test]
