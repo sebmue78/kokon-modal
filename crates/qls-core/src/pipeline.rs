@@ -144,6 +144,17 @@ pub fn inpaint_prompt(action: InpaintAction, prompt: &str, color: &str) -> Strin
     }
 }
 
+/// Fork: FLUX.3 Image Klein's box format (as in Layout) for the area of a brushed edit: `rect` (in
+/// image 1's content, placed at `offset` on a `canvas`-sized image) as `[top, left, bottom, right]` on
+/// 0..1000 of image 1, with what goes there.
+pub fn with_area_box(prompt: &str, rect: Rect, offset: (u32, u32), canvas: Size, what: &str) -> String {
+    let k = |v: u32, total: u32| ((v as f64 / total.max(1) as f64) * 1000.0).round().clamp(0.0, 1000.0) as u32;
+    let (x0, y0) = (rect.x + offset.0, rect.y + offset.1);
+    let bbox = [k(y0, canvas.height), k(x0, canvas.width), k(y0 + rect.height, canvas.height), k(x0 + rect.width, canvas.width)];
+    let what = if what.trim().is_empty() { "the change" } else { what.trim() };
+    format!("{prompt}\n{}", serde_json::json!([{ "id": "area", "bbox": bbox, "desc": what }]))
+}
+
 /// Fork: `<image1>` written as "image 1", the way FLUX.3 Image Klein's prompts name their
 /// reference images (in order).
 pub fn image_words(prompt: &str) -> String {
@@ -381,6 +392,16 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             // Fork: the images named in the edit model's own form (Fibo 2.0 `<image_1>`, FLUX.3 "image 1").
             if !plan.qwen_prompts {
                 req.prompt = if plan.underscore_image_tags { underscore_image_tags(&req.prompt) } else { image_words(&req.prompt) };
+                // They place new things where they see fit and the mask keeps only what falls inside
+                // it: say to use the whole area, and give FLUX.3 the area in its own box format too.
+                if matches!(action, InpaintAction::Replace | InpaintAction::Add | InpaintAction::Edit) {
+                    req.prompt = req.prompt.replacen(" Match the scene's", " Use the whole marked area for it. Match the scene's", 1);
+                    if !plan.underscore_image_tags
+                        && let Some(b) = imaging::mask_bbox(&m_content, 127)
+                    {
+                        req.prompt = with_area_box(&req.prompt, b, wc.content_offset, wc.canvas, &action.subject(prompt));
+                    }
+                }
             }
             req.mask_image = Some(gray_png_b64(&m_canvas)?);
             req.strength = plan.strength;

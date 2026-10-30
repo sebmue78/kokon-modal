@@ -145,10 +145,18 @@ fn flux_brushed_edits_see_the_photo_and_the_marked_area() {
     let pr = &j.request.prompt;
     assert!(pr.contains("In image 1, replace what is inside the area marked in") && pr.contains("in image 2 with a red apple"), "{pr}");
     assert!(!pr.contains("<image"), "{pr}");
+    // The whole area, and where it is in FLUX.3's box format (the box 300..360 × 400..480 of 900×700).
+    assert!(pr.contains("Use the whole marked area for it."), "{pr}");
+    let json = pr.split('\n').nth(1).expect("a box line");
+    let v: serde_json::Value = serde_json::from_str(json).unwrap();
+    assert_eq!(v[0]["desc"], "a red apple");
+    let bb: Vec<u64> = v[0]["bbox"].as_array().unwrap().iter().map(|x| x.as_u64().unwrap()).collect();
+    assert!(bb[0] < bb[2] && bb[1] < bb[3] && bb[2] - bb[0] < 400 && bb[3] - bb[1] < 400, "{bb:?}");
     // Fibo 2.0 names them its own way.
     let pf = plan(&r, &pi, &RecommendedSettings::fibo2_dev()).unwrap();
     let jf = prepare(&pf, &r.prompt, 1, std::slice::from_ref(&img), Some(&m), &BackendOptions::default()).unwrap();
     assert!(jf.request.prompt.contains("<image_1>") && jf.request.prompt.contains("<image_2>"), "{}", jf.request.prompt);
+    assert!(!jf.request.prompt.contains("bbox"), "the box format is FLUX.3's");
     // Krea 2 has no reference edits: plain masked inpainting.
     let pk = plan(&r, &pi, &RecommendedSettings::krea2_turbo()).unwrap();
     let jk = prepare(&pk, &r.prompt, 1, std::slice::from_ref(&img), Some(&m), &BackendOptions::default()).unwrap();
