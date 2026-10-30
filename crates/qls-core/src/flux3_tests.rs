@@ -146,7 +146,7 @@ fn flux_brushed_edits_see_the_photo_and_the_marked_area() {
     assert!(pr.contains("In image 1, replace what is inside the area marked in") && pr.contains("in image 2 with a red apple"), "{pr}");
     assert!(!pr.contains("<image"), "{pr}");
     // The whole area, and where it is in FLUX.3's box format (the box 300..360 × 400..480 of 900×700).
-    assert!(pr.contains("Use the whole marked area for it."), "{pr}");
+    assert!(pr.contains("Make it fit completely inside the marked area, nothing cut off at its edges."), "{pr}");
     let json = pr.split('\n').nth(1).expect("a box line");
     let v: serde_json::Value = serde_json::from_str(json).unwrap();
     assert_eq!(v[0]["desc"], "a red apple");
