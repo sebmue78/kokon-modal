@@ -45,8 +45,8 @@ are downloaded the first time you choose them (the app asks first, then shows th
 | Model | What it does | Steps | Prompt+ | License (check before commercial use) |
 | --- | --- | --- | --- | --- |
 | **Qwen-Image 2.1 Turbo** (Alibaba Qwen) | New images, every kind of edit, combining images | 8 | yes | Qwen Research License: research and evaluation only, non-commercial |
-| **FLUX.3 Image Klein** (Black Forest Labs, 5.6B) | New images, edits of a whole photo, combining up to 10 images; brushed changes as plain inpainting | 16 | yes, recommended | FLUX Kommunity License: non-commercial; commercial use of images only for qualifying users |
-| **Fibo 2.0 Dev** (Bria, 8B) | New images, edits of a whole photo, combining up to 10 images (`<image_1>`, `<image_2>`); brushed changes as plain inpainting | 20, CFG 5 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
+| **FLUX.3 Image Klein** (Black Forest Labs, 5.6B) | New images, edits of a whole photo, combining up to 10 images, brushed changes and areas (seeing the photo) | 16 | yes, recommended | FLUX Kommunity License: non-commercial; commercial use of images only for qualifying users |
+| **Fibo 2.0 Dev** (Bria, 8B) | New images, edits of a whole photo, combining up to 10 images (`<image_1>`, `<image_2>`), brushed changes and areas (seeing the photo) | 20, CFG 5 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
 | **Fibo 2.0 Edit Turbo** (Bria, 8B) | Fast edits of a whole photo and combining images; no new images from text | 4 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
 | **Krea 2 Turbo** (Krea, 12.9B) | New images from text, up to 2K; brushed changes and Expand as plain inpainting | 8 | yes | Krea 2 Community License |
 | **MOSS-Image SFT** (OpenMOSS, 5B) | New images from text, with CFG and negative prompts; brushed changes and Expand | 20 | no (its Qwen3.5 encoder can't write text in the engine) | Apache-2.0 |

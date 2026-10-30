@@ -117,7 +117,7 @@ fn flux_combines_several_images() {
 }
 
 #[test]
-fn flux_brushed_edits_are_plain_masked_inpainting() {
+fn flux_brushed_edits_see_the_photo_and_the_marked_area() {
     let rec = RecommendedSettings::flux3_klein();
     let mut img = photo(900, 700);
     let mut m = GrayImage::new(900, 700);
@@ -138,8 +138,21 @@ fn flux_brushed_edits_are_plain_masked_inpainting() {
     };
     let p = plan(&r, &pi, &rec).unwrap();
     let j = prepare(&p, &r.prompt, 1, std::slice::from_ref(&img), Some(&m), &BackendOptions::default()).unwrap();
-    assert!(j.request.ref_images.is_empty() && j.request.mask_image.is_some());
-    assert!(!j.request.prompt.contains("<image"), "no Qwen guide instruction: {}", j.request.prompt);
+    // The photo and a guide with the area marked, as for Qwen-Image 2.1 (plain inpainting drew the
+    // subject at the scale of a whole picture), with the images named as FLUX.3's prompts do.
+    assert_eq!(j.request.ref_images.len(), 2, "region + guide");
+    assert!(j.request.mask_image.is_some() && j.request.init_image.is_some());
+    let pr = &j.request.prompt;
+    assert!(pr.contains("In image 1, replace what is inside the area marked in") && pr.contains("in image 2 with a red apple"), "{pr}");
+    assert!(!pr.contains("<image"), "{pr}");
+    // Fibo 2.0 names them its own way.
+    let pf = plan(&r, &pi, &RecommendedSettings::fibo2_dev()).unwrap();
+    let jf = prepare(&pf, &r.prompt, 1, std::slice::from_ref(&img), Some(&m), &BackendOptions::default()).unwrap();
+    assert!(jf.request.prompt.contains("<image_1>") && jf.request.prompt.contains("<image_2>"), "{}", jf.request.prompt);
+    // Krea 2 has no reference edits: plain masked inpainting.
+    let pk = plan(&r, &pi, &RecommendedSettings::krea2_turbo()).unwrap();
+    let jk = prepare(&pk, &r.prompt, 1, std::slice::from_ref(&img), Some(&m), &BackendOptions::default()).unwrap();
+    assert!(jk.request.ref_images.is_empty() && !jk.request.prompt.contains("image"), "{}", jk.request.prompt);
 }
 
 #[test]

@@ -144,6 +144,13 @@ pub fn inpaint_prompt(action: InpaintAction, prompt: &str, color: &str) -> Strin
     }
 }
 
+/// Fork: `<image1>` written as "image 1", the way FLUX.3 Image Klein's prompts name their
+/// reference images (in order).
+pub fn image_words(prompt: &str) -> String {
+    static TAG: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)<image[ _]?(\d+)>").unwrap());
+    TAG.replace_all(prompt, "image $1").into_owned()
+}
+
 /// Fork: `<image1>`, `<image 2>` and `<image_3>` written as `<image_N>`, the form Fibo 2.0's
 /// prompts use (its docs: "instructions can refer to `<image_1>`, `<image_2>`").
 pub fn underscore_image_tags(prompt: &str) -> String {
@@ -299,8 +306,12 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             // the model rebuilds background instead of copying the object back.
             let pad = |img: &RgbaImage| imaging::pad_edge(img, wc.canvas, wc.content_offset);
             let image1 = if action == InpaintAction::Remove { imaging::fill_masked(&content, &m_work) } else { content.clone() };
-            if !plan.qwen_prompts {
-                // Plain masked inpainting: the latent mask alone tells the model where to paint.
+            // Fork: the edit models (FLUX.3, Fibo 2.0) take the brushed edit like Qwen-Image 2.1: the
+            // region as a reference, a guide with the area marked, an instruction. Plain masked
+            // inpainting only sees the words, so it drew the subject at the scale of a whole picture
+            // (an old man's head filling the area) and ignored the scene.
+            if !plan.qwen_prompts && !plan.reference_edits {
+                // Plain masked inpainting (Krea 2, MOSS-Image): the latent mask alone tells the model where to paint.
                 drop(content);
                 req.init_image = Some(png_b64(&pad(&image1))?);
                 req.prompt = plain_inpaint_prompt(action, prompt);
@@ -367,6 +378,10 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
                 Some((_, p)) => p,
                 None => inpaint_prompt(action, prompt, color_name),
             };
+            // Fork: the images named in the edit model's own form (Fibo 2.0 `<image_1>`, FLUX.3 "image 1").
+            if !plan.qwen_prompts {
+                req.prompt = if plan.underscore_image_tags { underscore_image_tags(&req.prompt) } else { image_words(&req.prompt) };
+            }
             req.mask_image = Some(gray_png_b64(&m_canvas)?);
             req.strength = plan.strength;
             req.image_preprocess = vec!["target=init,mode=none".into(), "target=mask,mode=none,filter=nearest-exact".into(), "target=ref,mode=none".into()];

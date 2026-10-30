@@ -1,13 +1,8 @@
-- **New: Freehand.** Layout has a third tool next to Rectangle and Outline: hold the mouse and draw
-  around an area; it closes when you let go and becomes an outline whose points you can still move.
-- **New: areas in Paint area.** When you edit a photo, Paint area now has Rectangle, Outline and
-  Freehand next to the brush. Every area you draw is changed. Write in an area what goes there, or
-  leave it empty and your prompt changes it, like a brushed stroke. With areas that have a text, the
-  prompt is optional. At most 8 areas.
-  - **Qwen-Image 2.1** changes all areas at once: each is marked in its own color in the image it
-    follows, with the text for that color.
-  - **FLUX.3, Fibo 2.0, Krea 2 and MOSS-Image** change one area at a time: one pass per area, each
-    starting from the result of the one before, saved as one image. Three areas take about three
-    times as long; the progress card says which pass is running.
-- Reopening an edit from the gallery brings its areas back.
-- Not tried on a GPU yet: how well each model follows several areas. Please report what you notice.
+- **Fix: FLUX.3 and Fibo 2.0 in Paint area.** Brushed changes and areas with these two models were
+  plain masked inpainting: the model saw only the text, not the photo. It drew the subject as if it
+  were a whole picture (an old man's head filling the area instead of an old man sitting there) and
+  ignored the scene. They now edit the way Qwen-Image 2.1 does: they see the photo and a copy with the
+  area marked, and get an instruction to change only that area, matching the scene's lighting,
+  perspective and scale. Areas are still painted one per pass.
+- Krea 2 and MOSS-Image can't see a photo (no reference images in the engine), so they stay plain
+  inpainting. Give them a short description of the scene in the prompt for better fitting results.
