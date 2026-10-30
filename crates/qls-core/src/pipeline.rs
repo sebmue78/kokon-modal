@@ -392,10 +392,11 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             // Fork: the images named in the edit model's own form (Fibo 2.0 `<image_1>`, FLUX.3 "image 1").
             if !plan.qwen_prompts {
                 req.prompt = if plan.underscore_image_tags { underscore_image_tags(&req.prompt) } else { image_words(&req.prompt) };
-                // They place new things where they see fit and the mask keeps only what falls inside
-                // it: say to use the whole area, and give FLUX.3 the area in its own box format too.
+                // They size new things for the scene and the mask keeps only what falls inside it (a
+                // head or feet were cut off): say it must fit inside, and give FLUX.3 the area in its
+                // own box format too.
                 if matches!(action, InpaintAction::Replace | InpaintAction::Add | InpaintAction::Edit) {
-                    req.prompt = req.prompt.replacen(" Match the scene's", " Use the whole marked area for it. Match the scene's", 1);
+                    req.prompt = req.prompt.replacen(" Match the scene's", " Make it fit completely inside the marked area, nothing cut off at its edges. Match the scene's", 1);
                     if !plan.underscore_image_tags
                         && let Some(b) = imaging::mask_bbox(&m_content, 127)
                     {

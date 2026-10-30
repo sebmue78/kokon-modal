@@ -292,6 +292,13 @@ pub struct Pass {
     pub mask: GrayImage,
 }
 
+/// An area's mask grown by a small margin (4% of its larger side): a drawn area is a rough
+/// outline, and a subject that reaches just past it (a head, a shoe) is kept instead of cut off.
+pub fn with_margin(mask: &GrayImage, area: &LayoutBox, w: u32, h: u32) -> GrayImage {
+    let side = (area.w * w as f32).max(area.h * h as f32);
+    crate::imaging::dilate(mask, ((side * 0.04).round() as u32).max(3))
+}
+
 /// The passes of an edit with areas for a plain-inpainting model (FLUX.3, Fibo 2.0, Krea 2,
 /// MOSS-Image): first the brushed rest with the user's prompt (if there is a rest and a prompt),
 /// then each area with its text, in order. Each pass starts from the result of the one before.
@@ -306,7 +313,7 @@ pub fn passes(request: &GenerationRequest, mask: &GrayImage) -> Vec<Pass> {
     }
     for r in &request.regions {
         // The area's text says what goes there: a replacement, fitted into the scene.
-        out.push(Pass { prompt: r.text.clone(), action: InpaintAction::Replace, mask: rasterize(&[r], w, h) });
+        out.push(Pass { prompt: r.text.clone(), action: InpaintAction::Replace, mask: with_margin(&rasterize(&[r], w, h), r, w, h) });
     }
     out
 }
@@ -379,6 +386,9 @@ mod tests {
         assert_eq!(p[1].action, InpaintAction::Replace);
         assert_eq!(p[0].mask.pixels().filter(|v| v[0] > 127).count(), 1000, "the rest is the stroke only");
         assert_eq!(p[2].mask.get_pixel(60, 60)[0], 255);
+        // A little past the area (25 px wide at 100 px: a 3 px margin), not much more.
+        assert_eq!(p[2].mask.get_pixel(48, 60)[0], 255);
+        assert_eq!(p[2].mask.get_pixel(45, 60)[0], 0);
         // Without a prompt the stroke is left out: only the areas.
         let r = GenerationRequest { regions, ..Default::default() };
         assert_eq!(passes(&r, &mask).len(), 2);
