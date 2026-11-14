@@ -76,18 +76,67 @@ fn service_exe() -> Option<PathBuf> {
     None
 }
 
-fn spawn_service() -> Result<(), String> {
+/// The service's own output while it runs: a crash before it opens its log (an unsupported
+/// processor, a missing library) leaves its reason here (#53). In the temp folder, not the data
+/// folder, which the service creates (and moves from the old name) itself.
+fn start_log() -> PathBuf {
+    std::env::temp_dir().join("kokon-service-start.log")
+}
+
+const NO_AVX: &str = "This processor does not support AVX instructions, which Kokon Modal needs (most processors made since 2011 have them), so Kokon Modal cannot run on this computer.";
+
+/// Kokon's engine and libraries are built for x86 processors with AVX: one without it (a 2010
+/// Xeon, #53) stopped with "Illegal instruction" before writing anything.
+fn cpu_unsupported() -> Option<&'static str> {
+    #[cfg(target_arch = "x86_64")]
+    if !std::arch::is_x86_feature_detected!("avx") {
+        return Some(NO_AVX);
+    }
+    None
+}
+
+fn spawn_service() -> Result<std::process::Child, String> {
+    if let Some(why) = cpu_unsupported() {
+        return Err(why.into());
+    }
     let exe = service_exe().ok_or("kokon-service was not found next to the application.")?;
     let mut cmd = std::process::Command::new(exe);
-    cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    let err = std::fs::File::create(start_log()).map(std::process::Stdio::from).unwrap_or_else(|_| std::process::Stdio::null());
+    cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(err);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         // CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP: survives independently of this window.
         cmd.creation_flags(0x0800_0000 | 0x0000_0200);
     }
-    cmd.spawn().map_err(|e| format!("Could not start the Kokon Modal service: {e}"))?;
-    Ok(())
+    cmd.spawn().map_err(|e| format!("Could not start the Kokon Modal service: {e}"))
+}
+
+/// Why the service stopped while starting: an illegal instruction means the processor lacks
+/// something it was built for; otherwise the exit status and the last lines it wrote.
+fn start_failure(status: std::process::ExitStatus) -> String {
+    #[cfg(unix)]
+    let illegal = {
+        use std::os::unix::process::ExitStatusExt;
+        status.signal() == Some(4) // SIGILL
+    };
+    #[cfg(windows)]
+    let illegal = status.code() == Some(0xC000_001Du32 as i32); // STATUS_ILLEGAL_INSTRUCTION
+    #[cfg(not(any(unix, windows)))]
+    let illegal = false;
+    if illegal {
+        return "The Kokon Modal service stopped with an illegal instruction: this processor lacks instructions Kokon Modal is built for (AVX or newer).".into();
+    }
+    let text = std::fs::read_to_string(start_log()).unwrap_or_default();
+    let tail: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    let tail = tail[tail.len().saturating_sub(5)..].join("
+");
+    if tail.is_empty() {
+        format!("The Kokon Modal service stopped while starting ({status}).")
+    } else {
+        format!("The Kokon Modal service stopped while starting ({status}):
+{tail}")
+    }
 }
 
 /// Asks the service to exit (it also stops sd-server unless kept loaded) and waits until it
@@ -117,7 +166,7 @@ fn ensure_service(shared: &Shared) -> Result<ServiceInfo, String> {
         // Left running by the previous version (e.g. just updated): replace it.
         stop_service(&i);
     }
-    spawn_service()?;
+    let mut child = spawn_service()?;
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(20) {
         std::thread::sleep(Duration::from_millis(250));
@@ -126,8 +175,15 @@ fn ensure_service(shared: &Shared) -> Result<ServiceInfo, String> {
         {
             return Ok(i);
         }
+        if let Ok(Some(status)) = child.try_wait() {
+            return Err(start_failure(status));
+        }
     }
-    Err(format!("The Kokon Modal service did not start. See {}.", data_dir().join("logs").join("service.log").display()))
+    Err(format!(
+        "The Kokon Modal service did not start. See {} and {}.",
+        data_dir().join("logs").join("service.log").display(),
+        start_log().display()
+    ))
 }
 
 fn heartbeat(info: &ServiceInfo) -> bool {
@@ -205,6 +261,23 @@ async fn read_clipboard_image(app: tauri::AppHandle) -> Result<tauri::ipc::Respo
     Ok(tauri::ipc::Response::new(png))
 }
 
+/// The Layers lab's .psd (the request's raw body): asks where to save it, writes it there. Returns
+/// the path, or null when the dialog is cancelled.
+#[tauri::command]
+async fn save_psd(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else { return Err("No file to save.".into()) };
+    let data = data.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = app.dialog().file().set_file_name("Layers.psd").add_filter("Photoshop", &["psd"]).blocking_save_file() else { return Ok(None) };
+        let path = path.into_path().map_err(|e| e.to_string())?;
+        std::fs::write(&path, data).map_err(|e| format!("Could not save the file: {e}"))?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Before installing an update: stop the service so the installer can replace it.
 #[tauri::command]
 async fn prepare_update(state: tauri::State<'_, Arc<Shared>>) -> Result<(), String> {
@@ -240,7 +313,8 @@ fn open_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
 #[tauri::command]
 fn open_link(app: tauri::AppHandle, url: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let allowed = ["https://github.com/", "https://huggingface.co/", "https://kokon.app/"];
+    // youtu.be: the video guides (src/lib/videos.ts), opened in the browser, never embedded.
+    let allowed = ["https://github.com/", "https://huggingface.co/", "https://kokon.app/", "https://youtu.be/"];
     if !allowed.iter().any(|p| url.starts_with(p)) || url.chars().any(|c| c.is_whitespace() || c == '"') {
         return Err("This link cannot be opened from the app.".into());
     }
@@ -305,7 +379,7 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![connect, copy_image, read_clipboard_image, reveal, open_folder, open_link, data_folder, prepare_update])
+        .invoke_handler(tauri::generate_handler![connect, copy_image, read_clipboard_image, save_psd, reveal, open_folder, open_link, data_folder, prepare_update])
         .build(tauri::generate_context!())
         .expect("error while building Kokon Modal");
     app.run(move |_handle, event| {

@@ -85,10 +85,14 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   the box around them. FLUX.3 reads the boxes natively (its `bbox` caption format); Qwen-Image 2.1 and Fibo 2.0
   Dev get the drawing as a reference image to follow as a plan; Krea 2 and MOSS-Image get the
   positions in words (approximate). Prompt+ writes the scene first, then the boxes are added.
-- **Areas when editing a photo.** Paint area has Rectangle, Outline and Freehand next to the brush:
-  each area is changed, as its own text says (or as the prompt says, if it has none). Qwen-Image 2.1
+- **Areas when editing a photo.** Next to Kokon's Colours, Paint area's One area has Rectangle,
+  Outline and Freehand beside the brush and Select: each area is changed, as its own text says (or as the prompt says, if it has none). Qwen-Image 2.1
   changes all areas at once (each marked in its own color in its guide image); FLUX.3, Fibo 2.0,
   Krea 2 and MOSS-Image paint one area per pass, each pass starting from the one before.
+- **Kokon's new features with every model where they can work.** Colours in Paint area needs a
+  model that sees the photo (Qwen-Image 2.1, FLUX.3, Fibo 2.0); with Krea 2 and MOSS-Image it is
+  switched off and One area is used. The Layers lab and More like this are Kokon's and tried with
+  Qwen-Image 2.1 only.
 - **A second GPU.** With several graphics cards, Settings → Performance → Second GPU runs the text
   encoder and the image decoder on another card (`--backend diffusion=cuda0,vae=cuda1,te=cuda1`):
   faster prompts and Prompt+, and the first card for the image model alone. One image still runs
@@ -99,8 +103,8 @@ FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardwa
   can be installed and run at the same time, and neither touches the other's files or processes.
 - **Updates from this repository.** Kokon Modal checks this fork once a day (Settings → General can
   turn it off or check now) and installs a new version in one click; updates are signed with the
-  fork's own key. Every release has its own, higher version: Kokon's version with a build number (`0.11.1014` =
-  Kokon 0.11.1, build 14).
+  fork's own key. Every release has its own, higher version: Kokon's version with a build number (`0.12.1024` =
+  Kokon 0.12.1, build 24).
 - Small fixes: the setup's file list no longer garbles rows waiting to download.
 
 ## Install
@@ -168,6 +172,13 @@ Kokon Modal keeps all of Kokon's features: brushed edits, Expand, the upscalers,
 mode, other devices in a browser, the HTTP API and the MCP server for AI agents (they talk to Kokon
 Modal's own service and data folder). They are described in
 [Kokon's README](https://github.com/GabrieleLozupone/kokon#readme) and in [docs/](docs/).
+
+Every image Kokon makes or changes with AI is marked as such, as the EU AI Act asks: in the file's
+metadata (IPTC Digital Source Type) and with an invisible watermark ([TrustMark](https://github.com/adobe/trustmark),
+the text `Kokon-AI`) that survives JPEG, resizing and screenshots. Please don't remove these
+marks. If you publish a realistic image of real people, places or events, say that it was made
+or changed with AI. Settings → General → **Check an image** reads the marks of any image;
+[docs/ai-marking.md](docs/ai-marking.md) has the details.
 
 ## License
 

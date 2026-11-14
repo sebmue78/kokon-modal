@@ -143,7 +143,7 @@ fn flux_brushed_edits_see_the_photo_and_the_marked_area() {
     assert_eq!(j.request.ref_images.len(), 2, "region + guide");
     assert!(j.request.mask_image.is_some() && j.request.init_image.is_some());
     let pr = &j.request.prompt;
-    assert!(pr.contains("In image 1, replace what is inside the area marked in") && pr.contains("in image 2 with a red apple"), "{pr}");
+    assert!(pr.starts_with("In image 1, the area marked in") && pr.contains("in image 2 has been blurred out") && pr.contains("with a red apple"), "{pr}");
     assert!(!pr.contains("<image"), "{pr}");
     // The whole area, and where it is in FLUX.3's box format (the box 300..360 × 400..480 of 900×700).
     assert!(pr.contains("Make it fit completely inside the marked area, nothing cut off at its edges."), "{pr}");

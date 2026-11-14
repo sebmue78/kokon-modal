@@ -5,9 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError, configure, setSignedOutHandler } from "./lib/api";
 import { native } from "./lib/native";
 import { inBrowser, isNarrow, useNarrow } from "./lib/platform";
-import { macEngineOfferDue } from "./lib/logic";
+import { macEngineDefaultDue } from "./lib/logic";
 import {
-  addExampleProjects, closeStarPrompt, loadProjects, dismissToast, getState, initStarPrompt, redoVersion, refreshLoras, refreshStatus, selectItem, setState, startEvents, startTour, submitComposer, toastError, toastInfo, undoVersion, useStore,
+  addExampleProjects, closeStarPrompt, loadProjects, dismissToast, getState, initStarPrompt, redoVersion, refreshLoras, refreshStatus, selectItem, setState, startEvents, startTour, submitComposer, toastError, toastInfo, turnOnMacEngine, undoVersion, useStore,
 } from "./lib/store";
 import { Composer, importPaths, uploadFiles } from "./components/Composer";
 import { Login } from "./components/Login";
@@ -15,6 +15,7 @@ import { ExpandEditor } from "./components/ExpandEditor";
 import { LayoutEditor } from "./components/LayoutEditor";
 import { Gallery } from "./components/Gallery";
 import { InpaintEditor } from "./components/InpaintEditor";
+import { LayersEditor } from "./components/LayersEditor";
 import { Settings as SettingsDialog } from "./components/Settings";
 import { Setup } from "./components/Setup";
 import { Sidebar } from "./components/Sidebar";
@@ -22,8 +23,8 @@ import { Stage } from "./components/Stage";
 import { Tour } from "./components/Tour";
 import { PromptTips } from "./components/PromptTips";
 import { Shortcuts } from "./components/Shortcuts";
+import { AiCheck } from "./components/AiCheck";
 import { WhatsNew, whatsNewDue } from "./components/WhatsNew";
-import { MacEngineOffer } from "./components/MacEngineOffer";
 import { UpscalerCompare } from "./components/Upscalers";
 import { KokonMark, Welcome } from "./components/Welcome";
 import { PhoneApp } from "./components/PhoneApp";
@@ -171,9 +172,10 @@ export default function App() {
         // After an app update: what's new, with the engine and model downloads the release offers
         // (they can be postponed there). Closing it goes on with afterStartScreens.
         const whatsNew = cfg.setupComplete && whatsNewDue(ui, st?.engine);
-        // Otherwise, once on a Mac: Kokon's Mac engine (before the model loads, on the engine chosen).
-        const macOffer = !inBrowser && welcomeSeen && !whatsNew && macEngineOfferDue(st, ui, cfg.setupComplete);
-        setState({ needsSetup: !cfg.setupComplete, ...(!welcomeSeen ? { overlay: "welcome" } : whatsNew ? { overlay: "whats-new" } : macOffer ? { overlay: "mac-engine" } : {}) });
+        // Otherwise, once on a Mac: Kokon's Mac engine switched on (the default there since 0.12), before the model loads.
+        const macOn = !inBrowser && welcomeSeen && !whatsNew && macEngineDefaultDue(st, ui, cfg.setupComplete);
+        setState({ needsSetup: !cfg.setupComplete, ...(!welcomeSeen ? { overlay: "welcome" } : whatsNew ? { overlay: "whats-new" } : {}) });
+        if (macOn) await turnOnMacEngine();
         setBoot("ok");
         if (!inBrowser) autoCheckForUpdate();
         // Own model files that run but don't suit Kokon's 8 steps (the base model instead of Turbo).
@@ -182,9 +184,9 @@ export default function App() {
             const w = m.active.source === "user" ? m.slots.find((x) => x.role === "diffusion")?.info?.warning : null;
             if (w) toastError(new ApiError({ code: "model_warning", message: w, suggestion: "Settings → Models: download the official files, or use other files of your own." }, 200));
           }, () => {});
-        // Preload the model so the first generation starts immediately. After What's new or the Mac offer instead
-        // (afterStartScreens): not a file or engine about to be replaced, and on the engine the user picks.
-        if (cfg.setupComplete && !whatsNew && !macOffer && st && st.server.state === "stopped") api.startBackend().then(refreshStatus, () => refreshStatus());
+        // Preload the model so the first generation starts immediately (on the Mac engine when it was just switched
+        // on). After What's new instead (afterStartScreens): not a file or engine about to be replaced.
+        if (cfg.setupComplete && !whatsNew && st && st.server.state === "stopped") api.startBackend().then(refreshStatus, () => refreshStatus());
       } catch (e) {
         setBoot(String(e));
       }
@@ -336,7 +338,7 @@ export default function App() {
         ) : (
           <div className="failed">
             <strong>{inBrowser ? "Could not reach Kokon Modal" : "Could not start the local service"}</strong>
-            <span>{boot}</span>
+            <span style={{ whiteSpace: "pre-line" }}>{boot}</span>
             <button className="btn" onClick={() => location.reload()}>
               Try again
             </button>
@@ -352,9 +354,9 @@ export default function App() {
       {overlay === "settings" && <SettingsDialog />}
       {overlay === "welcome" && <Welcome />}
       {overlay === "whats-new" && <WhatsNew />}
-      {overlay === "mac-engine" && <MacEngineOffer />}
       {overlay === "prompt-tips" && <PromptTips />}
       {overlay === "shortcuts" && <Shortcuts />}
+      {overlay === "ai-check" && <AiCheck />}
       {compareUpscalers && <UpscalerCompare />}
     </>
   );
@@ -381,6 +383,7 @@ export default function App() {
           {overlay === "inpaint" && <InpaintEditor />}
           {overlay === "expand" && <ExpandEditor />}
           {overlay === "layout" && <LayoutEditor />}
+          {overlay === "layers" && <LayersEditor />}
           {dragging && <div className="drop-hint">{editing ? "Drop to add as a reference image" : "Drop an image to start editing it"}</div>}
         </div>
         {!needsSetup && overlay !== "inpaint" && overlay !== "expand" && overlay !== "layout" && overlay !== "gallery" && <Composer />}

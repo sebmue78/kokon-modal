@@ -1,26 +1,21 @@
-import { AppWindow, CircleAlert, Cpu, Hourglass, Layers, LayoutTemplate, MousePointerClick, Save } from "lucide-react";
+import { AppWindow, CircleAlert, CirclePlay, Cpu, FolderTree, Images, Layers, LayoutTemplate } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { formatBytes, installProgress, installStep, installTimeLeft, modelChoiceUi, modelOfferDue, whatsNewDue as due } from "../lib/logic";
-import { inBrowser } from "../lib/platform";
 import { afterStartScreens, refreshStatus, setState, toastError, useStore } from "../lib/store";
 import type { GpuBackend, InstallItem, InstallStatus, ModelsStatus } from "../lib/types";
+import { native } from "../lib/native";
+import { VIDEOS } from "../lib/videos";
 import { KokonMark } from "./Welcome";
 
 /** The release these notes describe. Shown once to people updating from an earlier version. */
-export const WHATS_NEW_VERSION = "0.11.2";
-
-const MAC_NEWS = {
-  icon: Cpu,
-  title: "A faster Mac engine",
-  text: "Kokon's Mac engine 0.1.1: on macOS 26 the CPU's matrix unit and the Neural Engine now work beside the GPU too (about a fifth faster on an M5 Pro), and on M3, M4 and M5 Macs each step is 8–18 % faster. Still experimental, in Settings → Performance.",
-};
+export const WHATS_NEW_VERSION = "0.12.1";
 
 const NEWS = [
   {
     icon: LayoutTemplate,
     title: "Layout: say where things go",
-    text: "For a new image, Layout (next to the aspect ratio) opens a canvas in the image's shape: draw rectangles, outlines point by point or freehand, and write in each what goes there. Paint area has the same tools for a photo you edit. FLUX.3 reads the areas directly, Qwen-Image 2.1 and Fibo 2.0 Dev follow them as a sketch, Krea 2 and MOSS-Image get the positions in words.",
+    text: "For a new image, Layout (next to the aspect ratio) opens a canvas in the image's shape: draw rectangles, outlines point by point or freehand, and write in each what goes there. Paint area has the same tools for a photo you edit, next to Kokon's new Colours. FLUX.3 reads the areas directly, Qwen-Image 2.1 and Fibo 2.0 Dev follow them as a sketch, Krea 2 and MOSS-Image get the positions in words.",
   },
   {
     icon: Layers,
@@ -29,23 +24,34 @@ const NEWS = [
   },
   {
     icon: AppWindow,
-    title: "Its own app, based on Kokon 0.11.2",
-    text: "Kokon Modal installs next to Kokon with its own folders, models and settings, so both can run at the same time. It is built on Kokon by Gabriele Lozupone and now includes Kokon 0.11.2.",
+    title: "Its own app, based on Kokon 0.12.1",
+    text: "Kokon Modal installs next to Kokon with its own folders, models and settings, so both can run at the same time. It is built on Kokon by Gabriele Lozupone and now includes Kokon 0.12.1 (the Layers lab, Colours in Paint area, More like this).",
   },
   {
-    icon: Hourglass,
-    title: "The progress card keeps its place",
-    text: "Look at another version while an image is being made, then come back: the card goes on from where it is instead of starting over, and the Prompt+ text you already read stays on screen.",
+    icon: Images,
+    title: "More like this",
+    text: "Under a new image, More like this makes another one from it: Subtle keeps the picture and changes the details, Strong keeps the idea and changes more. Regenerate still starts from scratch.",
   },
   {
-    icon: Save,
-    title: "Settings ask before closing",
-    text: "Close Settings with changes you haven't saved and Kokon Modal asks whether to save them, instead of dropping them.",
+    icon: Layers,
+    title: "Redraw at this size",
+    text: "In the Layers lab, an object made bigger with the corner handle can be drawn again at its new size, so it stays sharp. The stretched version stays under Versions.",
+    video: VIDEOS.update012.url,
   },
   {
-    icon: MousePointerClick,
+    icon: Cpu,
+    title: "The GPU is freed when Kokon Modal is idle",
+    text: "After 10 idle minutes the model leaves the GPU even with a Kokon Modal window or browser tab open, so other programs can use it. It loads again with the next image.",
+  },
+  {
+    icon: FolderTree,
+    title: "A folder for each project",
+    text: "Settings → General → A folder for each project: new images are saved in a folder named after their project instead of one folder per day. Off unless you turn it on.",
+  },
+  {
+    icon: CircleAlert,
     title: "Smaller fixes",
-    text: "Setup keeps its buttons in view and shows every file name while downloading, selected text is visible on Linux with WebKitGTK, and the page draws properly after leaving full screen on Android phones.",
+    text: "The time saved in an image's file is local time (it was an hour early in Europe), and when Kokon Modal cannot start its service it says why, for example a processor without AVX.",
   },
 ];
 
@@ -74,7 +80,6 @@ type Step = "engine" | "vae" | "model";
  * replace the old files only if the user accepts. Own model files are never switched: the model step is a suggestion. */
 export function WhatsNew() {
   const engine = useStore((s) => s.status?.engine);
-  const macEngine = useStore((s) => !!s.status?.mac_engine?.available) && !inBrowser;
   const needsEngine = !!engine?.update_needed;
   const [missing, setMissing] = useState<InstallItem[] | null>(null);
   const [target, setTarget] = useState<{ preset: string; backend: GpuBackend } | null>(null);
@@ -187,11 +192,21 @@ export function WhatsNew() {
         <KokonMark size={44} />
         <h1>What's new in Kokon Modal {WHATS_NEW_VERSION}</h1>
         <div className="welcome-grid">
-          {(macEngine ? [MAC_NEWS, ...NEWS] : NEWS).map(({ icon: Icon, title, text }) => (
+          {NEWS.map(({ icon: Icon, title, text, video }: { icon: typeof Layers; title: string; text: string; video?: string }) => (
             <div className="welcome-item" key={title}>
               <Icon size={20} />
               <strong>{title}</strong>
-              <span>{text}</span>
+              <span>
+                {text}
+                {video && (
+                  <>
+                    {" "}
+                    <button className="link-btn" onClick={() => native.openLink(video).catch(toastError)} title="On YouTube (opens in your browser)">
+                      <CirclePlay size={13} /> Watch the 0.12 video
+                    </button>
+                  </>
+                )}
+              </span>
             </div>
           ))}
         </div>

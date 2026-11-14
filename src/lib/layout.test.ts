@@ -140,7 +140,8 @@ describe("Paint area with areas", () => {
     expect(r.mask).toBe("input:m");
     expect(r.regions).toEqual([box(0, 0, 0.3, 0.3, "a cat")]);
     expect(needsPrompt(c)).toBe(false);
-    const plain = { ...c, mask: { inputId: "m", refKey: "k" } };
+    // Without areas the prompt is needed again (except for a removal, Kokon's default action).
+    const plain = { ...c, inpaintAction: "edit" as const, mask: { inputId: "m", refKey: "k" } };
     expect(buildRequest(plain).regions).toBeUndefined();
     expect(needsPrompt(plain)).toBe(true);
   });

@@ -9,8 +9,8 @@ name: Release (fork)
 # which a renamed file would start again at 1 (a lower version: no update offered).
 #
 # Versions: every build gets its own, higher version, so the in-app updater can offer it:
-# <major>.<minor>.<patch * 1000 + run number> of the version in tauri.conf.json (0.11.2, run 17 →
-# 0.11.2017). It is set for the build only (scripts/release/set-version.sh), not committed.
+# <major>.<minor>.<patch * 1000 + run number> of the version in tauri.conf.json (0.12.1, run 24 →
+# 0.12.1024). It is set for the build only (scripts/release/set-version.sh), not committed.
 #
 # Updates: with the repository secret TAURI_SIGNING_PRIVATE_KEY (the fork's updater key; its public
 # half is in tauri.conf.json) both builds are signed for the updater and latest.json, with the
@@ -306,7 +306,7 @@ jobs:
             Models are downloaded again for Kokon Modal, or point it at Kokon's files with Settings → Models → Use my own files.
           - Updates: Kokon Modal checks this repository once a day and installs a new version in one click (it can be
             turned off in Settings → General).
-          - Versions: Kokon's version with a build number (0.11.2017 = Kokon 0.11.2, build 17).
+          - Versions: Kokon's version with a build number (0.12.1024 = Kokon 0.12.1, build 24).
 
           SHA-256:
           EOF
