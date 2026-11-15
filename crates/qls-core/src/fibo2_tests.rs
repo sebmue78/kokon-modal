@@ -85,3 +85,26 @@ fn image_tags_follow_fibos_form() {
     let p = plan(&r, &inputs(imgs.iter().map(|i| i.size()).collect()), &RecommendedSettings::flux3_klein()).unwrap();
     assert_eq!(prepare(&p, &r.prompt, 1, &imgs, None, &BackendOptions::default()).unwrap().request.prompt, r.prompt);
 }
+
+/// Fork: Qwen-Image 2.1 in full 16-bit precision, a model of its own in the menu.
+#[test]
+fn qwen_f16_is_qwen_in_full_precision() {
+    use crate::config::{QWEN_F16_PROFILE_ID, QWEN_IMAGE_21};
+    let dir = tempfile::tempdir().unwrap();
+    let c = cfg(dir.path(), "8gb", QWEN_F16_PROFILE_ID);
+    let p = c.profile();
+    assert_eq!(p.id, QWEN_F16_PROFILE_ID);
+    assert_eq!(p.model, QWEN_IMAGE_21, "Qwen: its edits, Layout sketch and LoRAs");
+    assert!(p.is_qwen() && p.from_catalog() && !p.is_official());
+    assert_eq!(p.diffusion_model, catalog::TURBO_F16.path(dir.path()), "16-bit on any card");
+    assert_eq!(p.text_encoder, catalog::TEXT_ENCODER_Q8_0.path(dir.path()));
+    assert_eq!(p.vae, catalog::official_vae(dir.path()).path(dir.path()), "the VAE is shared");
+    let ids: Vec<&str> = catalog::profile_model_downloads(p).iter().map(|d| d.id).collect();
+    assert!(ids.contains(&"turbo_f16") && ids.contains(&"text_encoder_q8_0"), "{ids:?}");
+    assert_eq!(catalog::TURBO_F16.sha256.len(), 64);
+    // Kokon's Mac engine stays with the 4-bit file.
+    let mut mac = c.clone();
+    mac.gpu_backend = GpuBackend::Metal;
+    mac.mac_engine = true;
+    assert!(!mac.uses_mac_engine());
+}

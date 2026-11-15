@@ -399,6 +399,23 @@ pub const TURBO_Q4_K_M: Download = Download {
     engine_tag: None,
 };
 
+/// Fork: the same model in full 16-bit precision (unsloth's F16 GGUF of Qwen/Qwen-Image-2.1-Turbo's
+/// bf16 weights, same repository as the 4-bit file): no quantization loss, for cards with room for
+/// it (14.2 GB). The model menu's "Qwen-Image 2.1 · 16-bit" (`ModelProfile::qwen21_f16`).
+pub const TURBO_F16: Download = Download {
+    id: "turbo_f16",
+    label: "Qwen-Image 2.1 Turbo F16",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/unsloth/Qwen-Image-2.1-Turbo-GGUF/resolve/main/qwen-image-2.1-turbo-F16.gguf",
+    fallback_urls: &[],
+    page: "https://huggingface.co/unsloth/Qwen-Image-2.1-Turbo-GGUF",
+    size: 14_230_275_904,
+    sha256: "4f2241cb2cccb6ce874ebcdd99138a10f96da9c40e4ff1ea0560111511e3e80f",
+    dest: "models/qwen21/qwen-image-2.1-turbo-F16.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
 /// The image model installed up to 0.11.0 (DogukanUrker's GGUF conversion, made with
 /// stable-diffusion.cpp). Kept while its owner has not chosen the Q4_K_M ([`official_dit`]);
 /// deleted once they have ([`unused_old_dit`]).
@@ -1128,7 +1145,7 @@ pub fn downloads_for(p: &Preset, backend: GpuBackend, sdcpp_dir: &Path) -> Vec<D
 /// (a piece the user chose to download, or an official file deleted from their folder), each
 /// saved where the profile expects it. Existing files are never replaced, whatever their name.
 pub fn profile_model_downloads(profile: &crate::config::ModelProfile) -> Vec<Download> {
-    let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
+    let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, TURBO_F16, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
     let official: Vec<Download> =
         qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).chain(FIBO2_DOWNLOADS.iter().copied()).collect();
     profile

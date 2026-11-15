@@ -17,6 +17,14 @@ export interface CatalogModel {
 }
 
 export const CATALOG_MODELS: Record<string, CatalogModel> = {
+  // Keyed by profile id like the others; its model is Qwen-Image 2.1, so Qwen's LoRAs and edits apply.
+  "qwen-image-2.1-turbo-f16": {
+    name: "Qwen-Image 2.1 · 16-bit",
+    full: "Qwen-Image 2.1 Turbo, full precision (16-bit)",
+    hint: "Qwen-Image 2.1 without 4-bit quantization: finest detail, needs a 16 GB+ card",
+    about:
+      "The same Qwen-Image 2.1 Turbo in full 16-bit precision (14.2 GB) with the 8-bit text encoder, instead of the 4-bit files: no quantization loss, a little finer detail and text. Best on a card with 16 GB or more; on smaller cards parts of it are moved to system memory and it is slower. Everything Qwen-Image 2.1 does works the same, with the same LoRAs. Qwen Research License: research and evaluation, non-commercial.",
+  },
   "flux-3-image-klein": {
     name: "FLUX.3 Klein",
     full: "FLUX.3 Image Klein",
@@ -56,8 +64,9 @@ export const CATALOG_MODELS: Record<string, CatalogModel> = {
 export const CATALOG_IDS = Object.keys(CATALOG_MODELS);
 
 /** Short name and what a model does. */
-export function modelLabel(p: { model: string; source: string }): { name: string; hint: string } {
-  const m = CATALOG_MODELS[p.model];
+export function modelLabel(p: { id?: string; model: string; source: string }): { name: string; hint: string } {
+  // Fork: by profile id first (the 16-bit Qwen is the Qwen model with files of its own).
+  const m = (p.id ? CATALOG_MODELS[p.id] : undefined) ?? CATALOG_MODELS[p.model];
   if (m) return { name: m.name, hint: m.hint };
   return { name: p.source === "user" ? "Qwen-Image 2.1 (your files)" : "Qwen-Image 2.1", hint: "Everything: new images, edits of a whole photo and combining images" };
 }
