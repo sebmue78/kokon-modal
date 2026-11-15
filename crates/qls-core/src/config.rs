@@ -71,6 +71,9 @@ pub const MOSS_PROFILE_ID: &str = "moss-image-sft";
 /// Qwen3-VL 4B as text encoder (Krea 2's file) and the FLUX.2 VAE (MOSS-Image's file). 16 steps, no CFG.
 pub const FLUX3_KLEIN: &str = "flux-3-image-klein";
 /// Profile id of the FLUX.3 Image Klein files from the catalog (always listed, downloaded on demand).
+/// Fork: Qwen-Image 2.1 Turbo in full 16-bit precision (`ModelProfile::qwen21_f16`). Its model is
+/// Qwen-Image 2.1, so everything Qwen's works with it (edits, Layout sketch, LoRAs).
+pub const QWEN_F16_PROFILE_ID: &str = "qwen-image-2.1-turbo-f16";
 pub const FLUX3_PROFILE_ID: &str = "flux-3-image-klein";
 /// Fibo 2.0 Dev (briaai/Fibo-2.0-dev, CC BY-NC 4.0: non-commercial): an 8B DiT for text to image
 /// and edits with references (seen by its Qwen3-VL 4B text encoder too), 20 steps at CFG 5. Shares
@@ -83,7 +86,7 @@ pub const FIBO2_EDIT: &str = "fibo-2.0-edit-turbo";
 pub const FIBO2_DEV_PROFILE_ID: &str = "fibo-2.0-dev";
 pub const FIBO2_EDIT_PROFILE_ID: &str = "fibo-2.0-edit-turbo";
 /// Models from the catalog besides Qwen-Image 2.1, in the order Settings lists them.
-pub const EXTRA_CATALOG_PROFILES: &[&str] = &[FLUX3_PROFILE_ID, FIBO2_DEV_PROFILE_ID, FIBO2_EDIT_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
+pub const EXTRA_CATALOG_PROFILES: &[&str] = &[QWEN_F16_PROFILE_ID, FLUX3_PROFILE_ID, FIBO2_DEV_PROFILE_ID, FIBO2_EDIT_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
 
 /// Where the text encoder's weights live. Compute always runs on the selected GPU except
 /// for `Cpu`, which also computes on the CPU (slow for image editing, measured ~35×).
@@ -500,6 +503,28 @@ impl ModelProfile {
         }
     }
 
+    /// Fork: Qwen-Image 2.1 Turbo in full 16-bit precision, whatever the card: the F16 image model
+    /// (14.2 GB) and the 8-bit text encoder, with the official VAE and vision projector (shared with
+    /// the 4-bit files, so only the image model and the text encoder are downloaded again).
+    pub fn qwen21_f16(sdcpp_dir: &Path) -> Self {
+        use crate::catalog::{official_vae, TEXT_ENCODER_Q8_0, TURBO_F16, VISION_PROJECTOR};
+        Self {
+            id: QWEN_F16_PROFILE_ID.into(),
+            display_name: "Qwen-Image 2.1 Turbo F16 (full precision)".into(),
+            model: QWEN_IMAGE_21.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: TURBO_F16.path(sdcpp_dir),
+            vae: official_vae(sdcpp_dir).path(sdcpp_dir),
+            text_encoder: TEXT_ENCODER_Q8_0.path(sdcpp_dir),
+            vision_projector: Some(VISION_PROJECTOR.path(sdcpp_dir)),
+            tokenizer: None,
+            backend_args: vec![],
+            recommended_settings: RecommendedSettings::default(),
+            capabilities: ProfileCapabilities::default(),
+        }
+    }
+
     /// The FLUX.3 Image Klein files for a hardware preset (`catalog::flux3_files`): leejet's GGUF,
     /// the Qwen3-VL 4B text encoder shared with Krea 2 (with its vision projector, so Prompt+ can
     /// look at the references) and the FLUX.2 VAE shared with MOSS-Image.
@@ -556,6 +581,7 @@ impl ModelProfile {
         match id {
             FIBO2_DEV_PROFILE_ID => Some(Self::fibo2(sdcpp_dir, preset, false)),
             FIBO2_EDIT_PROFILE_ID => Some(Self::fibo2(sdcpp_dir, preset, true)),
+            QWEN_F16_PROFILE_ID => Some(Self::qwen21_f16(sdcpp_dir)),
             FLUX3_PROFILE_ID => Some(Self::flux3(sdcpp_dir, preset)),
             KREA2_PROFILE_ID => Some(Self::krea2(sdcpp_dir, preset)),
             MOSS_PROFILE_ID => Some(Self::moss(sdcpp_dir, preset)),
@@ -1251,7 +1277,8 @@ impl AppConfig {
     /// Kokon's Mac engine runs instead of sd-server: chosen in Settings, on the Metal backend only.
     pub fn uses_mac_engine(&self) -> bool {
         // Kokon's Mac engine runs Qwen-Image 2.1 only; other models always run on sd-server.
-        let other = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(|p| !p.is_qwen());
+        // Fork: nor the 16-bit Qwen files (the Mac engine is checked against the 4-bit file only).
+        let other = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(|p| !p.is_qwen() || p.id == QWEN_F16_PROFILE_ID);
         self.mac_engine && self.gpu_backend == GpuBackend::Metal && !other
     }
 

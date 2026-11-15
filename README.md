@@ -45,6 +45,7 @@ are downloaded the first time you choose them (the app asks first, then shows th
 | Model | What it does | Steps | Prompt+ | License (check before commercial use) |
 | --- | --- | --- | --- | --- |
 | **Qwen-Image 2.1 Turbo** (Alibaba Qwen) | New images, every kind of edit, combining images | 8 | yes | Qwen Research License: research and evaluation only, non-commercial |
+| **Qwen-Image 2.1 · 16-bit** | The same model in full precision (F16, 14.2 GB, 8-bit text encoder): no quantization loss | 8 | yes | Qwen Research License |
 | **FLUX.3 Image Klein** (Black Forest Labs, 5.6B) | New images, edits of a whole photo, combining up to 10 images, brushed changes and areas (seeing the photo) | 16 | yes, recommended | FLUX Kommunity License: non-commercial; commercial use of images only for qualifying users |
 | **Fibo 2.0 Dev** (Bria, 8B) | New images, edits of a whole photo, combining up to 10 images (`<image_1>`, `<image_2>`), brushed changes and areas (seeing the photo) | 20, CFG 5 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
 | **Fibo 2.0 Edit Turbo** (Bria, 8B) | Fast edits of a whole photo and combining images; no new images from text | 4 | yes, sees your images | CC BY-NC 4.0: non-commercial only |

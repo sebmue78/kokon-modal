@@ -1,23 +1,10 @@
-- **Based on Kokon 0.12.1.** This version brings in Kokon 0.12.0 and 0.12.1:
-  - **Layers lab** (experimental): split an image into layers, move, scale and edit them one by
-    one, export a PSD.
-  - **Colours in Paint area**: one colour per thing, fill its area, say what goes there; the model
-    changes them in one go. **Select** fills an object with one click.
-  - **More like this**: a new version of a result that keeps its layout (Subtle or Strong).
-  - **AI marking** (EU AI Act): every result says in its file information that it was made with
-    AI, and carries an invisible watermark. Settings → General → Check an image reads both.
-  - The GPU is freed after 10 idle minutes, an optional folder for each project, a faster Mac
-    engine on the M5, Prompt+ for painted areas and Expand, and many fixes.
-- **Paint area has both ways now.** Kokon's Colours, and under **One area** our Rectangle, Outline
-  and Freehand tools next to the brush and Select. Areas with a text still say what goes there.
-- **What works with which model:**
-  - Colours needs a model that sees the photo: Qwen-Image 2.1, FLUX.3 and Fibo 2.0. With Krea 2
-    and MOSS-Image it is switched off and One area is used.
-  - Prompt+ for a painted area needs a model whose text encoder sees images: Qwen-Image 2.1 and
-    Fibo 2.0. With FLUX.3 and Krea 2 your own words are used.
-  - The Layers lab and More like this were made for Qwen-Image 2.1 and have not been tried with
-    the other models.
-- Layout for new images, the extra models, LoRAs per model, the second GPU and updates from this
-  repository are unchanged.
-- Versions now count from Kokon 0.12.1: 0.12.1024 is Kokon 0.12.1, build 24.
-- Not tried on a GPU yet. Please report what you notice.
+- **New: Qwen-Image 2.1 in full 16-bit precision.** The model menu at the top has a new entry,
+  **Qwen-Image 2.1 · 16-bit**: the same Qwen-Image 2.1 Turbo without 4-bit quantization (14.2 GB
+  instead of 4.2 GB), with the 8-bit text encoder (8.7 GB, in system memory). It is downloaded the
+  first time you choose it; the decoder and vision files are shared with the 4-bit Qwen.
+  - Everything Qwen-Image 2.1 does works the same: edits, Colours, areas, Layout, Prompt+, and its
+    LoRAs.
+  - Best on a card with 16 GB or more (on a 24 GB card it fits entirely). On smaller cards, parts
+    are moved to system memory and it is slower.
+  - On a Mac it runs on the standard engine, not Kokon's Mac engine.
+- The 4-bit Qwen-Image 2.1 stays the default; switch between both in the model menu.

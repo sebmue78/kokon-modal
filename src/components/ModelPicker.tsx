@@ -14,7 +14,7 @@ export { modelLabel };
 
 /** Install target of a model that is not downloaded yet: a catalog model by its id. */
 function installTarget(p: Entry): string | null {
-  if (CATALOG_MODELS[p.model]) return p.id;
+  if (CATALOG_MODELS[p.id] || CATALOG_MODELS[p.model]) return p.id;
   return p.source === "official" ? "official" : null;
 }
 
