@@ -499,6 +499,34 @@ pub fn resolve(cfg: &AppConfig, requested: Option<&[String]>) -> (Vec<AppliedLor
     (applied, notes)
 }
 
+/// Fork: the model's settings with the steps and CFG of the first LoRA in use that sets them
+/// (speed LoRAs), and a note saying so. Other settings, and jobs without such a LoRA, keep the
+/// model's own. Qwen's 8-step Turbo sigmas only fit 8 steps, so other step counts use the
+/// server's schedule.
+pub fn sampling(cfg: &AppConfig, requested: Option<&[String]>, rec: &crate::config::RecommendedSettings) -> (crate::config::RecommendedSettings, Option<String>) {
+    let (applied, _) = resolve(cfg, requested);
+    let mut out = rec.clone();
+    let Some(l) = applied.iter().filter_map(|a| cfg.loras.iter().find(|l| l.id == a.id)).find(|l| l.steps.is_some() || l.cfg_scale.is_some()) else {
+        return (out, None);
+    };
+    let mut parts = Vec::new();
+    if let Some(s) = l.steps {
+        if s != out.steps {
+            out.turbo_sigmas = false;
+        }
+        out.steps = s;
+        parts.push(format!("{s} steps"));
+    }
+    if let Some(c) = l.cfg_scale {
+        out.cfg_scale = c;
+        parts.push(if c <= 1.0 { "CFG off".to_string() } else { format!("CFG {c}") });
+    }
+    if let Some(first) = parts.first_mut() {
+        *first = format!("{}{}", first[..1].to_uppercase(), &first[1..]);
+    }
+    (out, Some(format!("{} from the LoRA \"{}\" (sampler: the model's own).", parts.join(" and "), l.name)))
+}
+
 /// The prompt with the LoRAs' trigger words in front (after the prompt enhancer, so it never
 /// rewrites them); words already in the prompt are not added again.
 pub fn with_triggers(prompt: &str, loras: &[AppliedLora]) -> String {
@@ -722,6 +750,35 @@ mod tests {
         let (on, notes) = resolve(&cfg, Some(&both));
         assert_eq!(on.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(), ["klein-style"]);
         assert!(notes[0].contains("is for Qwen-Image 2.1"), "{notes:?}");
+    }
+
+    #[test]
+    fn a_speed_lora_brings_its_own_steps_and_cfg() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut cfg = AppConfig { sdcpp_dir: dir.path().to_path_buf(), ..AppConfig::default() };
+        let fast = LoraEntry { steps: Some(4), cfg_scale: Some(1.0), ..entry("fast", false, 1.0, "") };
+        cfg.loras = vec![entry("style", false, 1.0, ""), fast];
+        std::fs::create_dir_all(cfg.lora_dir()).unwrap();
+        for id in ["style", "fast"] {
+            std::fs::write(cfg.lora_dir().join(format!("{id}.safetensors")), b"x").unwrap();
+        }
+        let rec = crate::config::RecommendedSettings::default();
+        // Without it: the model's own, no note.
+        let (same, note) = sampling(&cfg, Some(&["style".into()]), &rec);
+        assert_eq!((same.steps, same.cfg_scale, same.turbo_sigmas, note), (rec.steps, rec.cfg_scale, rec.turbo_sigmas, None));
+        // With it: 4 steps without CFG; Qwen's 8-step sigmas no longer fit, the sampler stays.
+        let (r, note) = sampling(&cfg, Some(&["style".into(), "fast".into()]), &rec);
+        assert_eq!((r.steps, r.cfg_scale, r.turbo_sigmas, r.sampler.as_str()), (4, 1.0, false, rec.sampler.as_str()));
+        assert_eq!(note.unwrap(), "4 steps and CFG off from the LoRA \"FAST\" (sampler: the model's own).");
+        // Only CFG: the steps and their schedule stay.
+        cfg.loras[1].steps = None;
+        cfg.loras[1].cfg_scale = Some(2.5);
+        let (r, note) = sampling(&cfg, Some(&["fast".into()]), &rec);
+        assert_eq!((r.steps, r.cfg_scale, r.turbo_sigmas), (rec.steps, 2.5, rec.turbo_sigmas));
+        assert!(note.unwrap().starts_with("CFG 2.5 from"));
+        // A LoRA of another model changes nothing.
+        cfg.loras[1].model = crate::config::FLUX3_KLEIN.into();
+        assert!(sampling(&cfg, Some(&["fast".into()]), &rec).1.is_none());
     }
 
     #[test]

@@ -65,6 +65,9 @@ pub struct LoraPatch {
     pub weight: Option<f32>,
     pub trigger_words: Option<String>,
     pub on_by_default: Option<bool>,
+    /// Fork: steps / CFG while the LoRA is on; 0 = back to the model's own.
+    pub steps: Option<u32>,
+    pub cfg_scale: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -388,6 +391,18 @@ impl Engine {
         }
         if let Some(on) = patch.on_by_default {
             l.on_by_default = on;
+        }
+        if let Some(s) = patch.steps {
+            if s > 100 {
+                return Err(AppError::invalid("Steps go from 1 to 100 (empty: the model's own)."));
+            }
+            l.steps = (s > 0).then_some(s);
+        }
+        if let Some(c) = patch.cfg_scale {
+            if !c.is_finite() || !(0.0..=20.0).contains(&c) || (c > 0.0 && c < 1.0) {
+                return Err(AppError::invalid("CFG goes from 1 (off) to 20 (empty: the model's own)."));
+            }
+            l.cfg_scale = (c > 0.0).then_some((c * 10.0).round() / 10.0);
         }
         let out = l.clone();
         self.set_loras(list)?;
@@ -1174,7 +1189,8 @@ impl Engine {
         let mut inputs = plan_inputs(&cfg, sizes, mask, vram);
         inputs.speed_factor = self.speed_factor(&cfg);
         inputs.unified_memory = self.gpu().is_some_and(|g| g.unified);
-        planner::plan(req, &inputs, &cfg.profile().recommended_settings)
+        let (rec, _) = lora::sampling(&cfg, req.loras.as_deref(), &cfg.profile().recommended_settings);
+        planner::plan(req, &inputs, &rec)
     }
 
     async fn run_job(self: Arc<Self>, id: &str) -> AppResult<()> {
@@ -1282,9 +1298,12 @@ impl Engine {
         let mut plan_inputs = plan_inputs(&cfg, images.iter().map(|i| i.size()).collect(), mask_info, vram);
         plan_inputs.speed_factor = self.speed_factor(&cfg);
         plan_inputs.unified_memory = self.gpu().is_some_and(|g| g.unified);
-        let plan = planner::plan(&request, &plan_inputs, &profile.recommended_settings)?;
+        // Fork: a LoRA's own steps and CFG (speed LoRAs).
+        let (rec, lora_note) = lora::sampling(&cfg, request.loras.as_deref(), &profile.recommended_settings);
+        let plan = planner::plan(&request, &plan_inputs, &rec)?;
         let mut seed = request.seed.unwrap_or_else(random_seed);
         let mut notes = plan.notes.clone();
+        notes.extend(lora_note);
         // A seed the user chose that made one of the references (see `avoid_reference_seeds`).
         // A quick upscale runs no diffusion, so its seed does not matter.
         if request.seed.is_some()
@@ -2271,6 +2290,13 @@ mod tests {
         assert_eq!(std::fs::read(&copy).unwrap(), std::fs::read(&src).unwrap());
         e.update_lora("my-style", LoraPatch { weight: Some(0.75), trigger_words: Some(" grainscape ".into()), on_by_default: Some(true), ..Default::default() }).unwrap();
         assert!(e.update_lora("my-style", LoraPatch { weight: Some(3.0), ..Default::default() }).is_err());
+        let l = e.update_lora("my-style", LoraPatch { steps: Some(4), cfg_scale: Some(1.0), ..Default::default() }).unwrap();
+        assert_eq!((l.steps, l.cfg_scale), (Some(4), Some(1.0)));
+        assert!(e.update_lora("my-style", LoraPatch { steps: Some(101), ..Default::default() }).is_err());
+        assert!(e.update_lora("my-style", LoraPatch { cfg_scale: Some(0.5), ..Default::default() }).is_err());
+        // 0 goes back to the model's own.
+        let l = e.update_lora("my-style", LoraPatch { steps: Some(0), cfg_scale: Some(0.0), ..Default::default() }).unwrap();
+        assert_eq!((l.steps, l.cfg_scale), (None, None));
         // Loading the same file again keeps its settings.
         assert_eq!(e.add_lora(&src).unwrap().weight, 0.75);
 
