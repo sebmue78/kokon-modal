@@ -285,6 +285,8 @@ export interface StatusResponse {
   setup_complete: boolean;
   /** Kokon's Mac engine: installed (inside the app or by hand) and switched on. */
   mac_engine?: { available: boolean; on: boolean };
+  /** Fork: the bundled MCP server (kokon-mcp) next to the service, if it is there. */
+  mcp_exe?: string | null;
 }
 
 export interface Check { id: string; label: string; ok: boolean; detail: string }

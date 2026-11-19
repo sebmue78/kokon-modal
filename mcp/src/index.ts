@@ -1,4 +1,4 @@
-// kokon-mcp — MCP server (stdio) for Kokon. Uses the same local service and
+// kokon-mcp — MCP server (stdio) for Kokon Modal (the sebmue78 fork of Kokon). Uses the same local service and
 // generation engine as the desktop app. Works when the app is closed: the service and
 // the inference server are started on demand. Everything stays on 127.0.0.1.
 
@@ -16,7 +16,7 @@ const DESCRIPTIONS: Record<keyof typeof schemas, { title: string; description: s
   generate_image: {
     title: "Generate image",
     description:
-      "Generate an image from a text prompt with the local Qwen-Image 2.1 model, optionally using reference images (a person, a product, a style) in a new scene. Write the full, detailed prompt yourself (see the prompt field): it is used as is. Dimensions are chosen automatically (aspect ratio can be inferred from the prompt, e.g. '16:9 hero image') unless width/height or aspect_ratio are given. Returns the absolute path of the saved PNG. Runs fully offline; typically 45 s–4 min.",
+      "Generate an image from a text prompt with the local model in use in Kokon Modal (list_models shows it; select_model changes it), optionally using reference images (a person, a product, a style) in a new scene. Write the full, detailed prompt yourself (see the prompt field): it is used as is. Dimensions are chosen automatically (aspect ratio can be inferred from the prompt, e.g. '16:9 hero image') unless width/height or aspect_ratio are given. Optional layout areas say where things go. Returns the absolute path of the saved PNG. Runs fully offline; typically 45 s–4 min.",
   },
   edit_image: {
     title: "Edit image",
@@ -36,7 +36,7 @@ const DESCRIPTIONS: Record<keyof typeof schemas, { title: string; description: s
   inpaint_image: {
     title: "Inpaint image",
     description:
-      "Change only the masked area of an image (mask: white = change, black = keep): edit it, remove what is there, replace it, or add something inside it. The model is shown the area marked on a copy of the image; pixels outside the mask are preserved exactly.",
+      "Change only part of an image: give a mask (white = change, black = keep), or areas (rectangles or outlines in fractions of the image, each with what goes there), or both. Edit it, remove what is there, replace it, or add something inside it. Pixels outside the mask or areas are preserved exactly.",
   },
   upscale_image: {
     title: "Upscale image",
@@ -49,12 +49,26 @@ const DESCRIPTIONS: Record<keyof typeof schemas, { title: string; description: s
   },
   get_generator_status: {
     title: "Generator status",
-    description: "Whether the local inference server is running and the model loaded, GPU and VRAM, the active job and the queue.",
+    description: "Whether the local inference server is running and the model loaded, the model in use, GPU and VRAM, the active job, the queue and a running model download.",
+  },
+  list_models: {
+    title: "List models",
+    description:
+      "The image models of Kokon Modal (Qwen-Image 2.1 in 4 and 16 bit, FLUX.3 Klein, Fibo 2.0 Dev and Edit Turbo, Krea 2 Turbo, MOSS-Image), what each can do, which are downloaded and which is in use. Check it before a task a model cannot do (e.g. Krea 2 and MOSS-Image do not edit whole photos).",
+  },
+  select_model: {
+    title: "Select model",
+    description:
+      "Make a model the one in use for the next images (it is the same choice as the model menu in the app, so the user sees it too). A model that is not downloaded is only fetched with download: true; ask the user first, it is several GB.",
+  },
+  list_loras: {
+    title: "List LoRAs",
+    description: "The LoRAs added in Kokon Modal, for which model, and their trigger words. Pass their ids in loras on generate/edit/inpaint; only those of the model in use apply.",
   },
 };
 
 const client = new ServiceClient();
-const server = new McpServer({ name: "kokon", version: VERSION }, { capabilities: { tools: {} } });
+const server = new McpServer({ name: "kokon-modal", version: VERSION }, { capabilities: { tools: {} } });
 
 function toMcp(r: ToolResult) {
   const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [{ type: "text", text: r.text }];
@@ -70,7 +84,7 @@ for (const name of Object.keys(schemas) as (keyof typeof schemas)[]) {
       title: d.title,
       description: d.description,
       inputSchema: schemas[name],
-      annotations: { readOnlyHint: name.startsWith("get_"), openWorldHint: false, destructiveHint: false, idempotentHint: name.startsWith("get_") },
+      annotations: { readOnlyHint: name.startsWith("get_") || name.startsWith("list_"), openWorldHint: false, destructiveHint: false, idempotentHint: name.startsWith("get_") || name.startsWith("list_") || name === "select_model" },
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (args: any, extra: any) => {

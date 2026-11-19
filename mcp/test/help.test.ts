@@ -12,7 +12,9 @@ describe("helpText", () => {
   it("says what the program is and how to register it", () => {
     expect(text).toContain("kokon-mcp 1.2.3");
     expect(text).toContain("stdio");
-    expect(text).toContain("claude mcp add --scope user kokon -- npx -y kokon-mcp");
+    expect(text).toContain("claude mcp add --scope user kokon-modal --");
+    expect(text).toContain("Kokon Modal\\\\kokon-mcp.exe".replace(/\\\\/g, "\\"));
+    expect(text).not.toContain("npx");
   });
 
   it("lists every environment variable the server reads", () => {

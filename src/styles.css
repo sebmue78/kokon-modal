@@ -335,6 +335,7 @@ svg { display: block; flex: none; }
 .remote-open { align-items: flex-start; gap: 16px; }
 .qr { width: 148px; height: 148px; flex: none; border-radius: 10px; }
 .remote-url { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--text); user-select: all; }
+.agent-config { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 6px 0 8px; white-space: pre-wrap; word-break: break-all; user-select: all; width: 100%; box-sizing: border-box; }
 
 /* version timeline: a line per image and the versions made from it; arcs join versions made
    from earlier ones or from several */

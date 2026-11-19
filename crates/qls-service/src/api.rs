@@ -250,6 +250,13 @@ async fn ping() -> Json<Value> {
 // Status, setup, config, backend
 // ---------------------------------------------------------------------------------------
 
+/// Fork: kokon-mcp beside this service (the installed app), if it is there.
+fn mcp_exe() -> Option<String> {
+    let name = if cfg!(windows) { "kokon-mcp.exe" } else { "kokon-mcp" };
+    let p = std::env::current_exe().ok()?.parent()?.join(name);
+    p.is_file().then(|| p.to_string_lossy().into_owned())
+}
+
 async fn status(State(s): St) -> Json<Value> {
     let e = s.engine.clone();
     let gpu = tokio::task::spawn_blocking(move || e.gpu()).await.ok().flatten();
@@ -261,6 +268,8 @@ async fn status(State(s): St) -> Json<Value> {
     let engine_update = tokio::task::spawn_blocking(move || e.engine_update_needed()).await.unwrap_or(false);
     Json(json!({
         "service": { "version": APP_VERSION, "pid": std::process::id(), "uptime_s": s.started.elapsed().as_secs() },
+        // Fork: the MCP server the installer puts next to the service, for Settings → AI agents.
+        "mcp_exe": mcp_exe(),
         "server": {
             "state": srv.state, "owned": srv.owned, "pid": srv.pid, "port": if srv.port > 0 { srv.port } else { cfg.server_port },
             "model": srv.model, "model_loaded": srv.state == qls_core::process::ServerState::Ready,

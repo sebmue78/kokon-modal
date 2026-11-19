@@ -1,10 +1,17 @@
-- **New: Qwen-Image 2.1 in full 16-bit precision.** The model menu at the top has a new entry,
-  **Qwen-Image 2.1 · 16-bit**: the same Qwen-Image 2.1 Turbo without 4-bit quantization (14.2 GB
-  instead of 4.2 GB), with the 8-bit text encoder (8.7 GB, in system memory). It is downloaded the
-  first time you choose it; the decoder and vision files are shared with the 4-bit Qwen.
-  - Everything Qwen-Image 2.1 does works the same: edits, Colours, areas, Layout, Prompt+, and its
-    LoRAs.
-  - Best on a card with 16 GB or more (on a 24 GB card it fits entirely). On smaller cards, parts
-    are moved to system memory and it is slower.
-  - On a Mac it runs on the standard engine, not Kokon's Mac engine.
-- The 4-bit Qwen-Image 2.1 stays the default; switch between both in the model menu.
+- **New: AI agents can use Kokon Modal (MCP).** Kokon Modal now comes with its own MCP server,
+  `kokon-mcp`, installed next to the app. Claude Code, Claude Desktop, Cursor and other agents can
+  make and edit images here, on your computer, also while the app is closed.
+  - **Settings → AI agents** shows where it is and copies the setup: a `claude mcp add` command for
+    Claude Code and the JSON for the other apps.
+  - Agents can make new images (also with a **Layout**: areas that say where things go), edit,
+    combine images, outpaint, upscale, and change parts of a photo with a mask or with **areas**
+    (each with its own text, like Paint area in the app).
+  - New tools: **list_models** and **select_model** (switch the model in use, the same choice as the
+    model menu; a model is only downloaded when the agent is told to), **list_loras** (and a `loras`
+    option on the image tools, for the LoRAs of the model in use).
+  - The tool descriptions no longer say every image is made with Qwen; the server is called
+    `kokon-modal`.
+  - Don't use `npx kokon-mcp`: that package belongs to the original Kokon.
+- Changing areas without a painted mask: when areas are sent without a mask (as agents do), the
+  areas themselves are now the mask. In the app nothing changes.
+- The service's status now says where `kokon-mcp` is.
