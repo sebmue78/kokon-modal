@@ -8,7 +8,7 @@ import Metal
 ///     then per token: embedding row ─ 36 × { RMS ─ q, k, v ─ norms, RoPE at its position ─ into the cache ─ attention on
 ///                     the cache ─ o ─ RMS ─ gate, up ─ SwiGLU ─ down } ─ final RMSNorm ─ LM head ─ sampler ─ next token
 ///
-/// The decode reads every weight once per token, so its products read the Q4_K / Q6_K blocks where they lie in the
+/// The decode reads every weight once per token, so its products read the Q4_K / Q6_K / Q8_0 blocks where they lie in the
 /// mapped file (`Kernels/decode.metal`), with no unpacking. Text only: images (edit Prompt+, Compose labels) need the
 /// vision tower.
 public final class QwenTextGenerator {
@@ -263,15 +263,15 @@ public final class QwenTextGenerator {
 
         /// `y = W · x` on the weight's blocks in the mapped file.
         func matvec(_ tensor: GGUFTensor, x: (MTLBuffer, Int), y: (MTLBuffer, Int), _ commands: MTLCommandBuffer) throws {
-            guard let type = tensor.type, type == .q4_K || type == .q6_K else {
-                throw GGUFFile.Failure.unsupported("\(tensor.name): \(tensor.type?.name ?? "?"), the decode reads Q4_K and Q6_K")
+            guard let type = tensor.type, let name = QwenTextGenerator.matvecKernel(type) else {
+                throw GGUFFile.Failure.unsupported("\(tensor.name): \(tensor.type?.name ?? "?"), the decode reads Q4_K, Q6_K and Q8_0")
             }
             let (source, offset) = try context.buffer(for: tensor, in: file)
-            try kernel(type == .q4_K ? "matvec_q4_K" : "matvec_q6_K", commands) { e in
+            try kernel(name, commands) { e in
                 e.setBuffer(source, offset: offset, index: 0)
                 e.setBuffer(x.0, offset: x.1, index: 1)
                 e.setBuffer(y.0, offset: y.1, index: 2)
-                var params = MatvecParams(rows: UInt32(tensor.rows), blocksPerRow: UInt32(tensor.columns / 256),
+                var params = MatvecParams(rows: UInt32(tensor.rows), blocksPerRow: UInt32(tensor.columns / type.blockValues),
                                           rowBytes: UInt32(type.bytes(count: tensor.columns)))
                 e.setBytes(&params, length: MemoryLayout<MatvecParams>.stride, index: 3)
                 let rows = QwenTextGenerator.matvecRows(type)
@@ -283,6 +283,15 @@ public final class QwenTextGenerator {
     struct MatvecParams { var rows, blocksPerRow, rowBytes: UInt32 }
     /// Rows per threadgroup of `matvec_*` (4 SIMD groups of MATVEC_Q4_ROWS or MATVEC_ROWS).
     static func matvecRows(_ type: QuantType) -> Int { type == .q4_K ? 16 : 8 }
+    /// The decode's kernel for a weight type; nil for the types it does not read.
+    static func matvecKernel(_ type: QuantType) -> String? {
+        switch type {
+        case .q4_K: return "matvec_q4_K"
+        case .q6_K: return "matvec_q6_K"
+        case .q8_0: return "matvec_q8_0"
+        default: return nil
+        }
+    }
     struct DecodeAttentionParams { var keys, capacity, groups: UInt32; var scale: Float }
 }
 

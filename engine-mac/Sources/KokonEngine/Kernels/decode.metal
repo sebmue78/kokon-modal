@@ -2,7 +2,7 @@
 using namespace metal;
 
 // Text generation (Prompt+, QwenTextGeneration.swift): one token at a time, so every product is a matrix-vector
-// product that reads the whole weight once. They read the GGUF's Q4_K and Q6_K blocks where they lie (the mapped
+// product that reads the whole weight once. They read the GGUF's Q4_K, Q6_K and Q8_0 blocks where they lie (the mapped
 // file), with ggml's formulas (dequant.metal), and add in fp32: the decode is bound by those bytes.
 
 struct MatvecParams {
@@ -90,6 +90,38 @@ kernel void matvec_q6_K(device const uchar *w [[buffer(0)]], device const float 
             float s3 = dot(q6((la.x >> 4) & m4, (qh.x >> 4) & m2), x3a) + dot(q6((la.y >> 4) & m4, (qh.y >> 4) & m2), x3b);
             float s4 = dot(q6((lb.x >> 4) & m4, (qh.x >> 6) & m2), x4a) + dot(q6((lb.y >> 4) & m4, (qh.y >> 6) & m2), x4b);
             sums[r] += d * (float(sc[0]) * s1 + float(sc[2]) * s2 + float(sc[4]) * s3 + float(sc[6]) * s4);
+        }
+    }
+    for (uint r = 0; r < MATVEC_ROWS; r++) {
+        float total = simd_sum(sums[r]);
+        if (lane == 0 && row0 + r < p.rows) y[row0 + r] = total;
+    }
+}
+
+// Q8_0 (34-byte blocks: fp16 d, then 32 signed bytes; 2-byte aligned): every lane takes one whole block of 32 values,
+// so the 32 lanes read 32 neighbouring blocks of a row; two rows per SIMD group, the activations loaded once for both.
+// Qwen3-VL in Q8_0 (the files with a Q8_0 LM head) needs it for every product of the decode.
+kernel void matvec_q8_0(device const uchar *w [[buffer(0)]], device const float *x [[buffer(1)]],
+                        device float *y [[buffer(2)]], constant MatvecParams &p [[buffer(3)]],
+                        uint group [[threadgroup_position_in_grid]], uint lane [[thread_index_in_simdgroup]],
+                        uint simd [[simdgroup_index_in_threadgroup]], uint groups [[simdgroups_per_threadgroup]]) {
+    uint row0 = (group * groups + simd) * MATVEC_ROWS;
+    if (row0 >= p.rows) return;
+    float sums[MATVEC_ROWS] = {0};
+    for (uint b = lane; b < p.blocksPerRow; b += 32) {
+        device const float4 *xl = (device const float4 *)(x + b * 32);
+        float4 xs[8];
+        for (uint i = 0; i < 8; i++) xs[i] = xl[i];
+        for (uint r = 0; r < MATVEC_ROWS; r++) {
+            if (row0 + r >= p.rows) break;
+            device const uchar *block = w + (ulong)(row0 + r) * p.rowBytes + b * 34;
+            float d = float(*((device const half *)block));
+            float s = 0;
+            for (uint i = 0; i < 4; i++) {
+                uint2 q = load8(block + 2 + 8 * i);
+                s += dot(float4(as_type<char4>(q.x)), xs[2 * i]) + dot(float4(as_type<char4>(q.y)), xs[2 * i + 1]);
+            }
+            sums[r] += d * s;
         }
     }
     for (uint r = 0; r < MATVEC_ROWS; r++) {
