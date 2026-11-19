@@ -1,10 +1,6 @@
-- **Fixed: a LoRA with its own CFG stopped Turbo models.** A LoRA whose CFG was set above 1 (for
-  example CFG 4, the value for the full Qwen-Image model) made every image with Qwen-Image 2.1
-  Turbo fail with "The inference server rejected the request". Turbo models run without CFG.
-  - A LoRA's CFG is now left out on models that run at CFG 1 (the Turbo models). Its steps
-    still apply.
-  - The job notes say so: "The LoRA … asks for CFG 4, but this model runs without CFG, so that is
-    not used."
-  - On models with CFG (MOSS-Image, Fibo 2.0 Dev), a LoRA's CFG is used as before.
-- MCP: when a job fails, the error text now includes the engine's own reason (for example
-  "txt_cfg 4.0: … runs at CFG 1 only"), not only "The inference server rejected the request."
+- **Fixed: Prompt+ with Qwen-Image 2.1 on a Mac.** Prompt+ did nothing on a Mac when the Qwen3-VL
+  text model was a Q8_0 file (for example Qwen3VL-8B-Instruct-Q8_0). The Mac engine's text writer
+  only read Q4_K and Q6_K weights. It stopped with "unsupported GGUF content: output.weight: Q8_0",
+  and the image was made from the prompt as written.
+  - The Mac engine now reads Q8_0 weights too, so Prompt+ works with these files.
+  - Nothing changes for Q4_K_M files or on Windows.

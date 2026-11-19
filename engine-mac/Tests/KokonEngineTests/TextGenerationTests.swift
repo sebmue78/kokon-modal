@@ -54,21 +54,23 @@ final class TextGenerationTests: XCTestCase {
     }
 }
 
-/// The decode's matrix-vector products on Q4_K and Q6_K blocks against the CPU's unpacking (`Dequant.row`) and a dot
+/// The decode's matrix-vector products on Q4_K, Q6_K and Q8_0 blocks against the CPU's unpacking (`Dequant.row`) and a dot
 /// product in double: random blocks with sane scales, 3 blocks a row (ragged across the SIMD group's lanes).
 final class MatvecKernelTests: XCTestCase {
     func testMatvecMatchesTheUnpackedRows() throws {
         let context = try MetalContext()
         var s: UInt64 = 7
         func next() -> UInt64 { s = s &* 6364136223846793005 &+ 1442695040888963407; return s >> 33 }
-        for (type, kernel) in [(QuantType.q4_K, "matvec_q4_K"), (.q6_K, "matvec_q6_K")] {
+        for (type, kernel) in [(QuantType.q4_K, "matvec_q4_K"), (.q6_K, "matvec_q6_K"), (.q8_0, "matvec_q8_0")] {
+            XCTAssertEqual(QwenTextGenerator.matvecKernel(type), kernel)
+            let blocks = 3 * 256 / type.blockValues
             let rows = 37, columns = 3 * 256, rowBytes = type.bytes(count: columns)
             var bytes = (0..<(rows * rowBytes)).map { _ in UInt8(truncatingIfNeeded: next()) }
             // The fp16 scales of every block: small positive values (random bytes may be NaN or huge).
             for r in 0..<rows {
-                for b in 0..<3 {
+                for b in 0..<blocks {
                     let block = r * rowBytes + b * type.blockBytes
-                    let scaleOffsets = type == .q4_K ? [0, 2] : [208]
+                    let scaleOffsets = type == .q4_K ? [0, 2] : type == .q6_K ? [208] : [0]
                     for o in scaleOffsets {
                         let v = Float16(Float(next() % 1000 + 1) * 1e-5)
                         withUnsafeBytes(of: v.bitPattern.littleEndian) { bytes[block + o] = $0[0]; bytes[block + o + 1] = $0[1] }
@@ -83,7 +85,7 @@ final class MatvecKernelTests: XCTestCase {
             let e = commands.makeComputeCommandEncoder()!
             e.setComputePipelineState(try context.pipeline(kernel))
             e.setBuffer(w, offset: 0, index: 0); e.setBuffer(xb, offset: 0, index: 1); e.setBuffer(y, offset: 0, index: 2)
-            var params = QwenTextGenerator.MatvecParams(rows: UInt32(rows), blocksPerRow: 3, rowBytes: UInt32(rowBytes))
+            var params = QwenTextGenerator.MatvecParams(rows: UInt32(rows), blocksPerRow: UInt32(blocks), rowBytes: UInt32(rowBytes))
             e.setBytes(&params, length: MemoryLayout<QwenTextGenerator.MatvecParams>.stride, index: 3)
             let perGroup = QwenTextGenerator.matvecRows(type)
             e.dispatchThreadgroups(MTLSize(width: (rows + perGroup - 1) / perGroup, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 128, height: 1, depth: 1))
