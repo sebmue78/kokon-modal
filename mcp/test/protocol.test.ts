@@ -55,6 +55,8 @@ describe("MCP protocol", () => {
     expect(tools.map((t) => t.name).sort()).toEqual([
       "edit_image", "edit_images", "generate_image", "get_generator_status", "get_image_info", "inpaint_image", "list_loras", "list_models", "outpaint_image", "select_model", "upscale_image",
     ]);
+    // Fork: no tuple schemas (items as a list): Claude refuses those tools.
+    expect(JSON.stringify(tools.map((t) => t.inputSchema))).not.toMatch(/"items":\[/);
     // Fork: the model guide reaches the client with the tool list.
     expect(client.getInstructions()).toMatch(/keep the model in use/);
     const gen = tools.find((t) => t.name === "generate_image")!;
