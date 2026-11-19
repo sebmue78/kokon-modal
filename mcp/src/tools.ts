@@ -232,6 +232,8 @@ async function runJob(ctx: ToolContext, body: Record<string, unknown>, includePr
   // The calling model writes the prompt: Kokon's own prompt writer (Prompt+) never runs for MCP.
   const out = typeof body.output_path === "string" ? body.output_path : undefined;
   const workspace = out ? jobWorkspace(out, ctx.cwd, await roots(ctx)) : ctx.cwd;
+  const refused = await checkModel(ctx, body);
+  if (refused) return refused;
   const job = await ctx.client.call<JobView>("POST", "/jobs", { ...body, enhance: false, workspace, client: "mcp" });
   let last = "";
   let cancelled = false;
@@ -491,15 +493,28 @@ export const handlers = {
   async list_models(_a: Args<"list_models">, ctx: ToolContext) {
     const st = await ctx.client.call<Record<string, any>>("GET", "/status");
     const active = st.profile?.id ?? null;
-    const models = ((st.profiles as any[]) ?? []).map((p) => ({
-      id: p.id,
-      name: MODEL_INFO[p.id]?.name ?? p.display_name,
-      can: MODEL_INFO[p.id]?.can ?? (p.model === "qwen-image-2.1" ? MODEL_INFO["qwen-image-2.1"].can : "see Kokon Modal"),
-      downloaded: !!p.installed,
-      active: p.id === active,
-    }));
-    const lines = models.map((m) => `${m.active ? "* " : "  "}${m.id}: ${m.name}${m.downloaded ? "" : " (not downloaded)"} - ${m.can}`);
-    return { text: `Models (* = in use):\n${lines.join("\n")}`, structured: { active_model: active, models } } as ToolResult;
+    const profiles = (st.profiles as any[]) ?? [];
+    const models = profiles.map((p) => {
+      const info = MODEL_INFO[p.id] ?? (p.model === "qwen-image-2.1" ? MODEL_INFO["qwen-image-2.1"] : undefined);
+      return {
+        id: p.id,
+        name: info?.name ?? p.display_name,
+        can: info?.can ?? "see Kokon Modal",
+        best_for: info?.best_for ?? null,
+        tasks: info?.tasks ?? [],
+        commercial_use: info?.commercial ?? null,
+        downloaded: !!p.installed,
+        active: p.id === active,
+      };
+    });
+    // Per task: the best downloaded model, so an agent that must switch does not have to guess.
+    const recommended = Object.fromEntries((Object.keys(TASK_PICKS) as Task[]).map((t) => [t, bestDownloaded(t, profiles)]));
+    const lines = models.map(
+      (m) => `${m.active ? "* " : "  "}${m.id}: ${m.name}${m.downloaded ? "" : " (not downloaded)"}${m.commercial_use === false ? " [non-commercial license]" : m.commercial_use === null ? " [check its license for commercial use]" : ""}\n    can: ${m.can}${m.best_for ? `\n    best for: ${m.best_for}` : ""}`,
+    );
+    const rec = (Object.keys(TASK_PICKS) as Task[]).map((t) => `- ${TASK_LABEL[t]}: ${recommended[t] ?? "none downloaded"}`);
+    const text = `Models (* = in use). Keep the model in use unless the user names one or it cannot do the task.\n${lines.join("\n")}\n\nBest downloaded model per task:\n${rec.join("\n")}`;
+    return { text, structured: { active_model: active, models, recommended } } as ToolResult;
   },
 
   async select_model(a: Args<"select_model">, ctx: ToolContext) {
@@ -539,17 +554,95 @@ export const handlers = {
   },
 };
 
-/** Fork: what each model of Kokon Modal does, for list_models. */
-export const MODEL_INFO: Record<string, { name: string; can: string }> = {
-  "qwen-image-2.1": { name: "Qwen-Image 2.1 Turbo", can: "everything: new images, edits, combining images, inpainting (areas in one pass)" },
-  "qwen-image-2.1-user": { name: "Qwen-Image 2.1 (the user's own files)", can: "everything: new images, edits, combining images, inpainting" },
-  "qwen-image-2.1-turbo-f16": { name: "Qwen-Image 2.1 Turbo, 16-bit", can: "everything Qwen-Image 2.1 does, in full precision (needs a 16 GB+ card)" },
-  "flux-3-image-klein": { name: "FLUX.3 Image Klein", can: "new images (reads layout areas exactly), edits, combining up to 10 images, inpainting (non-commercial license)" },
-  "fibo-2.0-dev": { name: "Fibo 2.0 Dev", can: "new images, edits, combining images (refer to them as <image_1>, <image_2>), inpainting (non-commercial)" },
-  "fibo-2.0-edit-turbo": { name: "Fibo 2.0 Edit Turbo", can: "fast edits and combining images only, no new images from text (non-commercial)" },
-  "krea-2-turbo": { name: "Krea 2 Turbo", can: "new images from text up to 2K, inpainting and outpainting (no edits of a whole photo)" },
-  "moss-image-sft": { name: "MOSS-Image SFT", can: "new images from text with CFG, inpainting and outpainting (no edits of a whole photo)" },
+/** Fork: the tasks the model guide knows. */
+export type Task = "new_image" | "layout" | "edit" | "combine" | "change_part" | "remove" | "outpaint";
+
+export const TASK_LABEL: Record<Task, string> = {
+  new_image: "new image from text",
+  layout: "new image with layout areas",
+  edit: "edit a whole photo",
+  combine: "combine images / new scene from reference images",
+  change_part: "change part of a photo (mask or areas)",
+  remove: "remove an object",
+  outpaint: "expand beyond the borders",
 };
+
+interface ModelInfo {
+  name: string;
+  can: string;
+  /** What it is best at, for an agent that has to choose. */
+  best_for: string;
+  tasks: Task[];
+  /** The license allows commercial use of the images (null: depends on its terms, see the license). */
+  commercial: boolean | null;
+}
+
+const QWEN_TASKS: Task[] = ["new_image", "layout", "edit", "combine", "change_part", "remove", "outpaint"];
+const QWEN_BEST =
+  "the all-rounder and the first choice: text in images, edits of a whole photo, removing objects and changing parts (it sees the marked area in the photo; several areas in one pass)";
+
+/** Fork: what each model of Kokon Modal does, for list_models and the model guide. */
+export const MODEL_INFO: Record<string, ModelInfo> = {
+  "qwen-image-2.1": { name: "Qwen-Image 2.1 Turbo", can: "everything: new images, layout (as a sketch), edits, combining up to 10 images, inpainting (areas in one pass), outpainting", best_for: QWEN_BEST, tasks: QWEN_TASKS, commercial: false },
+  "qwen-image-2.1-user": { name: "Qwen-Image 2.1 (the user's own files)", can: "everything Qwen-Image 2.1 does", best_for: QWEN_BEST, tasks: QWEN_TASKS, commercial: false },
+  "qwen-image-2.1-turbo-f16": { name: "Qwen-Image 2.1 Turbo, 16-bit", can: "everything Qwen-Image 2.1 does, in full precision (needs a 16 GB+ card)", best_for: `${QWEN_BEST}; a little finer detail and text than the 4-bit files, slower on cards under 16 GB`, tasks: QWEN_TASKS, commercial: false },
+  "flux-3-image-klein": { name: "FLUX.3 Image Klein", can: "new images, edits, combining up to 10 images, inpainting (one area per pass), outpainting", best_for: "new images with a layout (reads the areas exactly, the others only approximately), edits and combining images", tasks: QWEN_TASKS, commercial: false },
+  "fibo-2.0-dev": { name: "Fibo 2.0 Dev", can: "new images, edits, combining up to 10 images (refer to them as <image_1>, <image_2>), inpainting (one area per pass), outpainting", best_for: "new images, edits and combining images when there is time: 20 steps with CFG, slower than the Turbo models", tasks: QWEN_TASKS, commercial: false },
+  "fibo-2.0-edit-turbo": { name: "Fibo 2.0 Edit Turbo", can: "edits, combining up to 10 images, inpainting (one area per pass), outpainting; no new images from text", best_for: "fast edits of a whole photo (4 steps)", tasks: ["edit", "combine", "change_part", "remove", "outpaint"], commercial: false },
+  "krea-2-turbo": { name: "Krea 2 Turbo", can: "new images from text up to 2K, layout (as words), inpainting and outpainting as plain masked inpainting; no edits of a whole photo, no reference images", best_for: "new images from text, up to 2K; filling or expanding an area from a description", tasks: ["new_image", "layout", "change_part", "remove", "outpaint"], commercial: null },
+  "moss-image-sft": { name: "MOSS-Image SFT", can: "new images from text (CFG), layout (as words), inpainting and outpainting as plain masked inpainting; no edits of a whole photo, no reference images", best_for: "new images from text under an open license (Apache-2.0)", tasks: ["new_image", "layout", "change_part", "remove", "outpaint"], commercial: true },
+};
+
+/** Fork: the models to prefer per task, best first (by what they can, not by taste). */
+export const TASK_PICKS: Record<Task, string[]> = {
+  new_image: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "moss-image-sft"],
+  layout: ["flux-3-image-klein", "qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
+  edit: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev"],
+  combine: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev"],
+  change_part: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
+  remove: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
+  outpaint: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "fibo-2.0-edit-turbo", "moss-image-sft"],
+};
+
+/** The task a job body asks for. */
+export function taskOf(body: Record<string, unknown>): Task | null {
+  switch (body.mode) {
+    case "generate":
+      return Array.isArray(body.layout) && body.layout.length ? "layout" : "new_image";
+    case "compose":
+    case "multi_reference":
+      return "combine";
+    case "edit":
+      return "edit";
+    case "inpaint":
+      return body.inpaint_action === "remove" ? "remove" : "change_part";
+    case "outpaint":
+      return "outpaint";
+    default:
+      return null;
+  }
+}
+
+/** The first model of `TASK_PICKS` that is downloaded, or null. */
+export function bestDownloaded(task: Task, profiles: { id: string; installed: boolean }[]): string | null {
+  const have = new Set(profiles.filter((p) => p.installed).map((p) => p.id));
+  return TASK_PICKS[task].find((id) => have.has(id)) ?? null;
+}
+
+/** Fork: stops a job the model in use cannot do, and names the model to switch to. */
+async function checkModel(ctx: ToolContext, body: Record<string, unknown>): Promise<ToolResult | null> {
+  const task = taskOf(body);
+  if (!task) return null;
+  const st = await ctx.client.call<Record<string, any>>("GET", "/status").catch(() => null);
+  const id: string | undefined = st?.profile?.id;
+  const info = id ? MODEL_INFO[id] : undefined;
+  if (!info || info.tasks.includes(task)) return null;
+  const best = bestDownloaded(task, st?.profiles ?? []);
+  const fix = best
+    ? `Tell the user, then call select_model with model_id "${best}" (${MODEL_INFO[best].name}, downloaded) and try again.`
+    : `No downloaded model can do this. Ask the user whether to download ${MODEL_INFO[TASK_PICKS[task][0]].name} (select_model with download: true).`;
+  return errorResult(`${info.name}, the model in use, cannot ${TASK_LABEL[task]}.`, "model_cannot", fix);
+}
 
 export function toErrorResult(e: unknown): ToolResult {
   if (e instanceof PathError) return errorResult(e.message, "invalid_path");

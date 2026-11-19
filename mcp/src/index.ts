@@ -7,6 +7,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { handlers, schemas, toErrorResult, type ToolContext, type ToolResult } from "./tools.js";
 import { ServiceClient } from "./service.js";
 import { helpText } from "./help.js";
+import { INSTRUCTIONS } from "./guide.js";
 import pkg from "../package.json" with { type: "json" };
 
 // Bundled in by esbuild: the one place to bump is package.json (see docs/releasing.md).
@@ -54,12 +55,12 @@ const DESCRIPTIONS: Record<keyof typeof schemas, { title: string; description: s
   list_models: {
     title: "List models",
     description:
-      "The image models of Kokon Modal (Qwen-Image 2.1 in 4 and 16 bit, FLUX.3 Klein, Fibo 2.0 Dev and Edit Turbo, Krea 2 Turbo, MOSS-Image), what each can do, which are downloaded and which is in use. Check it before a task a model cannot do (e.g. Krea 2 and MOSS-Image do not edit whole photos).",
+      "The image models of Kokon Modal (Qwen-Image 2.1 in 4 and 16 bit, FLUX.3 Klein, Fibo 2.0 Dev and Edit Turbo, Krea 2 Turbo, MOSS-Image), what each can do and is best for, which are downloaded, which is in use, and the best downloaded model per task (new image, layout, edit, combine, change part, remove, expand). Use it when the model in use cannot do a task or the user asks for the best model.",
   },
   select_model: {
     title: "Select model",
     description:
-      "Make a model the one in use for the next images (it is the same choice as the model menu in the app, so the user sees it too). A model that is not downloaded is only fetched with download: true; ask the user first, it is several GB.",
+      "Make a model the one in use for the next images (it is the same choice as the model menu in the app, so the user sees it too, and the next image waits while it loads). Only switch when the user names a model or the model in use cannot do the task (see the server instructions and list_models). A model that is not downloaded is only fetched with download: true; ask the user first, it is several GB.",
   },
   list_loras: {
     title: "List LoRAs",
@@ -68,7 +69,7 @@ const DESCRIPTIONS: Record<keyof typeof schemas, { title: string; description: s
 };
 
 const client = new ServiceClient();
-const server = new McpServer({ name: "kokon-modal", version: VERSION }, { capabilities: { tools: {} } });
+const server = new McpServer({ name: "kokon-modal", version: VERSION }, { capabilities: { tools: {} }, instructions: INSTRUCTIONS });
 
 function toMcp(r: ToolResult) {
   const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [{ type: "text", text: r.text }];
