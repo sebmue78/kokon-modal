@@ -515,6 +515,7 @@ pub fn sampling(cfg: &AppConfig, requested: Option<&[String]>, rec: &crate::conf
         return (out, None);
     };
     let mut parts = Vec::new();
+    let mut skipped = None;
     if let Some(s) = l.steps {
         if s != out.steps {
             out.turbo_sigmas = false;
@@ -522,14 +523,29 @@ pub fn sampling(cfg: &AppConfig, requested: Option<&[String]>, rec: &crate::conf
         out.steps = s;
         parts.push(format!("{s} steps"));
     }
-    if let Some(c) = l.cfg_scale {
-        out.cfg_scale = c;
-        parts.push(if c <= 1.0 { "CFG off".to_string() } else { format!("CFG {c}") });
+    match l.cfg_scale {
+        // A distilled model (Turbo, CFG 1) breaks at a higher CFG, and the Mac engine refuses
+        // it: a LoRA's CFG is usually the one for the full model, so it is left out here.
+        Some(c) if c > 1.0 && rec.cfg_scale <= 1.0 => skipped = Some(c),
+        Some(c) => {
+            out.cfg_scale = c;
+            parts.push(if c <= 1.0 { "CFG off".to_string() } else { format!("CFG {c}") });
+        }
+        None => {}
     }
-    if let Some(first) = parts.first_mut() {
-        *first = format!("{}{}", first[..1].to_uppercase(), &first[1..]);
+    let mut note = String::new();
+    if !parts.is_empty() {
+        let mut text = parts.join(" and ");
+        text = format!("{}{}", text[..1].to_uppercase(), &text[1..]);
+        note = format!("{text} from the LoRA \"{}\" (sampler: the model's own).", l.name);
     }
-    (out, Some(format!("{} from the LoRA \"{}\" (sampler: the model's own).", parts.join(" and "), l.name)))
+    if let Some(c) = skipped {
+        if !note.is_empty() {
+            note.push(' ');
+        }
+        note.push_str(&format!("The LoRA \"{}\" asks for CFG {c}, but this model runs without CFG, so that is not used.", l.name));
+    }
+    (out, Some(note))
 }
 
 /// The prompt with the LoRAs' trigger words in front (after the prompt enhancer, so it never
@@ -775,12 +791,21 @@ mod tests {
         let (r, note) = sampling(&cfg, Some(&["style".into(), "fast".into()]), &rec);
         assert_eq!((r.steps, r.cfg_scale, r.turbo_sigmas, r.sampler.as_str()), (4, 1.0, false, rec.sampler.as_str()));
         assert_eq!(note.unwrap(), "4 steps and CFG off from the LoRA \"FAST\" (sampler: the model's own).");
-        // Only CFG: the steps and their schedule stay.
+        // Only CFG, on a model that uses CFG (MOSS): the steps and their schedule stay.
         cfg.loras[1].steps = None;
         cfg.loras[1].cfg_scale = Some(2.5);
-        let (r, note) = sampling(&cfg, Some(&["fast".into()]), &rec);
-        assert_eq!((r.steps, r.cfg_scale, r.turbo_sigmas), (rec.steps, 2.5, rec.turbo_sigmas));
+        let full = crate::config::RecommendedSettings { steps: 20, cfg_scale: 3.0, turbo_sigmas: false, ..rec.clone() };
+        let (r, note) = sampling(&cfg, Some(&["fast".into()]), &full);
+        assert_eq!((r.steps, r.cfg_scale, r.turbo_sigmas), (20, 2.5, false));
         assert!(note.unwrap().starts_with("CFG 2.5 from"));
+        // A Turbo model (CFG 1) keeps CFG 1: the engine refuses more, and the note says why.
+        cfg.loras[1].steps = Some(20);
+        cfg.loras[1].cfg_scale = Some(4.0);
+        let (r, note) = sampling(&cfg, Some(&["fast".into()]), &rec);
+        assert_eq!((r.steps, r.cfg_scale, r.turbo_sigmas), (20, rec.cfg_scale, false));
+        let note = note.unwrap();
+        assert!(note.starts_with("20 steps from the LoRA \"FAST\"") && note.contains("asks for CFG 4, but this model runs without CFG"), "{note}");
+        cfg.loras[1].steps = None;
         // A LoRA of another model changes nothing.
         cfg.loras[1].model = crate::config::FLUX3_KLEIN.into();
         assert!(sampling(&cfg, Some(&["fast".into()]), &rec).1.is_none());
