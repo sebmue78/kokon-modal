@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { handlers, label, schemas, toErrorResult } from "../src/tools";
+import { bestDownloaded, handlers, label, MODEL_INFO, schemas, TASK_PICKS, taskOf, toErrorResult } from "../src/tools";
+import { INSTRUCTIONS } from "../src/guide";
 
 const obj = <K extends keyof typeof schemas>(k: K) => z.object(schemas[k]);
 
@@ -206,5 +207,55 @@ describe("progress labels are truthful", () => {
     expect(label({ ...j, status: "starting_backend" })).toBe("Loading the model");
     expect(label({ ...j, stage: "upscaling", step: null })).toBe("Upscaling");
     expect(label({ ...j, stage: "refining", step: [2, 6] })).toBe("Refining step 2/6");
+  });
+});
+
+describe("model guide", () => {
+  const profiles = [
+    { id: "qwen-image-2.1", installed: false },
+    { id: "krea-2-turbo", installed: true },
+    { id: "flux-3-image-klein", installed: true },
+    { id: "fibo-2.0-edit-turbo", installed: true },
+  ];
+  it("knows the task of each job", () => {
+    expect(taskOf({ mode: "generate" })).toBe("new_image");
+    expect(taskOf({ mode: "generate", layout: [{}] })).toBe("layout");
+    expect(taskOf({ mode: "compose" })).toBe("combine");
+    expect(taskOf({ mode: "inpaint", inpaint_action: "remove" })).toBe("remove");
+    expect(taskOf({ mode: "inpaint", inpaint_action: "edit" })).toBe("change_part");
+    expect(taskOf({ mode: "upscale" })).toBeNull();
+  });
+  it("picks the best downloaded model per task", () => {
+    expect(bestDownloaded("edit", profiles)).toBe("flux-3-image-klein");
+    expect(bestDownloaded("new_image", profiles)).toBe("krea-2-turbo");
+    expect(bestDownloaded("layout", profiles)).toBe("flux-3-image-klein");
+    expect(bestDownloaded("edit", [{ id: "krea-2-turbo", installed: true }])).toBeNull();
+    // Every pick is a model that can do the task.
+    for (const [t, ids] of Object.entries(TASK_PICKS)) for (const id of ids) expect(MODEL_INFO[id].tasks).toContain(t);
+  });
+  it("stops a job the model in use cannot do and names the model to switch to", async () => {
+    let posted = false;
+    const client = {
+      call: async (method: string, p: string) => {
+        if (p === "/status") return { profile: { id: "krea-2-turbo" }, profiles };
+        if (method === "POST") posted = true;
+        return {};
+      },
+    };
+    const tmp = fs.mkdtempSync(path.join(process.cwd(), ".qls-mcp-g-"));
+    try {
+      fs.writeFileSync(path.join(tmp, "a.png"), "x");
+      const r = await handlers.edit_image({ image_path: path.join(tmp, "a.png"), prompt: "make it night" } as never, { client: client as never, cwd: process.cwd(), progress: () => {} });
+      expect(r.isError).toBe(true);
+      expect(r.text).toContain("Krea 2 Turbo, the model in use, cannot edit a whole photo");
+      expect(r.text).toContain('"flux-3-image-klein"');
+      expect(posted).toBe(false);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+  it("the instructions keep the model in use unless needed", () => {
+    expect(INSTRUCTIONS).toMatch(/Otherwise keep the model in use/);
+    expect(INSTRUCTIONS).toMatch(/Never download a model/);
   });
 });

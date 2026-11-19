@@ -58,6 +58,11 @@ run for MCP, so the assistant writes the full description. The tool descriptions
 | `select_model` | Switch the model in use (the same choice as the app's model menu); downloads one only with `download: true`. |
 | `list_loras` | The LoRAs added in the app, per model, with trigger words. `generate_image`, `edit_image(s)` and `inpaint_image` take their ids in `loras`. |
 
+**Choosing a model.** The server tells the agent to keep the model in use unless the user names
+one or it cannot do the task. Then the tool says so and names the best downloaded model, and
+`list_models` shows what each model can do and is best for (new image, layout, edit, combine,
+change part, remove, expand). Models are only downloaded after asking the user.
+
 Areas and layout boxes use fractions of the image (0..1 from the top left): `{"x": 0.1, "y": 0.5,
 "w": 0.3, "h": 0.4, "text": "a red vintage car"}`, optionally with `points` for an outline.
 
