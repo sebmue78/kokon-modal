@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { bestDownloaded, handlers, label, MODEL_INFO, schemas, TASK_PICKS, taskOf, toErrorResult } from "../src/tools";
+import { bestDownloaded, errorResult, handlers, label, MODEL_INFO, schemas, TASK_PICKS, taskOf, toErrorResult } from "../src/tools";
 import { INSTRUCTIONS } from "../src/guide";
 
 const obj = <K extends keyof typeof schemas>(k: K) => z.object(schemas[k]);
@@ -257,5 +257,13 @@ describe("model guide", () => {
   it("the instructions keep the model in use unless needed", () => {
     expect(INSTRUCTIONS).toMatch(/Otherwise keep the model in use/);
     expect(INSTRUCTIONS).toMatch(/Never download a model/);
+  });
+});
+
+describe("error text", () => {
+  it("carries the engine's reason, not only the message", () => {
+    const r = errorResult("The inference server rejected the request.", "malformed_request", undefined, '{"error":"txt_cfg 4.0: Qwen-Image 2.1 Turbo runs at CFG 1 only"}');
+    expect(r.text).toContain("runs at CFG 1 only");
+    expect(errorResult("Cancelled.").text).toBe("Cancelled.");
   });
 });

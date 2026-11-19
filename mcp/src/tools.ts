@@ -304,7 +304,10 @@ async function formatDone(ctx: ToolContext, j: JobView, includePreview: boolean)
 
 export function errorResult(message: string, code = "error", suggestion?: string, detail?: string): ToolResult {
   const structured = { error: { code, message, suggestion, detail: detail?.slice(0, 2000) } };
-  return { text: [message, suggestion].filter(Boolean).join(" "), structured, isError: true };
+  // The engine's own words (e.g. why it refused a request) go in the text too: a client may
+  // show the agent only the text.
+  const why = detail?.trim() ? `Detail: ${detail.trim().slice(0, 500)}` : undefined;
+  return { text: [message, suggestion, why].filter(Boolean).join(" "), structured, isError: true };
 }
 
 async function roots(ctx: ToolContext) {
