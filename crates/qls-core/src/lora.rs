@@ -130,6 +130,11 @@ fn read_header(path: &Path) -> AppResult<StFile> {
     Ok(StFile { tensors, meta, data_start, len })
 }
 
+/// Fork: the training metadata of a safetensors file (`__metadata__`), for "Suggest settings".
+pub fn file_meta(path: &Path) -> AppResult<serde_json::Map<String, serde_json::Value>> {
+    Ok(read_header(path)?.meta)
+}
+
 /// PEFT's alpha, when the file has no other alpha the engine reads (`.alpha` tensors or a
 /// top-level `alpha`).
 fn peft_only_alpha(st: &StFile) -> Option<f32> {

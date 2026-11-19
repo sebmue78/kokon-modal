@@ -185,6 +185,12 @@ export interface GenerationRecord {
 export interface AppliedLora { id: string; name: string; weight: number; trigger_words?: string }
 
 /** One of the user's LoRAs (Settings → LoRA); Kokon's prepared copy is `<dir>/<id>.safetensors`. */
+/** Fork: "Suggest settings" for a LoRA: values with their source, and the places looked at. */
+export interface LoraSuggestions {
+  values: { field: "triggerWords" | "steps" | "cfgScale" | "weight"; value: string | number; source: string; detail: string }[];
+  looked: { source: string; url: string | null; note: string; found: boolean }[];
+}
+
 export interface LoraItem {
   id: string;
   name: string;
@@ -198,6 +204,8 @@ export interface LoraItem {
   /** Fork: steps / CFG while the LoRA is on (speed LoRAs); null = the model's own. */
   steps?: number | null;
   cfgScale?: number | null;
+  /** Fork: its Hugging Face or Civitai page ("" = none), for "Suggest settings". */
+  link?: string;
   size: number;
   warning: string | null;
   notes: string[];

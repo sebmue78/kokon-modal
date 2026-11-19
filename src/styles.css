@@ -1428,3 +1428,16 @@ kbd { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; display
 .welcome-item .link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; vertical-align: baseline; }
 .welcome-item .link-btn svg { margin: 0; }
 .row-btns { display: flex; gap: 6px; flex: none; }
+/* Fork: "Suggest settings" in Settings → LoRA. */
+.lora-suggest-open { align-self: flex-start; }
+.lora-suggest { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.lora-suggest-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.lora-suggest-privacy { font-size: 12px; }
+.lora-suggest-field { display: grid; grid-template-columns: 96px 1fr; gap: 8px; align-items: start; padding-top: 6px; border-top: 1px solid var(--border); }
+.lora-suggest-name { font-size: 13px; padding-top: 5px; }
+.lora-suggest-values { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lora-suggest-value { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.lora-suggest-value .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lora-suggest-value:not(.best) { opacity: 0.75; }
+.lora-suggest-looked { display: flex; flex-direction: column; gap: 2px; font-size: 12px; padding-top: 6px; border-top: 1px solid var(--border); }
+.lora-suggest-looked .link-btn { display: inline-flex; vertical-align: -2px; }
