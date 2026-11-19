@@ -546,10 +546,20 @@ export const handlers = {
     const [st, l] = await Promise.all([ctx.client.call<Record<string, any>>("GET", "/status"), ctx.client.call<{ items: any[] }>("GET", "/loras")]);
     const model = st.profile?.model ?? "qwen-image-2.1";
     // LoRAs loaded before models had their own are Qwen-Image 2.1's.
-    const items = (l.items ?? []).map((x) => ({ id: x.id, name: x.name, model: x.model || "qwen-image-2.1", trigger_words: x.trigger_words || "", weight: x.weight, usable_now: (x.model || "qwen-image-2.1") === model }));
+    // The service sends LoRAs in camelCase (triggerWords, cfgScale).
+    const items = (l.items ?? []).map((x) => ({
+      id: x.id,
+      name: x.name,
+      model: x.model || "qwen-image-2.1",
+      trigger_words: x.triggerWords ?? x.trigger_words ?? "",
+      weight: x.weight,
+      steps: x.steps ?? null,
+      cfg: x.cfgScale ?? null,
+      usable_now: (x.model || "qwen-image-2.1") === model,
+    }));
     const now = items.filter((x) => x.usable_now);
     const text = now.length
-      ? `LoRAs for the model in use (pass their ids as loras):\n${now.map((x) => `- ${x.id}: ${x.name}${x.trigger_words ? ` (trigger: ${x.trigger_words})` : ""}`).join("\n")}`
+      ? `LoRAs for the model in use (pass their ids as loras):\n${now.map((x) => `- ${x.id}: ${x.name}${x.trigger_words ? ` (trigger: ${x.trigger_words})` : ""}${x.steps || x.cfg ? ` (sets ${[x.steps && `${x.steps} steps`, x.cfg && `CFG ${x.cfg}`].filter(Boolean).join(", ")})` : ""}`).join("\n")}`
       : "No LoRAs for the model in use. LoRAs are added in Kokon Modal: Settings → LoRA (beta).";
     return { text, structured: { model, loras: items } } as ToolResult;
   },

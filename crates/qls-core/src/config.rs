@@ -815,6 +815,10 @@ pub struct LoraEntry {
     pub trigger_words: String,
     /// On in every new project of the app (MCP never uses LoRAs).
     pub on_by_default: bool,
+    /// Fork: steps and CFG while this LoRA is on (speed LoRAs: e.g. 4 steps at CFG 1); None =
+    /// the model's own (`RecommendedSettings`).
+    pub steps: Option<u32>,
+    pub cfg_scale: Option<f32>,
     /// Size of the copy in bytes.
     pub size: u64,
     /// From the check: the LoRA works only in part.
@@ -834,6 +838,8 @@ impl Default for LoraEntry {
             weight: 1.0,
             trigger_words: String::new(),
             on_by_default: false,
+            steps: None,
+            cfg_scale: None,
             size: 0,
             warning: None,
             notes: vec![],

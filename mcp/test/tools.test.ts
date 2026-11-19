@@ -177,10 +177,10 @@ describe("fork tools", () => {
 
   it("lists the LoRAs of the model in use", async () => {
     const f = fake((_m, p) =>
-      p === "/status" ? status : p === "/loras" ? { items: [{ id: "a", name: "Ink", model: "", trigger_words: "ink style" }, { id: "b", name: "Film", model: "krea-2" }] } : undefined,
+      p === "/status" ? status : p === "/loras" ? { items: [{ id: "a", name: "Ink", model: "", triggerWords: "ink style", steps: 4, cfgScale: 1 }, { id: "b", name: "Film", model: "krea-2" }] } : undefined,
     );
     const r = await handlers.list_loras({} as never, f.ctx);
-    expect(r.text).toContain("a: Ink (trigger: ink style)");
+    expect(r.text).toContain("a: Ink (trigger: ink style) (sets 4 steps, CFG 1)");
     expect(r.text).not.toContain("Film");
   });
 });

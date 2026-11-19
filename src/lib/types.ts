@@ -195,6 +195,9 @@ export interface LoraItem {
   weight: number;
   triggerWords: string;
   onByDefault: boolean;
+  /** Fork: steps / CFG while the LoRA is on (speed LoRAs); null = the model's own. */
+  steps?: number | null;
+  cfgScale?: number | null;
   size: number;
   warning: string | null;
   notes: string[];

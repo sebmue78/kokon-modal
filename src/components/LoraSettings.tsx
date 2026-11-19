@@ -39,6 +39,32 @@ function BlurField(props: { value: string; placeholder?: string; label: string; 
   );
 }
 
+/** Fork: a number saved on blur; empty = the model's own (sent as 0). */
+function NumberField(props: { value: number | null | undefined; label: string; onSave: (v: number) => void }) {
+  const shown = props.value == null ? "" : String(props.value);
+  const [v, setV] = useState(shown);
+  useEffect(() => setV(shown), [shown]);
+  const save = () => {
+    if (v.trim() === shown) return;
+    const n = v.trim() === "" ? 0 : Number(v.replace(",", "."));
+    if (!Number.isFinite(n)) return setV(shown);
+    props.onSave(n);
+  };
+  return (
+    <input
+      className="input lora-number"
+      type="text"
+      inputMode="decimal"
+      aria-label={props.label}
+      placeholder="auto"
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+    />
+  );
+}
+
 function LoraRow({ l }: { l: LoraItem }) {
   const [weight, setWeight] = useState(l.weight);
   useEffect(() => setWeight(l.weight), [l.weight]);
@@ -86,6 +112,17 @@ function LoraRow({ l }: { l: LoraItem }) {
         <span>Trigger words (added in front of the prompt when the LoRA is on)</span>
         <BlurField label="Trigger words" placeholder="none" value={l.triggerWords} onSave={(triggerWords) => update(l.id, { triggerWords })} />
       </label>
+      <div className="field-row">
+        <span title="For speed LoRAs (e.g. 4 steps, CFG 1). Empty: the model's own. The sampler always stays the model's own.">
+          Steps and CFG while it is on <span className="muted">(speed LoRAs; auto = the model's own)</span>
+        </span>
+        <span className="lora-sampling">
+          <NumberField label="Steps" value={l.steps} onSave={(steps) => update(l.id, { steps })} />
+          <span className="muted">steps</span>
+          <NumberField label="CFG" value={l.cfgScale} onSave={(cfgScale) => update(l.id, { cfgScale })} />
+          <span className="muted">CFG</span>
+        </span>
+      </div>
       <div className="field-row">
         <span>On by default in new projects</span>
         <Switch on={l.onByDefault} label="On by default" onChange={(onByDefault) => update(l.id, { onByDefault })} />
