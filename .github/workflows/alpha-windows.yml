@@ -197,6 +197,9 @@ jobs:
           bundle=target/aarch64-apple-darwin/release/bundle
           app=$(ls -d "$bundle"/macos/*.app | head -1)
           codesign --verify --deep --strict "$app" && echo "signature (ad hoc) valid"
+          # Fork: the bundled Node programs must start (hardened runtime without JIT entitlements
+          # made kokon-mcp crash with "trace trap" in 0.12.1027).
+          "$app/Contents/MacOS/kokon-mcp" --version
           mkdir -p dist-release
           v="${{ needs.version.outputs.version }}"
           cp "$(ls -t "$bundle"/dmg/*.dmg | head -1)" "dist-release/Kokon-modal_${v}_aarch64.dmg"
