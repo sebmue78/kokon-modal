@@ -123,6 +123,7 @@ pub fn router(state: Arc<AppState>, lan: bool) -> Router {
         .route("/image-info", post(image_info))
         .route("/loras", get(loras_list).post(loras_add))
         .route("/loras/{id}", delete(loras_remove).patch(loras_update))
+        .route("/loras/{id}/suggest", post(loras_suggest))
         .route("/luts", get(luts_list))
         .route("/luts/import", post(luts_import))
         .route("/luts/{name}", delete(luts_remove))
@@ -1147,6 +1148,19 @@ async fn loras_add(State(s): St, Json(b): Json<PathBody>) -> ApiResult<Json<Valu
     let engine = s.engine.clone();
     let entry = tokio::task::spawn_blocking(move || engine.add_lora(&p)).await.map_err(AppError::internal)??;
     Ok(Json(serde_json::to_value(entry).unwrap()))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct SuggestBody {
+    /// Look the LoRA up online (Civitai by hash, the linked page); false = its file only.
+    online: bool,
+}
+
+/// Fork: "Suggest settings" for a LoRA (nothing is changed).
+async fn loras_suggest(State(s): St, AxPath(id): AxPath<String>, Json(b): Json<SuggestBody>) -> ApiResult<Json<Value>> {
+    let r = s.engine.suggest_lora(&id, b.online).await?;
+    Ok(Json(serde_json::to_value(r).unwrap()))
 }
 
 async fn loras_update(State(s): St, AxPath(id): AxPath<String>, Json(b): Json<LoraPatch>) -> ApiResult<Json<Value>> {

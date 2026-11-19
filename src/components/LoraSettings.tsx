@@ -8,6 +8,7 @@ import { inBrowser } from "../lib/platform";
 import { refreshLoras, toastError, toastInfo, useStore } from "../lib/store";
 import type { LoraItem } from "../lib/types";
 import { Switch } from "./ui";
+import { LoraSuggest } from "./LoraSuggest";
 
 type Patch = Parameters<typeof api.updateLora>[1];
 
@@ -127,6 +128,7 @@ function LoraRow({ l }: { l: LoraItem }) {
         <span>On by default in new projects</span>
         <Switch on={l.onByDefault} label="On by default" onChange={(onByDefault) => update(l.id, { onByDefault })} />
       </div>
+      <LoraSuggest l={l} />
       <span className="muted lora-meta">
         {[...l.notes, `${formatBytes(l.size)} · from ${l.source}`].join(" ")}
       </span>

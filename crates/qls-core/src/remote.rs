@@ -281,6 +281,8 @@ pub fn browser_allowed(method: &str, path: &str) -> bool {
         ("POST", ["jobs", _, "cancel"]) => true,
         ("POST", ["private", "clear"]) => true,
         ("POST", ["luts", _, "apply"]) => true,
+        // Fork: "Suggest settings" changes nothing (like reading the LoRA list).
+        ("POST", ["loras", _, "suggest"]) => true,
         ("POST", ["session", "heartbeat" | "release"]) => true,
         ("PATCH", ["gallery", _] | ["loras", _]) => true,
         ("DELETE", ["gallery", _] | ["loras", _] | ["luts", _] | ["setup", "legacy-upscalers"]) => true,

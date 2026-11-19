@@ -14,6 +14,7 @@ pub mod imaging;
 pub mod installer;
 pub mod layout;
 pub mod lora;
+pub mod lora_suggest;
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 mod glibc_compat;
 pub mod lut;

@@ -7,7 +7,7 @@ import { inBrowser } from "./platform";
 import type { ProjectData } from "./store";
 import type {
   GpuBackend,
-  AppConfig, AppErrorBody, GenerationRecord, GenerationRequest, HardwareReport, InputRecord, InstallStatus, JobView, LoraItem, LutEntry, MacBenchState, ModelFileInfo, ModelScan, ModelSlot, ModelsStatus, Plan,
+  AppConfig, AppErrorBody, GenerationRecord, GenerationRequest, HardwareReport, InputRecord, InstallStatus, JobView, LoraItem, LoraSuggestions, LutEntry, MacBenchState, ModelFileInfo, ModelScan, ModelSlot, ModelsStatus, Plan,
   ServiceEvent, SetupReport, StatusResponse, UpscalerItem,
 } from "./types";
 
@@ -219,8 +219,10 @@ export const api = {
   loras: () => call<{ items: LoraItem[]; dir: string; max_active: number }>("/loras"),
   /** Checks a LoRA file against the image model and loads Kokon's copy of it. */
   addLora: (path: string) => call<LoraItem>("/loras", { method: "POST", body: json({ path }) }),
-  updateLora: (id: string, patch: Partial<Pick<LoraItem, "name" | "weight" | "triggerWords" | "onByDefault" | "steps" | "cfgScale">>) =>
+  updateLora: (id: string, patch: Partial<Pick<LoraItem, "name" | "weight" | "triggerWords" | "onByDefault" | "steps" | "cfgScale" | "link">>) =>
     call<LoraItem>(`/loras/${encodeURIComponent(id)}`, { method: "PATCH", body: json(patch) }),
+  /** Fork: suggested settings from the file and, when `online`, Civitai and the linked page. */
+  suggestLora: (id: string, online: boolean) => call<LoraSuggestions>(`/loras/${encodeURIComponent(id)}/suggest`, { method: "POST", body: json({ online }) }),
   /** Removes the LoRA and Kokon's copy (the user's file stays). */
   removeLora: (id: string) => call<{ removed: string }>(`/loras/${encodeURIComponent(id)}`, { method: "DELETE" }),
   luts: () => call<{ items: LutEntry[] }>("/luts"),

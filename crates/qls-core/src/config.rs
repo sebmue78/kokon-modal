@@ -819,6 +819,8 @@ pub struct LoraEntry {
     /// the model's own (`RecommendedSettings`).
     pub steps: Option<u32>,
     pub cfg_scale: Option<f32>,
+    /// Fork: the LoRA's page (Hugging Face or Civitai) for "Suggest settings"; "" = none.
+    pub link: String,
     /// Size of the copy in bytes.
     pub size: u64,
     /// From the check: the LoRA works only in part.
@@ -840,6 +842,7 @@ impl Default for LoraEntry {
             on_by_default: false,
             steps: None,
             cfg_scale: None,
+            link: String::new(),
             size: 0,
             warning: None,
             notes: vec![],

@@ -68,6 +68,8 @@ pub struct LoraPatch {
     /// Fork: steps / CFG while the LoRA is on; 0 = back to the model's own.
     pub steps: Option<u32>,
     pub cfg_scale: Option<f32>,
+    /// Fork: the LoRA's Hugging Face or Civitai page ("" = none).
+    pub link: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -404,9 +406,42 @@ impl Engine {
             }
             l.cfg_scale = (c > 0.0).then_some((c * 10.0).round() / 10.0);
         }
+        if let Some(link) = patch.link {
+            let link = link.trim();
+            if !link.is_empty() && crate::lora_suggest::parse_link(link).is_none() {
+                return Err(AppError::invalid("Paste the LoRA's Hugging Face or Civitai page (https://huggingface.co/… or https://civitai.com/models/…)."));
+            }
+            l.link = link.chars().take(500).collect();
+        }
         let out = l.clone();
         self.set_loras(list)?;
         Ok(out)
+    }
+
+    /// Fork: suggested settings for a LoRA: what its file says and, when `online`, what Civitai
+    /// (by the file's SHA-256) and the LoRA's linked page say. Nothing is changed.
+    pub async fn suggest_lora(&self, id: &str, online: bool) -> AppResult<crate::lora_suggest::Suggestions> {
+        let cfg = self.config();
+        let l = cfg.loras.iter().find(|l| l.id == id).cloned().ok_or_else(|| AppError::new(ErrorCode::NotFound, "This LoRA is no longer loaded."))?;
+        // The user's own file is the one Civitai knows; Kokon's copy may have been reworked.
+        let copy = lora::entry_path(&cfg, &l);
+        let file = if l.source.is_file() { l.source.clone() } else { copy };
+        let name = l.source.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| l.name.clone());
+        let (meta, hash) = {
+            let f = file.clone();
+            tokio::task::spawn_blocking(move || -> AppResult<_> {
+                let meta = lora::file_meta(&f)?;
+                let hash = if online { Some(crate::lora_suggest::sha256(&f)?) } else { None };
+                Ok((meta, hash))
+            })
+            .await
+            .map_err(AppError::internal)??
+        };
+        let mut out = crate::lora_suggest::read_file(&meta, &name);
+        if let Some(h) = hash {
+            crate::lora_suggest::lookup(&mut out, &h, Some(l.link.as_str())).await?;
+        }
+        Ok(crate::lora_suggest::finish(out))
     }
 
     /// Removes a LoRA and Kokon's copy of it (the user's own file stays).
