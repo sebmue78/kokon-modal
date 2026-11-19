@@ -31,7 +31,8 @@ const area = z.object({
   h: z.number().gt(0).max(1).describe("Height, 0..1 of the image height"),
   text: z.string().trim().min(1).max(500).describe("What goes in this area, in English (e.g. 'a red vintage car', 'the word \"SALE\" in big white letters')"),
   points: z
-    .array(z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]))
+    // Pairs as plain arrays: a JSON-schema tuple (items as a list) is refused by some clients (Claude).
+    .array(z.array(z.number().min(0).max(1)).length(2))
     .min(3)
     .max(64)
     .optional()
