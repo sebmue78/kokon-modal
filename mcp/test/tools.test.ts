@@ -93,6 +93,97 @@ describe("input validation", () => {
   });
 });
 
+describe("fork tools", () => {
+  const job = { id: "j", status: "failed", error: { code: "x", message: "stop here" }, results: [], notes: [], queue_position: 0, plan: null, stage: null, step: null };
+  const fake = (extra: (method: string, p: string, body?: Record<string, unknown>) => unknown = () => undefined) => {
+    const sent: Record<string, unknown>[] = [];
+    const calls: [string, string, unknown][] = [];
+    const client = {
+      call: async (method: string, p: string, body?: Record<string, unknown>) => {
+        calls.push([method, p, body]);
+        const r = extra(method, p, body);
+        if (r !== undefined) return r;
+        if (method === "POST" && p === "/jobs" && body) sent.push(body);
+        return job;
+      },
+    };
+    return { sent, calls, ctx: { client: client as never, cwd: process.cwd(), progress: () => {} } };
+  };
+  const area = { x: 0.1, y: 0.2, w: 0.3, h: 0.4, text: "a red car" };
+
+  it("validates areas", () => {
+    expect(obj("generate_image").safeParse({ prompt: "x", layout: [area] }).success).toBe(true);
+    expect(obj("generate_image").safeParse({ prompt: "x", layout: [{ ...area, x: 1.2 }] }).success).toBe(false);
+    expect(obj("generate_image").safeParse({ prompt: "x", layout: [{ ...area, text: " " }] }).success).toBe(false);
+    expect(obj("inpaint_image").safeParse({ image_path: "a.png", areas: [{ ...area, points: [[0.1, 0.2], [0.4, 0.2], [0.3, 0.6]] }] }).success).toBe(true);
+    expect(obj("inpaint_image").safeParse({ image_path: "a.png", areas: [{ ...area, points: [[0.1, 0.2]] }] }).success).toBe(false);
+  });
+
+  it("sends the layout and LoRAs with a new image, not the layout with references", async () => {
+    const f = fake();
+    await handlers.generate_image({ prompt: "a street", layout: [area], loras: ["l1"] } as never, f.ctx);
+    expect(f.sent[0]).toMatchObject({ mode: "generate", layout: [area], loras: ["l1"] });
+  });
+
+  it("inpaints areas without a mask, and needs one of the two", async () => {
+    const tmp = fs.mkdtempSync(path.join(process.cwd(), ".qls-mcp-t-"));
+    try {
+      fs.writeFileSync(path.join(tmp, "a.png"), "x");
+      const f = fake();
+      await handlers.inpaint_image({ image_path: path.join(tmp, "a.png"), action: "edit", prompt: "", areas: [area] } as never, f.ctx);
+      expect(f.sent[0]).toMatchObject({ mode: "inpaint", mask: null, regions: [area] });
+      const res = await handlers.inpaint_image({ image_path: path.join(tmp, "a.png"), action: "edit", prompt: "x" } as never, f.ctx).catch(toErrorResult);
+      expect(res.isError).toBe(true);
+      expect(res.text).toMatch(/mask_path or areas/);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  const status = {
+    profile: { id: "qwen-image-2.1", model: "qwen-image-2.1" },
+    profiles: [
+      { id: "qwen-image-2.1", display_name: "Qwen", model: "qwen-image-2.1", installed: true },
+      { id: "krea-2-turbo", display_name: "Krea 2 Turbo", model: "krea-2", installed: true },
+      { id: "flux-3-image-klein", display_name: "FLUX.3", model: "flux-3", installed: false },
+    ],
+  };
+
+  it("lists the models with the one in use", async () => {
+    const f = fake((_m, p) => (p === "/status" ? status : undefined));
+    const r = await handlers.list_models({} as never, f.ctx);
+    expect(r.structured).toMatchObject({ active_model: "qwen-image-2.1" });
+    expect((r.structured as { models: { id: string; downloaded: boolean }[] }).models.map((m) => [m.id, m.downloaded])).toEqual([
+      ["qwen-image-2.1", true],
+      ["krea-2-turbo", true],
+      ["flux-3-image-klein", false],
+    ]);
+    expect(r.text).toContain("* qwen-image-2.1:");
+  });
+
+  it("selects a downloaded model, downloads only when asked", async () => {
+    const f = fake((_m, p) => (p === "/status" ? status : p === "/setup/hardware" ? { current: "nvidia-16" } : {}));
+    await handlers.select_model({ model_id: "krea-2-turbo" } as never, f.ctx);
+    expect(f.calls).toContainEqual(["POST", "/models/use", { profile: "krea-2-turbo" }]);
+    const no = await handlers.select_model({ model_id: "flux-3-image-klein" } as never, f.ctx);
+    expect(no.isError).toBe(true);
+    expect(f.calls.some(([, p]) => p === "/setup/install")).toBe(false);
+    await handlers.select_model({ model_id: "flux-3-image-klein", download: true } as never, f.ctx);
+    expect(f.calls).toContainEqual(["POST", "/setup/install", { preset: "nvidia-16", target: "flux-3-image-klein", apply: true }]);
+    const bad = await handlers.select_model({ model_id: "nope" } as never, f.ctx).catch(toErrorResult);
+    expect(bad.isError).toBe(true);
+  });
+
+  it("lists the LoRAs of the model in use", async () => {
+    const f = fake((_m, p) =>
+      p === "/status" ? status : p === "/loras" ? { items: [{ id: "a", name: "Ink", model: "", trigger_words: "ink style" }, { id: "b", name: "Film", model: "krea-2" }] } : undefined,
+    );
+    const r = await handlers.list_loras({} as never, f.ctx);
+    expect(r.text).toContain("a: Ink (trigger: ink style)");
+    expect(r.text).not.toContain("Film");
+  });
+});
+
 describe("upscale_image", () => {
   it("validates factor and size", () => {
     expect(obj("upscale_image").safeParse({ image_path: "a.png" }).success).toBe(true);

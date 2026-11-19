@@ -227,7 +227,8 @@ pub fn prepare_regions(request: &mut GenerationRequest) -> AppResult<()> {
     if request.regions.is_empty() {
         return Ok(());
     }
-    if request.images.is_empty() || request.mask.is_none() {
+    // Without a painted mask (an agent through MCP), the areas themselves are the mask (`engine`).
+    if request.images.is_empty() {
         return Err(AppError::invalid("Areas with a text change a photo: open one and mark the areas in Paint area."));
     }
     Ok(())
@@ -397,8 +398,10 @@ mod tests {
     #[test]
     fn regions_need_a_photo_and_a_mask() {
         let mut r = GenerationRequest { prompt: "".into(), regions: vec![b(0.0, 0.0, 0.3, 0.3, "a cat"), b(0.5, 0.5, 0.2, 0.2, " ")], ..Default::default() };
-        assert!(prepare_regions(&mut r.clone()).is_err());
+        assert!(prepare_regions(&mut r.clone()).is_err(), "no photo");
         r.images = vec!["input:a".into()];
+        // A painted mask is optional: without one the areas are the mask.
+        assert!(prepare_regions(&mut r.clone()).is_ok());
         r.mask = Some("input:m".into());
         prepare_regions(&mut r).unwrap();
         assert_eq!(r.regions.len(), 1, "the area without text is only part of the mask");

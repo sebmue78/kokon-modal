@@ -1215,6 +1215,24 @@ impl Engine {
                 }
                 None => None,
             };
+            // Fork: areas with a text and no painted mask (an agent through MCP): their outlines are
+            // the mask, kept as an input like a painted one.
+            let mask = match mask {
+                None if !req2.regions.is_empty() && !images.is_empty() => {
+                    let (w, h) = images[0].pixels.dimensions();
+                    let all: Vec<&crate::layout::LayoutBox> = req2.regions.iter().collect();
+                    let m = crate::layout::rasterize(&all, w, h);
+                    let rgba = image::RgbaImage::from_fn(w, h, |x, y| {
+                        let v = m.get_pixel(x, y)[0];
+                        image::Rgba([v, v, v, 255])
+                    });
+                    let png = imaging::encode_png(&rgba, &[], None, true)?;
+                    let store = if req2.private { &this.private_store } else { &this.store };
+                    let rec = store.put_input(&png, Some("areas-mask.png"), None)?;
+                    Some((m, rec))
+                }
+                m => m,
+            };
             let marks = match &req2.marks {
                 Some(m) => Some(this.resolve_source(m, ws.as_deref(), req2.private)?.0.pixels),
                 None => None,

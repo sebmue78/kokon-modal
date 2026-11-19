@@ -1,4 +1,4 @@
-import { Activity, Copy, Cpu, Download, FolderOpen, HardDrive, Heart, Layers, MonitorSmartphone, RefreshCw, RotateCcw, Settings2, Trash2, X } from "lucide-react";
+import { Activity, Bot, Copy, Cpu, Download, FolderOpen, HardDrive, Heart, Layers, MonitorSmartphone, RefreshCw, RotateCcw, Settings2, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { api } from "../lib/api";
@@ -9,6 +9,7 @@ import { getState, openModelSetup, refreshStatus, setState, startTour, toastErro
 import { formatBytes, macBenchProgress } from "../lib/logic";
 import { setThemeChoice, themeChoice, type ThemeChoice } from "../lib/theme";
 import { LoraSettings } from "./LoraSettings";
+import { AiAgents } from "./AiAgents";
 import { RemoteAccess } from "./RemoteAccess";
 import { UpscalerControls } from "./Upscalers";
 import { WHATS_NEW_VERSION } from "./WhatsNew";
@@ -85,8 +86,8 @@ function GitHubMark() {
   );
 }
 
-type Tab = "general" | "models" | "lora" | "performance" | "devices" | "diagnostics";
-const TABS: Tab[] = ["general", "models", "lora", "performance", "devices", "diagnostics"];
+type Tab = "general" | "models" | "lora" | "performance" | "devices" | "agents" | "diagnostics";
+const TABS: Tab[] = ["general", "models", "lora", "performance", "devices", "agents", "diagnostics"];
 
 /** Browser: what the computer running Kokon has set (only its desktop app changes folders and files). */
 function PathField(props: { label: string; value: string; onChange: (v: string) => void; folder?: boolean; extensions?: string[]; open?: boolean }) {
@@ -430,6 +431,8 @@ export function Settings() {
     ["performance", "Performance", <Cpu size={16} key="p" />],
     // Only the computer running Kokon decides who else can use it.
     ...(inBrowser ? [] : ([["devices", "Other devices", <MonitorSmartphone size={16} key="o" />]] as [Tab, string, React.ReactNode][])),
+    // Fork: agents run on this computer, so only its app shows how to connect them.
+    ...(inBrowser ? [] : ([["agents", "AI agents", <Bot size={16} key="a" />]] as [Tab, string, React.ReactNode][])),
     ["diagnostics", "Diagnostics", <Activity size={16} key="d" />],
   ];
 
@@ -443,7 +446,7 @@ export function Settings() {
             </button>
           ))}
           <span style={{ flex: 1 }} />
-          {tab !== "diagnostics" && tab !== "lora" && tab !== "devices" && (
+          {tab !== "diagnostics" && tab !== "lora" && tab !== "devices" && tab !== "agents" && (
             <button className="btn primary nav-save" style={{ justifyContent: "center" }} disabled={!dirty} onClick={save}>
               Save
             </button>
@@ -942,9 +945,10 @@ export function Settings() {
           )}
 
           {tab === "lora" && <LoraSettings />}
+          {tab === "agents" && <AiAgents />}
           {tab === "diagnostics" && <Diagnostics />}
           {/* On a phone Save sits at the foot of the page (the tabs scroll sideways). */}
-          {tab !== "diagnostics" && tab !== "lora" && tab !== "devices" && (
+          {tab !== "diagnostics" && tab !== "lora" && tab !== "devices" && tab !== "agents" && (
             <div className="modal-save">
               <button className="btn primary" disabled={!dirty} onClick={save}>
                 Save

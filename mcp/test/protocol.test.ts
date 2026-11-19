@@ -50,9 +50,11 @@ afterAll(async () => {
 });
 
 describe("MCP protocol", () => {
-  it("lists the eight tools with schemas", async () => {
+  it("lists the eleven tools with schemas", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["edit_image", "edit_images", "generate_image", "get_generator_status", "get_image_info", "inpaint_image", "outpaint_image", "upscale_image"]);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      "edit_image", "edit_images", "generate_image", "get_generator_status", "get_image_info", "inpaint_image", "list_loras", "list_models", "outpaint_image", "select_model", "upscale_image",
+    ]);
     const gen = tools.find((t) => t.name === "generate_image")!;
     expect(gen.inputSchema.required).toEqual(["prompt"]);
   });
@@ -69,6 +71,15 @@ describe("MCP protocol", () => {
     expect(s).toHaveProperty("server_running");
     expect(s).toHaveProperty("model_loaded");
     expect(s.service_version).toBe(appVersion);
+    expect(s).toHaveProperty("active_model");
+  }, 60_000);
+
+  it("lists the fork's models with the one in use", async () => {
+    const r = await client.callTool({ name: "list_models", arguments: {} });
+    expect(r.isError).toBe(false);
+    const s = r.structuredContent as { active_model: string; models: { id: string; active: boolean }[] };
+    expect(s.models.map((m) => m.id)).toEqual(expect.arrayContaining(["qwen-image-2.1", "flux-3-image-klein", "krea-2-turbo"]));
+    expect(s.models.filter((m) => m.active).map((m) => m.id)).toEqual([s.active_model]);
   }, 60_000);
 
   it("get_image_info reads a project image and blocks paths outside", async () => {

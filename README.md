@@ -164,14 +164,33 @@ Where the fork's changes live:
 | Model menu, "Based on Kokon" | `src/components/ModelPicker.tsx`, `BasedOn.tsx` |
 | App identity | `src-tauri/tauri.conf.json`, `src-tauri/windows/`, `crates/qls-core/src/config.rs` |
 | Model names in the UI | `src/lib/models.ts` |
+| MCP server for agents | `mcp/src/tools.ts`, `mcp/src/index.ts`, `src/components/AiAgents.tsx` |
 | Layout, areas in Paint area | `crates/qls-core/src/layout.rs`, `src/lib/layout.ts`, `src/components/AreaLayer.tsx`, `LayoutEditor.tsx`, `InpaintEditor.tsx` |
 | Tests | `crates/qls-core/src/krea2_tests.rs`, `moss_tests.rs`, `flux3_tests.rs`, `fibo2_tests.rs` |
+
+## AI agents (MCP)
+
+Kokon Modal comes with its own MCP server, `kokon-mcp`, installed next to the app. Claude Code,
+Claude Desktop, Cursor and other MCP clients can then make and edit images here: new images (with a
+Layout), edits, combining images, inpainting with a mask or with areas, outpainting, upscaling,
+listing and switching the models, and the LoRAs of each model. **Settings → AI agents** shows the
+path and a ready-made configuration. For Claude Code:
+
+```bash
+# Windows
+claude mcp add --scope user kokon-modal -- "%LOCALAPPDATA%\Kokon Modal\kokon-mcp.exe"
+# Mac
+claude mcp add --scope user kokon-modal -- "/Applications/Kokon Modal.app/Contents/MacOS/kokon-mcp"
+```
+
+Don't use `npx kokon-mcp`: that package talks to the original Kokon. [mcp/README.md](mcp/README.md)
+lists the tools.
 
 ## Everything else
 
 Kokon Modal keeps all of Kokon's features: brushed edits, Expand, the upscalers, LUTs, private
-mode, other devices in a browser, the HTTP API and the MCP server for AI agents (they talk to Kokon
-Modal's own service and data folder). They are described in
+mode, other devices in a browser and the HTTP API (they use Kokon Modal's own service and data
+folder). They are described in
 [Kokon's README](https://github.com/GabrieleLozupone/kokon#readme) and in [docs/](docs/).
 
 Every image Kokon makes or changes with AI is marked as such, as the EU AI Act asks: in the file's
