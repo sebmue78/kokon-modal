@@ -416,6 +416,72 @@ pub const TURBO_F16: Download = Download {
     engine_tag: None,
 };
 
+// ---------------------------------------------------------------------------------------
+// Fork: Qwen-Image 2.1 Uncensored Omni (chatrlabs), pinned from the Hugging Face API on 2026-11-23.
+// Qwen Research License (non-commercial). Its GGUFs keep Diffusers' split MLP layout, which sd.cpp
+// reads as is; text encoder, vision projector and VAE are Qwen-Image 2.1's files.
+// ---------------------------------------------------------------------------------------
+
+const OMNI_PAGE: &str = "https://huggingface.co/chatrlabs/Qwen-Image-2.1-Uncensored-Omni-Quantized";
+
+pub const OMNI_Q4_K_M: Download = Download {
+    id: "omni_q4_k_m",
+    label: "Qwen-Image 2.1 Uncensored Omni Q4_K_M",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/chatrlabs/Qwen-Image-2.1-Uncensored-Omni-Quantized/resolve/af0343c259513913de8056af85819c70f627d681/qwen-image-2.1-step90000-Q4_K_M.gguf",
+    fallback_urls: &[],
+    page: OMNI_PAGE,
+    size: 4_474_346_272,
+    sha256: "05be65dea694885d0e81e783b172e68cf8d6a36a1143f778138df31f0cc81c3d",
+    dest: "models/qwen21-omni/qwen-image-2.1-omni-Q4_K_M.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+pub const OMNI_Q8_0: Download = Download {
+    id: "omni_q8_0",
+    label: "Qwen-Image 2.1 Uncensored Omni Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/chatrlabs/Qwen-Image-2.1-Uncensored-Omni-Quantized/resolve/af0343c259513913de8056af85819c70f627d681/qwen-image-2.1-step90000-Q8_0.gguf",
+    fallback_urls: &[],
+    page: OMNI_PAGE,
+    size: 7_687_183_136,
+    sha256: "58ab4d7baaa58ad7bdda18e6aafc22eebce1f494932d08c34667b88ab4fee5ca",
+    dest: "models/qwen21-omni/qwen-image-2.1-omni-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// chatrlabs' Turbo LoRA for Omni: 8 steps without CFG instead of 35 at CFG 5. Downloaded with the
+/// model and added to the LoRA library on (`OMNI_TURBO_STEPS`), so Omni is fast from the start.
+pub const OMNI_TURBO_LORA: Download = Download {
+    id: "omni_turbo_lora",
+    label: "Qwen-Image 2.1 Uncensored Omni Turbo LoRA",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/chatrlabs/Qwen-Image-2.1-Uncensored-Omni-LoRA-v0.1/resolve/04651bc83877565575c7da47e470696c3d5f43fa/chatrlabs-omni-turbo-8step-fp32.safetensors",
+    fallback_urls: &[],
+    page: OMNI_TURBO_PAGE,
+    size: 671_148_320,
+    sha256: "77e8863bed85e7baebd31e242810a708e11071674e42b7c21b0ff9c88cd94b43",
+    dest: "models/qwen21-omni/chatrlabs-omni-turbo-8step-fp32.safetensors",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// The Turbo LoRA's page (its link in the LoRA library, for "Suggest settings").
+pub const OMNI_TURBO_PAGE: &str = "https://huggingface.co/chatrlabs/Qwen-Image-2.1-Uncensored-Omni-LoRA-v0.1";
+/// The Turbo LoRA's settings (its model card): 8 steps, CFG 1, strength 1.
+pub const OMNI_TURBO_STEPS: u32 = 8;
+
+/// Omni's image model for a hardware preset: Q8_0 where the Turbo text encoder is 8-bit too
+/// (cards with 14 GB+, like FLUX.3), else Q4_K_M (Qwen-Image 2.1 Turbo's own quantization).
+pub fn omni_files(p: &Preset) -> Download {
+    if p.min_vram_mib >= 14 * 1024 { OMNI_Q8_0 } else { OMNI_Q4_K_M }
+}
+
+/// The Omni files the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const OMNI_DOWNLOADS: &[Download] = &[OMNI_Q4_K_M, OMNI_Q8_0];
+
 /// The image model installed up to 0.11.0 (DogukanUrker's GGUF conversion, made with
 /// stable-diffusion.cpp). Kept while its owner has not chosen the Q4_K_M ([`official_dit`]);
 /// deleted once they have ([`unused_old_dit`]).
@@ -1147,7 +1213,7 @@ pub fn downloads_for(p: &Preset, backend: GpuBackend, sdcpp_dir: &Path) -> Vec<D
 pub fn profile_model_downloads(profile: &crate::config::ModelProfile) -> Vec<Download> {
     let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, TURBO_F16, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
     let official: Vec<Download> =
-        qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).chain(FIBO2_DOWNLOADS.iter().copied()).collect();
+        qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).chain(FIBO2_DOWNLOADS.iter().copied()).chain(OMNI_DOWNLOADS.iter().copied()).collect();
     profile
         .files()
         .into_iter()
@@ -1169,6 +1235,10 @@ pub fn downloads_for_profile(profile: &crate::config::ModelProfile, backend: Gpu
         v.push(SUPERSCALE);
     }
     v.extend(profile_model_downloads(profile));
+    // Fork: Omni's Turbo LoRA comes with it (set up in the LoRA library when the install is done).
+    if profile.model == crate::config::QWEN_OMNI {
+        v.push(OMNI_TURBO_LORA);
+    }
     v
 }
 

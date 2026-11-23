@@ -173,7 +173,7 @@ impl LoraModel<'_> {
     /// Qwen-Image 2.1: the layout Kokon's checks and fixes were made for.
     pub const QWEN: LoraModel<'static> = LoraModel { model: crate::config::QWEN_IMAGE_21, name: "Qwen-Image 2.1" };
     fn is_qwen(&self) -> bool {
-        self.model == crate::config::QWEN_IMAGE_21
+        crate::config::is_qwen_model(self.model)
     }
 }
 
@@ -507,7 +507,7 @@ pub fn resolve(cfg: &AppConfig, requested: Option<&[String]>) -> (Vec<AppliedLor
 /// Fork: the model's settings with the steps and CFG of the first LoRA in use that sets them
 /// (speed LoRAs), and a note saying so. Other settings, and jobs without such a LoRA, keep the
 /// model's own. Qwen's 8-step Turbo sigmas only fit 8 steps, so other step counts use the
-/// server's schedule.
+/// server's schedule; fewer steps on a full Qwen model drop its terminal stretch.
 pub fn sampling(cfg: &AppConfig, requested: Option<&[String]>, rec: &crate::config::RecommendedSettings) -> (crate::config::RecommendedSettings, Option<String>) {
     let (applied, _) = resolve(cfg, requested);
     let mut out = rec.clone();
@@ -520,6 +520,9 @@ pub fn sampling(cfg: &AppConfig, requested: Option<&[String]>, rec: &crate::conf
         if s != out.steps {
             out.turbo_sigmas = false;
         }
+        // A speed LoRA of a full Qwen-Image 2.1 model (Omni's Turbo LoRA) was distilled for the
+        // model's schedule without its terminal stretch (`RecommendedSettings::no_terminal_shift`).
+        out.no_terminal_shift = s < rec.steps && !rec.turbo_sigmas && cfg.profile().is_qwen();
         out.steps = s;
         parts.push(format!("{s} steps"));
     }
@@ -771,6 +774,32 @@ mod tests {
         let (on, notes) = resolve(&cfg, Some(&both));
         assert_eq!(on.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(), ["klein-style"]);
         assert!(notes[0].contains("is for Qwen-Image 2.1"), "{notes:?}");
+    }
+
+    #[test]
+    fn omnis_turbo_lora_drops_the_terminal_stretch() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut cfg = AppConfig { sdcpp_dir: dir.path().to_path_buf(), ..AppConfig::default() };
+        cfg.use_extra_catalog(crate::config::OMNI_PROFILE_ID);
+        assert_eq!(cfg.profile().model, crate::config::QWEN_OMNI);
+        let turbo = LoraEntry { model: crate::config::QWEN_OMNI.into(), steps: Some(8), cfg_scale: Some(1.0), ..entry("omni-turbo", false, 1.0, "") };
+        // A Qwen-Image 2.1 Turbo LoRA is not Omni's (its own model id).
+        cfg.loras = vec![turbo, entry("qwen-style", false, 1.0, "")];
+        std::fs::create_dir_all(cfg.lora_dir()).unwrap();
+        for id in ["omni-turbo", "qwen-style"] {
+            std::fs::write(cfg.lora_dir().join(format!("{id}.safetensors")), b"x").unwrap();
+        }
+        let rec = cfg.profile().recommended_settings.clone();
+        assert_eq!((rec.steps, rec.cfg_scale, rec.turbo_sigmas, rec.no_terminal_shift), (35, 5.0, false, false));
+        let (r, note) = sampling(&cfg, Some(&["omni-turbo".into()]), &rec);
+        assert_eq!((r.steps, r.cfg_scale, r.turbo_sigmas, r.no_terminal_shift), (8, 1.0, false, true));
+        assert!(note.unwrap().starts_with("8 steps and CFG off from the LoRA"));
+        let (applied, notes) = resolve(&cfg, Some(&["omni-turbo".into(), "qwen-style".into()]));
+        assert_eq!(applied.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), ["omni-turbo"]);
+        assert_eq!(notes.len(), 1, "{notes:?}");
+        // Without it: 35 steps at CFG 5 with the server's own schedule.
+        let (r, _) = sampling(&cfg, Some(&[]), &rec);
+        assert_eq!((r.steps, r.no_terminal_shift), (35, false));
     }
 
     #[test]

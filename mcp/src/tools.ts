@@ -600,6 +600,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
   "qwen-image-2.1": { name: "Qwen-Image 2.1 Turbo", can: "everything: new images, layout (as a sketch), edits, combining up to 10 images, inpainting (areas in one pass), outpainting", best_for: QWEN_BEST, tasks: QWEN_TASKS, commercial: false },
   "qwen-image-2.1-user": { name: "Qwen-Image 2.1 (the user's own files)", can: "everything Qwen-Image 2.1 does", best_for: QWEN_BEST, tasks: QWEN_TASKS, commercial: false },
   "qwen-image-2.1-turbo-f16": { name: "Qwen-Image 2.1 Turbo, 16-bit", can: "everything Qwen-Image 2.1 does, in full precision (needs a 16 GB+ card)", best_for: `${QWEN_BEST}; a little finer detail and text than the 4-bit files, slower on cards under 16 GB`, tasks: QWEN_TASKS, commercial: false },
+  "qwen-image-2.1-omni": { name: "Qwen-Image 2.1 Uncensored Omni", can: "everything Qwen-Image 2.1 does, without its content filter", best_for: "what Qwen-Image 2.1 does, when the user asks for this model or for content the other models refuse; pass its Turbo LoRA (list_loras) for 8 steps, without it 35 steps at CFG 5 (about 6x slower)", tasks: QWEN_TASKS, commercial: false },
   "flux-3-image-klein": { name: "FLUX.3 Image Klein", can: "new images, edits, combining up to 10 images, inpainting (one area per pass), outpainting", best_for: "new images with a layout (reads the areas exactly, the others only approximately), edits and combining images", tasks: QWEN_TASKS, commercial: false },
   "fibo-2.0-dev": { name: "Fibo 2.0 Dev", can: "new images, edits, combining up to 10 images (refer to them as <image_1>, <image_2>), inpainting (one area per pass), outpainting", best_for: "new images, edits and combining images when there is time: 20 steps with CFG, slower than the Turbo models", tasks: QWEN_TASKS, commercial: false },
   "fibo-2.0-edit-turbo": { name: "Fibo 2.0 Edit Turbo", can: "edits, combining up to 10 images, inpainting (one area per pass), outpainting; no new images from text", best_for: "fast edits of a whole photo (4 steps)", tasks: ["edit", "combine", "change_part", "remove", "outpaint"], commercial: false },
@@ -609,13 +610,13 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
 
 /** Fork: the models to prefer per task, best first (by what they can, not by taste). */
 export const TASK_PICKS: Record<Task, string[]> = {
-  new_image: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "moss-image-sft"],
-  layout: ["flux-3-image-klein", "qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
-  edit: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev"],
-  combine: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev"],
-  change_part: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
-  remove: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
-  outpaint: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "fibo-2.0-edit-turbo", "moss-image-sft"],
+  new_image: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "moss-image-sft"],
+  layout: ["flux-3-image-klein", "qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
+  edit: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev"],
+  combine: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev"],
+  change_part: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
+  remove: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
+  outpaint: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "fibo-2.0-edit-turbo", "moss-image-sft"],
 };
 
 /** The task a job body asks for. */

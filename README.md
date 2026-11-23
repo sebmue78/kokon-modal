@@ -46,6 +46,7 @@ are downloaded the first time you choose them (the app asks first, then shows th
 | --- | --- | --- | --- | --- |
 | **Qwen-Image 2.1 Turbo** (Alibaba Qwen) | New images, every kind of edit, combining images | 8 | yes | Qwen Research License: research and evaluation only, non-commercial |
 | **Qwen-Image 2.1 · 16-bit** | The same model in full precision (F16, 14.2 GB, 8-bit text encoder): no quantization loss | 8 | yes | Qwen Research License |
+| **Qwen-Image 2.1 Uncensored Omni** (chatrlabs) | The full Qwen-Image 2.1 without its content filter: new images, every kind of edit, combining images. Its Turbo LoRA comes with it, switched on | 8 with its Turbo LoRA, else 35 at CFG 5 | yes | Qwen Research License |
 | **FLUX.3 Image Klein** (Black Forest Labs, 5.6B) | New images, edits of a whole photo, combining up to 10 images, brushed changes and areas (seeing the photo) | 16 | yes, recommended | FLUX Kommunity License: non-commercial; commercial use of images only for qualifying users |
 | **Fibo 2.0 Dev** (Bria, 8B) | New images, edits of a whole photo, combining up to 10 images (`<image_1>`, `<image_2>`), brushed changes and areas (seeing the photo) | 20, CFG 5 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
 | **Fibo 2.0 Edit Turbo** (Bria, 8B) | Fast edits of a whole photo and combining images; no new images from text | 4 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
@@ -54,7 +55,9 @@ are downloaded the first time you choose them (the app asks first, then shows th
 
 Download sizes on a 24 GB card (smaller files are picked for smaller cards): Qwen-Image about
 12 GB, FLUX.3 about 12 GB, Fibo 2.0 Dev or Edit Turbo about 16 GB each, Krea 2 about 18 GB,
-MOSS-Image about 12 GB. FLUX.3, Fibo 2.0 and Krea 2 share their text encoder (Qwen3-VL 4B), and
+MOSS-Image about 12 GB, Qwen-Image 2.1 Uncensored Omni about 8.4 GB after Qwen-Image 2.1 (it uses
+Qwen's text encoder and decoder; 5.1 GB on cards under 14 GB). Omni runs on the standard engine on a
+Mac too (Kokon's Mac engine has no LoRAs). FLUX.3, Fibo 2.0 and Krea 2 share their text encoder (Qwen3-VL 4B), and
 FLUX.3, Fibo 2.0 and MOSS-Image their decoder (the FLUX.2 VAE): a shared file is downloaded once,
 so the second of them is much smaller (Fibo 2.0 after FLUX.3: about 10 GB). Every file is pinned by URL, size and SHA-256 and checked after
 download.

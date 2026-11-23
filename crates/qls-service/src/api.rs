@@ -472,6 +472,10 @@ async fn install_start(State(s): St, Json(b): Json<InstallBody>) -> ApiResult<Js
         if let Err(e) = engine.set_config(c) {
             tracing::error!("could not save the installed preset: {}", e.message);
         }
+        // Fork: Omni's Turbo LoRA, downloaded with it, goes into the LoRA library.
+        if let Err(e) = engine.setup_omni_turbo() {
+            tracing::error!("could not add Omni's Turbo LoRA: {}", e.message);
+        }
         // The engine can name its devices only now that it is installed.
         if let Some(i) = card {
             match engine.use_card(i) {
@@ -1838,5 +1842,12 @@ async fn models_use(State(s): St, Json(b): Json<UseBody>) -> ApiResult<Json<Valu
         other => return Err(AppError::invalid(format!("Unknown profile {other}.")).into()),
     }
     save_and_restart(&s, cfg).await?;
+    // Fork: Omni's Turbo LoRA, when its files were downloaded before (checks and copies it once).
+    let e = s.engine.clone();
+    match tokio::task::spawn_blocking(move || e.setup_omni_turbo()).await {
+        Ok(Err(e)) => tracing::error!("could not add Omni's Turbo LoRA: {}", e.message),
+        Ok(Ok(Some(l))) => tracing::info!("added Omni's Turbo LoRA as {}", l.id),
+        _ => {}
+    }
     models_status(State(s)).await
 }

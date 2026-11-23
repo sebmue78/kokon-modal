@@ -370,6 +370,32 @@ impl Engine {
         Ok(entry)
     }
 
+    /// Fork: puts Omni's Turbo LoRA (`catalog::OMNI_TURBO_LORA`) in the LoRA library, on by default
+    /// with its 8 steps at CFG 1, once Omni is the model in use and the file is there. Does nothing
+    /// when it is already there (the user's settings for it stay) or for another model. Blocking.
+    pub fn setup_omni_turbo(&self) -> AppResult<Option<LoraEntry>> {
+        use crate::catalog::{OMNI_TURBO_LORA, OMNI_TURBO_PAGE, OMNI_TURBO_STEPS};
+        let cfg = self.config();
+        let src = OMNI_TURBO_LORA.path(&cfg.sdcpp_dir);
+        if cfg.profile().model != crate::config::QWEN_OMNI || !OMNI_TURBO_LORA.is_present(&cfg.sdcpp_dir) {
+            return Ok(None);
+        }
+        if cfg.loras.iter().any(|l| l.source == src && l.model_or_qwen() == crate::config::QWEN_OMNI) {
+            return Ok(None);
+        }
+        let entry = self.add_lora(&src)?;
+        let patch = LoraPatch {
+            name: Some("Omni Turbo (8 steps)".into()),
+            weight: Some(1.0),
+            trigger_words: None,
+            on_by_default: Some(true),
+            steps: Some(OMNI_TURBO_STEPS),
+            cfg_scale: Some(1.0),
+            link: Some(OMNI_TURBO_PAGE.into()),
+        };
+        self.update_lora(&entry.id, patch).map(Some)
+    }
+
     /// Changes a LoRA's settings (name, weight, trigger words, on by default).
     pub fn update_lora(&self, id: &str, patch: LoraPatch) -> AppResult<LoraEntry> {
         let _lock = lora::LIBRARY.lock().unwrap_or_else(|e| e.into_inner());
