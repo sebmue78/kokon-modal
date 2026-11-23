@@ -108,3 +108,33 @@ fn qwen_f16_is_qwen_in_full_precision() {
     mac.mac_engine = true;
     assert!(!mac.uses_mac_engine());
 }
+
+#[test]
+fn qwen_omni_is_qwen_with_its_own_loras() {
+    use crate::config::{OMNI_PROFILE_ID, QWEN_OMNI};
+    let dir = tempfile::tempdir().unwrap();
+    for (preset, quant) in [("8gb", catalog::OMNI_Q4_K_M), ("24gb", catalog::OMNI_Q8_0)] {
+        let c = cfg(dir.path(), preset, OMNI_PROFILE_ID);
+        let p = c.profile();
+        assert_eq!((p.id.as_str(), p.model.as_str()), (OMNI_PROFILE_ID, QWEN_OMNI));
+        assert!(p.is_qwen() && p.from_catalog() && !p.is_official(), "Qwen's edits, prompts and Layout sketch");
+        assert_eq!(crate::config::model_name(&p.model), "Qwen-Image 2.1 Uncensored Omni");
+        assert_eq!(p.diffusion_model, quant.path(dir.path()), "{preset}");
+        assert_eq!(p.vae, catalog::official_vae(dir.path()).path(dir.path()), "the VAE is shared");
+        assert_eq!(p.vision_projector, Some(catalog::VISION_PROJECTOR.path(dir.path())));
+        let rec = &p.recommended_settings;
+        assert_eq!((rec.steps, rec.cfg_scale, rec.turbo_sigmas), (35, 5.0, false), "its model card without the Turbo LoRA");
+        // The Turbo LoRA comes with the model; the files are pinned.
+        let ids: Vec<&str> = catalog::downloads_for_profile(p, GpuBackend::Cuda).iter().map(|d| d.id).collect();
+        assert!(ids.contains(&quant.id) && ids.contains(&"omni_turbo_lora"), "{ids:?}");
+        for d in [catalog::OMNI_Q4_K_M, catalog::OMNI_Q8_0, catalog::OMNI_TURBO_LORA] {
+            assert_eq!(d.sha256.len(), 64);
+            assert!(d.url.contains("/resolve/") && !d.url.contains("/resolve/main/"), "pinned: {}", d.url);
+        }
+        // Not on Kokon's Mac engine (no LoRAs, no CFG there).
+        let mut mac = c.clone();
+        mac.gpu_backend = GpuBackend::Metal;
+        mac.mac_engine = true;
+        assert!(!mac.uses_mac_engine());
+    }
+}

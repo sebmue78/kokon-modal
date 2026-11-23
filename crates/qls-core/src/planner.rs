@@ -766,6 +766,31 @@ pub const TURBO_SIGMAS: [f32; 9] = [1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0
 /// Turbo's step count (fixed: Qwen evaluated no other schedule).
 pub const TURBO_STEPS: u32 = TURBO_SIGMAS.len() as u32 - 1;
 
+/// Fork: Qwen-Image 2.1's own schedule for `steps` at `size`, as Diffusers' QwenImage21Pipeline and
+/// sd.cpp's server build it: t from 1 to 1/steps, shifted by the image's token count (16x16 pixels
+/// per token; mu from 0.5 at 256 tokens to 0.9 at 8192, exponential), optionally stretched so the
+/// last step ends at 0.02, then 0. Sent only without the stretch (`terminal: false`): what speed
+/// LoRAs of the full model are distilled for (chatrlabs' Omni Turbo: `shift_terminal=None`).
+pub fn qwen21_sigmas(steps: u32, size: Size, terminal: bool) -> Vec<f32> {
+    let n = steps.max(1) as usize;
+    let seq = (size.height / 16) as f64 * (size.width / 16) as f64;
+    let mu = 0.5 + (seq - 256.0) * (0.9 - 0.5) / (8192.0 - 256.0);
+    let mut sigmas: Vec<f64> = (0..n)
+        .map(|i| {
+            let t = 1.0 - i as f64 / n as f64;
+            mu.exp() / (mu.exp() + (1.0 / t - 1.0))
+        })
+        .collect();
+    if terminal && n > 1 {
+        let scale = (1.0 - sigmas[n - 1]) / (1.0 - 0.02);
+        for s in &mut sigmas {
+            *s = 1.0 - (1.0 - *s) / scale;
+        }
+    }
+    sigmas.push(0.0);
+    sigmas.into_iter().map(|s| s as f32).collect()
+}
+
 /// Area of the inpaint guide reference (the region with the painted area marked), as a
 /// share of the working canvas: enough to locate the area, cheap in tokens.
 pub const INPAINT_GUIDE_AREA: f64 = 0.25;
@@ -1338,7 +1363,15 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
         upscaler: inputs.upscaler.clone(),
         upscale_tile: if inputs.upscale_tile > 0 { inputs.upscale_tile } else { LARGE_UPSCALE_TILE },
         upscale,
-        custom_sigmas: if quick_upscale || !rec.turbo_sigmas { Vec::new() } else { TURBO_SIGMAS.to_vec() },
+        custom_sigmas: if quick_upscale {
+            Vec::new()
+        } else if rec.turbo_sigmas {
+            TURBO_SIGMAS.to_vec()
+        } else if rec.no_terminal_shift {
+            qwen21_sigmas(steps, working.canvas, false)
+        } else {
+            Vec::new()
+        },
         reference_edits: rec.reference_edits,
         qwen_prompts: rec.qwen_prompts,
         underscore_image_tags: rec.underscore_image_tags,
@@ -1388,6 +1421,23 @@ mod tests {
     }
 
     use super::*;
+
+    /// Diffusers' QwenImage21Pipeline schedule (FlowMatchEulerDiscreteScheduler, Qwen/Qwen-Image-2.1's
+    /// scheduler_config.json), worked out with its formulas in Python on 2026-11-23.
+    #[test]
+    fn qwen21_sigmas_match_diffusers() {
+        let close = |got: Vec<f32>, want: &[f32]| {
+            assert_eq!(got.len(), want.len());
+            for (g, w) in got.iter().zip(want) {
+                assert!((g - w).abs() < 2e-6, "{got:?} vs {want:?}");
+            }
+        };
+        let square = Size { width: 1024, height: 1024 };
+        close(qwen21_sigmas(8, square, false), &[1.0, 0.933358, 0.857192, 0.769302, 0.666756, 0.545554, 0.400096, 0.222292, 0.0]);
+        // With the stretch: what the server sends on its own (shift_terminal 0.02).
+        close(qwen21_sigmas(8, square, true), &[1.0, 0.916024, 0.820046, 0.709295, 0.580075, 0.427347, 0.244054, 0.02, 0.0]);
+        close(qwen21_sigmas(8, Size { width: 896, height: 1184 }, false), &[1.0, 0.933509, 0.857488, 0.769731, 0.667293, 0.546154, 0.400677, 0.22271, 0.0]);
+    }
 
     fn rec() -> RecommendedSettings {
         RecommendedSettings::default()

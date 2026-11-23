@@ -25,6 +25,14 @@ export const CATALOG_MODELS: Record<string, CatalogModel> = {
     about:
       "The same Qwen-Image 2.1 Turbo in full 16-bit precision (14.2 GB) with the 8-bit text encoder, instead of the 4-bit files: no quantization loss, a little finer detail and text. Best on a card with 16 GB or more; on smaller cards parts of it are moved to system memory and it is slower. Everything Qwen-Image 2.1 does works the same, with the same LoRAs. Qwen Research License: research and evaluation, non-commercial.",
   },
+  // Its own model id: its Turbo LoRA (set up with it) is not offered for Qwen-Image 2.1 Turbo.
+  "qwen-image-2.1-omni": {
+    name: "Qwen-Image 2.1 Omni",
+    full: "Qwen-Image 2.1 Uncensored Omni",
+    hint: "Qwen-Image 2.1 without content filter: new images and edits, 8 steps with its Turbo LoRA (non-commercial license)",
+    about:
+      "chatrlabs' uncensored version of the full Qwen-Image 2.1: new images, edits of a whole photo, combining images and brushed changes, like Qwen-Image 2.1 Turbo. Its Turbo LoRA is downloaded with it and switched on (8 steps without CFG); turned off, the model runs 35 steps at CFG 5, about 6x slower. On a Mac it uses the standard engine (Kokon's Mac engine has no LoRAs). Qwen Research License: research and evaluation, non-commercial.",
+  },
   "flux-3-image-klein": {
     name: "FLUX.3 Klein",
     full: "FLUX.3 Image Klein",

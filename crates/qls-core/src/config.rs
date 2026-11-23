@@ -74,6 +74,14 @@ pub const FLUX3_KLEIN: &str = "flux-3-image-klein";
 /// Fork: Qwen-Image 2.1 Turbo in full 16-bit precision (`ModelProfile::qwen21_f16`). Its model is
 /// Qwen-Image 2.1, so everything Qwen's works with it (edits, Layout sketch, LoRAs).
 pub const QWEN_F16_PROFILE_ID: &str = "qwen-image-2.1-turbo-f16";
+/// Fork: Qwen-Image 2.1 Uncensored Omni (chatrlabs/Qwen-Image-2.1-Uncensored-Omni-Quantized, Qwen
+/// Research License: non-commercial): Qwen-Image 2.1 (the full model, not Turbo) with chatrlabs'
+/// adapter merged at strength 1, for text to image and edits. 35 steps at CFG 5 on its own; with
+/// chatrlabs' Turbo LoRA 8 steps without CFG (`catalog::OMNI_TURBO_LORA`, set up with the model).
+/// Qwen-Image 2.1's text encoder, vision projector and VAE. Its own model id, so the Turbo LoRA is
+/// never offered for Qwen-Image 2.1 Turbo; everything else Qwen's works the same (`is_qwen`).
+pub const QWEN_OMNI: &str = "qwen-image-2.1-omni";
+pub const OMNI_PROFILE_ID: &str = "qwen-image-2.1-omni";
 pub const FLUX3_PROFILE_ID: &str = "flux-3-image-klein";
 /// Fibo 2.0 Dev (briaai/Fibo-2.0-dev, CC BY-NC 4.0: non-commercial): an 8B DiT for text to image
 /// and edits with references (seen by its Qwen3-VL 4B text encoder too), 20 steps at CFG 5. Shares
@@ -86,7 +94,7 @@ pub const FIBO2_EDIT: &str = "fibo-2.0-edit-turbo";
 pub const FIBO2_DEV_PROFILE_ID: &str = "fibo-2.0-dev";
 pub const FIBO2_EDIT_PROFILE_ID: &str = "fibo-2.0-edit-turbo";
 /// Models from the catalog besides Qwen-Image 2.1, in the order Settings lists them.
-pub const EXTRA_CATALOG_PROFILES: &[&str] = &[QWEN_F16_PROFILE_ID, FLUX3_PROFILE_ID, FIBO2_DEV_PROFILE_ID, FIBO2_EDIT_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
+pub const EXTRA_CATALOG_PROFILES: &[&str] = &[QWEN_F16_PROFILE_ID, OMNI_PROFILE_ID, FLUX3_PROFILE_ID, FIBO2_DEV_PROFILE_ID, FIBO2_EDIT_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
 
 /// Where the text encoder's weights live. Compute always runs on the selected GPU except
 /// for `Cpu`, which also computes on the CPU (slow for image editing, measured ~35×).
@@ -196,6 +204,12 @@ pub struct RecommendedSettings {
     /// Send Qwen-Image 2.1 Turbo's saved schedule (`planner::TURBO_SIGMAS`); otherwise the
     /// server picks its schedule for the model (Krea 2: flow shift 1.15, its default).
     pub turbo_sigmas: bool,
+    /// Fork: Qwen-Image 2.1's own schedule (resolution shift) without the 0.02 terminal stretch the
+    /// server adds (`planner::qwen21_sigmas`): what speed LoRAs of the full model were distilled
+    /// for (chatrlabs' Omni Turbo LoRA: Diffusers' default with `shift_terminal=None`). Set by
+    /// `lora::sampling` when such a LoRA brings its own steps; never saved.
+    #[serde(skip)]
+    pub no_terminal_shift: bool,
     /// The model edits from reference images (`<image1>` prompts, Qwen-Image Edit style).
     /// Without it, brushed edits and Expand are plain masked inpainting and whole-image edits,
     /// combines and new images from references are not available.
@@ -236,6 +250,7 @@ impl Default for RecommendedSettings {
             max_references: 10,
             steps: 8,
             turbo_sigmas: true,
+            no_terminal_shift: false,
             reference_edits: true,
             qwen_prompts: true,
             prompt_vision: true,
@@ -263,6 +278,7 @@ impl RecommendedSettings {
             max_references: 1,
             steps: 8,
             turbo_sigmas: false,
+            no_terminal_shift: false,
             reference_edits: false,
             qwen_prompts: false,
             prompt_vision: false,
@@ -287,6 +303,7 @@ impl RecommendedSettings {
             max_references: 1,
             steps: 20,
             turbo_sigmas: false,
+            no_terminal_shift: false,
             reference_edits: false,
             qwen_prompts: false,
             prompt_vision: false,
@@ -311,6 +328,7 @@ impl RecommendedSettings {
             max_references: 10,
             steps: 20,
             turbo_sigmas: false,
+            no_terminal_shift: false,
             reference_edits: true,
             qwen_prompts: false,
             prompt_vision: true,
@@ -319,6 +337,14 @@ impl RecommendedSettings {
             cfg_scale: 5.0,
             layout: crate::layout::LayoutStyle::Sketch,
         }
+    }
+
+    /// Fork: Qwen-Image 2.1 Uncensored Omni (its model card): the full Qwen-Image 2.1, 35 steps at
+    /// CFG 5, Euler with the server's Qwen-Image 2.1 schedule (the same as Diffusers': resolution
+    /// shift, 0.02 terminal). Everything else is Qwen-Image 2.1 Turbo's. Its Turbo LoRA brings
+    /// 8 steps without CFG (`lora::sampling`).
+    pub fn qwen21_omni() -> Self {
+        Self { steps: 35, cfg_scale: 5.0, turbo_sigmas: false, ..Self::default() }
     }
 
     /// Fibo 2.0 Edit Turbo (sd.cpp's recipe fibo2-edit-turbo): edits only, 4 steps without CFG.
@@ -340,6 +366,7 @@ impl RecommendedSettings {
             max_references: 10,
             steps: 16,
             turbo_sigmas: false,
+            no_terminal_shift: false,
             reference_edits: true,
             qwen_prompts: false,
             prompt_vision: false,
@@ -525,6 +552,30 @@ impl ModelProfile {
         }
     }
 
+    /// Fork: Qwen-Image 2.1 Uncensored Omni for a hardware preset (`catalog::omni_files`): chatrlabs'
+    /// GGUF with the preset's Qwen-Image 2.1 text encoder, the official VAE and vision projector
+    /// (shared with the Turbo files, so only the image model is new). Its Turbo LoRA comes with it.
+    pub fn qwen21_omni(sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Self {
+        use crate::catalog::{official_vae, VISION_PROJECTOR};
+        let diffusion = crate::catalog::omni_files(preset);
+        let quant = diffusion.dest.rsplit('-').next().unwrap_or("").trim_end_matches(".gguf");
+        Self {
+            id: OMNI_PROFILE_ID.into(),
+            display_name: format!("Qwen-Image 2.1 Uncensored Omni {quant}"),
+            model: QWEN_OMNI.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: diffusion.path(sdcpp_dir),
+            vae: official_vae(sdcpp_dir).path(sdcpp_dir),
+            text_encoder: preset.text_encoder.path(sdcpp_dir),
+            vision_projector: Some(VISION_PROJECTOR.path(sdcpp_dir)),
+            tokenizer: None,
+            backend_args: vec![],
+            recommended_settings: RecommendedSettings::qwen21_omni(),
+            capabilities: ProfileCapabilities::default(),
+        }
+    }
+
     /// The FLUX.3 Image Klein files for a hardware preset (`catalog::flux3_files`): leejet's GGUF,
     /// the Qwen3-VL 4B text encoder shared with Krea 2 (with its vision projector, so Prompt+ can
     /// look at the references) and the FLUX.2 VAE shared with MOSS-Image.
@@ -582,6 +633,7 @@ impl ModelProfile {
             FIBO2_DEV_PROFILE_ID => Some(Self::fibo2(sdcpp_dir, preset, false)),
             FIBO2_EDIT_PROFILE_ID => Some(Self::fibo2(sdcpp_dir, preset, true)),
             QWEN_F16_PROFILE_ID => Some(Self::qwen21_f16(sdcpp_dir)),
+            OMNI_PROFILE_ID => Some(Self::qwen21_omni(sdcpp_dir, preset)),
             FLUX3_PROFILE_ID => Some(Self::flux3(sdcpp_dir, preset)),
             KREA2_PROFILE_ID => Some(Self::krea2(sdcpp_dir, preset)),
             MOSS_PROFILE_ID => Some(Self::moss(sdcpp_dir, preset)),
@@ -592,7 +644,7 @@ impl ModelProfile {
     /// The files are Qwen-Image 2.1's (the official ones or the user's own): the model Kokon's
     /// edits, prompt cache, Mac engine and LoRA library are built for.
     pub fn is_qwen(&self) -> bool {
-        self.model == QWEN_IMAGE_21
+        is_qwen_model(&self.model)
     }
 
     /// The files are Krea 2's.
@@ -859,6 +911,11 @@ impl LoraEntry {
 }
 
 /// The name of a model id (`ModelProfile::model`) in messages.
+/// Fork: Qwen-Image 2.1's architecture (the Turbo files, the user's own, Uncensored Omni).
+pub fn is_qwen_model(model: &str) -> bool {
+    model == QWEN_IMAGE_21 || model == QWEN_OMNI
+}
+
 pub fn model_name(model: &str) -> String {
     match model {
         FLUX3_KLEIN => "FLUX.3 Image Klein".into(),
@@ -867,6 +924,7 @@ pub fn model_name(model: &str) -> String {
         KREA2_TURBO => "Krea 2 Turbo".into(),
         MOSS_IMAGE_SFT => "MOSS-Image".into(),
         QWEN_IMAGE_21 | "" => "Qwen-Image 2.1".into(),
+        QWEN_OMNI => "Qwen-Image 2.1 Uncensored Omni".into(),
         other => other.into(),
     }
 }
@@ -1286,8 +1344,10 @@ impl AppConfig {
     /// Kokon's Mac engine runs instead of sd-server: chosen in Settings, on the Metal backend only.
     pub fn uses_mac_engine(&self) -> bool {
         // Kokon's Mac engine runs Qwen-Image 2.1 only; other models always run on sd-server.
-        // Fork: nor the 16-bit Qwen files (the Mac engine is checked against the 4-bit file only).
-        let other = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(|p| !p.is_qwen() || p.id == QWEN_F16_PROFILE_ID);
+        // Fork: nor the 16-bit Qwen files (the Mac engine is checked against the 4-bit file only), nor
+        // Uncensored Omni (the full model's split MLP layout, CFG 5, and its Turbo LoRA: the Mac
+        // engine has none of these).
+        let other = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(|p| p.model != QWEN_IMAGE_21 || p.id == QWEN_F16_PROFILE_ID);
         self.mac_engine && self.gpu_backend == GpuBackend::Metal && !other
     }
 
