@@ -1352,19 +1352,29 @@ impl Engine {
         }
 
         // 2. Plan.
-        let cfg = self.config();
+        let mut cfg = self.config();
         let profile = cfg.profile().clone();
+        // Fork: a LoRA's own steps and CFG (speed LoRAs).
+        let (rec, lora_note) = lora::sampling(&cfg, request.loras.as_deref(), &profile.recommended_settings);
+        // Fork: Kokon's Mac engine runs without CFG only: a job with CFG (Uncensored Omni without its
+        // Turbo LoRA) runs on sd-server, which starts in its place and hands back to the Mac engine
+        // with the next job without CFG.
+        let standard_engine = job_uses_standard_engine(&cfg, rec.cfg_scale);
+        if standard_engine {
+            cfg.mac_engine = false;
+        }
         let vram = self.planning_vram(&cfg);
         let mask_info = mask.as_ref().map(|(m, _)| (Size::new(m.width(), m.height()), imaging::mask_bbox(m, 16), imaging::mask_coverage(m, 16)));
         let mut plan_inputs = plan_inputs(&cfg, images.iter().map(|i| i.size()).collect(), mask_info, vram);
         plan_inputs.speed_factor = self.speed_factor(&cfg);
         plan_inputs.unified_memory = self.gpu().is_some_and(|g| g.unified);
-        // Fork: a LoRA's own steps and CFG (speed LoRAs).
-        let (rec, lora_note) = lora::sampling(&cfg, request.loras.as_deref(), &profile.recommended_settings);
         let plan = planner::plan(&request, &plan_inputs, &rec)?;
         let mut seed = request.seed.unwrap_or_else(random_seed);
         let mut notes = plan.notes.clone();
         notes.extend(lora_note);
+        if standard_engine {
+            notes.push(format!("Made on the standard engine: Kokon's Mac engine runs without CFG only (this image uses CFG {}).", trim_cfg(rec.cfg_scale)));
+        }
         // A seed the user chose that made one of the references (see `avoid_reference_seeds`).
         // A quick upscale runs no diffusion, so its seed does not matter.
         if request.seed.is_some()
@@ -1390,7 +1400,11 @@ impl Engine {
 
         // 3. Backend.
         // A job that also starts the server is not a fair speed sample (startup, first load).
-        let model_loaded = self.server.capabilities().is_some_and(|c| c.model_matches(&profile.diffusion_model));
+        // Fork: and the engine this job runs on (the Mac engine or sd-server, see `job_uses_standard_engine`).
+        let model_loaded = self
+            .server
+            .capabilities()
+            .is_some_and(|c| c.model_matches(&profile.diffusion_model) && c.is_mac_engine() == cfg.uses_mac_engine());
         let mut cold_start = false;
         if self.server.status().state != ServerState::Ready || self.server.owned_alive() == Some(false) || !model_loaded {
             cold_start = true;
@@ -2259,6 +2273,18 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
         let _ = std::fs::remove_file(&tmp);
         AppError::io("save the image", path, e)
     })
+}
+
+
+/// Fork: whether a job runs on sd-server although Kokon's Mac engine is chosen: the Mac engine runs
+/// without CFG only (CFG 1), so a job with CFG (Uncensored Omni without its Turbo LoRA) needs sd-server.
+pub fn job_uses_standard_engine(cfg: &AppConfig, cfg_scale: f32) -> bool {
+    cfg.uses_mac_engine() && cfg_scale > 1.0
+}
+
+fn trim_cfg(v: f32) -> String {
+    let s = format!("{v:.1}");
+    s.strip_suffix(".0").map(str::to_string).unwrap_or(s)
 }
 
 #[cfg(test)]

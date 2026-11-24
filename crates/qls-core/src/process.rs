@@ -157,6 +157,9 @@ pub fn build_mac_engine_args(cfg: &AppConfig, profile: &ModelProfile) -> Vec<Str
         a.push("--llm_vision".into());
         a.push(p(v));
     }
+    // Fork: LoRAs, from Kokon's copies as for sd-server.
+    a.push("--lora-model-dir".into());
+    a.push(p(&cfg.lora_dir()));
     a
 }
 
@@ -1046,6 +1049,7 @@ mod tests {
         if let Some(v) = &profile.vision_projector {
             want.extend(["--llm_vision".to_string(), p(v)]);   // edits
         }
+        want.extend(["--lora-model-dir".to_string(), p(&cfg.lora_dir())]);   // Fork: LoRAs
         assert_eq!(a, want);
         assert!(profile.vision_projector.is_some(), "the default profile has the mmproj, so the engine can edit");
         assert_ne!(a, sdcpp, "a different launch: switching restarts the server");

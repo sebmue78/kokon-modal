@@ -131,10 +131,12 @@ fn qwen_omni_is_qwen_with_its_own_loras() {
             assert_eq!(d.sha256.len(), 64);
             assert!(d.url.contains("/resolve/") && !d.url.contains("/resolve/main/"), "pinned: {}", d.url);
         }
-        // Not on Kokon's Mac engine (no LoRAs, no CFG there).
+        // On Kokon's Mac engine with its Turbo LoRA (CFG 1); a job with CFG runs on sd-server.
         let mut mac = c.clone();
         mac.gpu_backend = GpuBackend::Metal;
         mac.mac_engine = true;
-        assert!(!mac.uses_mac_engine());
+        assert!(mac.uses_mac_engine());
+        assert!(crate::engine::job_uses_standard_engine(&mac, 5.0) && !crate::engine::job_uses_standard_engine(&mac, 1.0));
+        assert!(!crate::engine::job_uses_standard_engine(&c, 5.0), "sd-server anyway");
     }
 }

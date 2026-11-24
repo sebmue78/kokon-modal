@@ -22,11 +22,14 @@ public final class EngineServer: @unchecked Sendable {
         public let diffusionModel, vae, textEncoder: String
         /// The vision tower (mmproj): edits need it.
         public let vision: String?
-        public init(diffusionModel: String, vae: String, textEncoder: String, vision: String? = nil) {
+        /// sd-server's `--lora-model-dir`: a request's `lora` paths are relative to it. nil: no LoRAs.
+        public let loraDir: String?
+        public init(diffusionModel: String, vae: String, textEncoder: String, vision: String? = nil, loraDir: String? = nil) {
             self.diffusionModel = diffusionModel
             self.vae = vae
             self.textEncoder = textEncoder
             self.vision = vision
+            self.loraDir = loraDir
         }
     }
 
@@ -55,9 +58,12 @@ public final class EngineServer: @unchecked Sendable {
         /// An edit's condition images, decoded, at the size they are encoded at.
         let references: [QwenPipeline.Reference]
         let initImage: QwenPipeline.InitImage?
+        /// LoRAs, their paths resolved in the LoRA folder.
+        var loras: [LoraRequest] = []
 
         /// nil and the reason when the engine cannot do it (yet). `vision`: the engine has the vision tower (edits).
-        static func parse(_ body: Data, vision: Bool = true) -> (ImageRequest?, String?) {
+        /// `loraDir`: the folder of the request's LoRAs (nil: LoRAs are refused).
+        static func parse(_ body: Data, vision: Bool = true, loraDir: String? = nil) -> (ImageRequest?, String?) {
             guard let json = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else {
                 return (nil, "the body is not a JSON object")
             }
@@ -66,7 +72,22 @@ public final class EngineServer: @unchecked Sendable {
             if !refs.isEmpty && !vision {
                 return (nil, "Qwen Image 2.1 editing requires Qwen3-VL vision weights; start the engine with --llm_vision")
             }
-            if !array("lora").isEmpty { return (nil, "Kokon's Mac engine does not run LoRAs yet") }
+            // sd-server's `lora`: [{path, multiplier}], the path relative to `--lora-model-dir` and inside it.
+            var loras: [LoraRequest] = []
+            for (i, item) in array("lora").enumerated() {
+                guard let dir = loraDir else { return (nil, "LoRAs need the LoRA folder: start the engine with --lora-model-dir") }
+                guard let entry = item as? [String: Any], let path = entry["path"] as? String, !path.isEmpty else {
+                    return (nil, "lora[\(i)] has no path")
+                }
+                let multiplier = (entry["multiplier"] as? NSNumber)?.floatValue ?? 1
+                let root = URL(fileURLWithPath: dir).standardizedFileURL.path
+                let full = URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: dir, isDirectory: true)).standardizedFileURL.path
+                guard full.hasPrefix(root + "/"), FileManager.default.fileExists(atPath: full) else {
+                    return (nil, "lora[\(i)]: \(path) is not a file in the LoRA folder")
+                }
+                guard multiplier.isFinite else { return (nil, "lora[\(i)]: multiplier \(multiplier)") }
+                loras.append(LoraRequest(path: full, multiplier: multiplier))
+            }
             if let hires = json["hires"] as? [String: Any], hires["enabled"] as? Bool == true {
                 return (nil, "Kokon's Mac engine has no second pass (hires)")
             }
@@ -77,7 +98,7 @@ public final class EngineServer: @unchecked Sendable {
             }
             let sample = json["sample_params"] as? [String: Any] ?? [:]
             let cfg = (sample["guidance"] as? [String: Any])?["txt_cfg"] as? Double ?? 1
-            guard abs(cfg - 1) < 1e-6 else { return (nil, "txt_cfg \(cfg): Qwen-Image 2.1 Turbo runs at CFG 1 only") }
+            guard abs(cfg - 1) < 1e-6 else { return (nil, "txt_cfg \(cfg): Kokon's Mac engine runs at CFG 1 only") }
             var sigmas = (sample["custom_sigmas"] as? [Any] ?? []).compactMap { ($0 as? NSNumber)?.floatValue }
             let steps = sample["sample_steps"] as? Int ?? QwenPipeline.turboSigmas.count - 1
             if sigmas.isEmpty {
@@ -138,8 +159,10 @@ public final class EngineServer: @unchecked Sendable {
                 guard strength.isFinite, strength >= 0, strength <= 1 else { return (nil, "strength \(strength) out of [0, 1]") }
                 initImage = .init(image: .init(rgba: image.rgba, width: width, height: height), mask: mask, strength: strength)
             }
-            return (ImageRequest(prompt: json["prompt"] as? String ?? "", width: width, height: height, seed: seed,
-                                 batch: batch, sigmas: sigmas, references: references, initImage: initImage), nil)
+            var request = ImageRequest(prompt: json["prompt"] as? String ?? "", width: width, height: height, seed: seed,
+                                       batch: batch, sigmas: sigmas, references: references, initImage: initImage)
+            request.loras = loras
+            return (request, nil)
         }
     }
 
@@ -206,7 +229,7 @@ public final class EngineServer: @unchecked Sendable {
 
     func capabilities() -> [String: Any] {
         let url = URL(fileURLWithPath: paths.diffusionModel)
-        let feature: [String: Any] = ["ref_images": paths.vision != nil, "init_image": true, "mask_image": true, "lora": false,
+        let feature: [String: Any] = ["ref_images": paths.vision != nil, "init_image": true, "mask_image": true, "lora": paths.loraDir != nil,
                                       "hires": false, "custom_sigmas": true, "cancel_generating": true]
         return [
             "engine": "kokon-engine-mac",
@@ -227,7 +250,7 @@ public final class EngineServer: @unchecked Sendable {
     }
 
     func submit(_ body: Data) -> HTTPServer.Response {
-        let (parsed, reason) = ImageRequest.parse(body, vision: paths.vision != nil)
+        let (parsed, reason) = ImageRequest.parse(body, vision: paths.vision != nil, loraDir: paths.loraDir)
         guard let parsed else { return .error(400, reason ?? "bad request") }
         return lock.withLock {
             guard queue.count < EngineServer.maxQueue else { return .error(429, "the queue is full") }
@@ -461,7 +484,11 @@ public final class EngineServer: @unchecked Sendable {
                 }
             }
             let image = try pipeline.generate(prompt: r.prompt, references: r.references, initImage: r.initImage, width: r.width, height: r.height,
-                                              seed: UInt64(bitPattern: seed), sigmas: r.sigmas)
+                                              seed: UInt64(bitPattern: seed), sigmas: r.sigmas, loras: r.loras)
+            if i == 0, let set = pipeline.loraSet {
+                log("[INFO   ] engine-mac - LoRAs: \(set.applied) module(s) applied"
+                    + (set.unmatched.isEmpty ? "" : ", \(set.unmatched.count) not in this model (\(set.unmatched.prefix(3).joined(separator: ", ")))"))
+            }
             let png = try QwenPipeline.pngData(QwenPipeline.pixels(image, width: r.width, height: r.height), width: r.width, height: r.height)
             images.append(png.base64EncodedString())
             let t = pipeline.timings

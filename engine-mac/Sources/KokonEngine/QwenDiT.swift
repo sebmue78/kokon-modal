@@ -32,7 +32,22 @@ public final class QwenDiT {
     /// zero row is zero. Slices therefore hold `padded(rows) + 64` rows.
     static func padded(_ rows: Int) -> Int { max(64, (rows + 63) / 64 * 64) }
 
+    /// Every Linear weight of the DiT, by name without the file's prefix (LoRAs with kohya's names are matched to them).
+    static func linearNames() -> [String] {
+        var names = ["img_in.weight", "proj_out.weight", "txt_in.in_layer.weight", "txt_in.out_layer.weight",
+                     "time_text_embed.timestep_embedder.linear_1.weight", "time_text_embed.timestep_embedder.linear_2.weight",
+                     "modulation.1.weight", "norm_out.linear.weight"]
+        for layer in 0..<layers {
+            let block = "transformer_blocks.\(layer)."
+            names += ["to_q", "to_k", "to_v", "to_out.0"].map { block + "attn.\($0).weight" }
+            names += ["gate_layer", "proj", "out"].map { block + "img_mlp.\($0).weight" }
+        }
+        return names
+    }
+
     public let file: GGUFFile
+    /// The file's prefix of the DiT's tensor names: `model.diffusion_model.`, or none (Diffusers-layout GGUFs).
+    let namePrefix: String
     let context: MetalContext
     let dequant: GPUDequant
     public let sequence: QwenSequence
@@ -183,6 +198,9 @@ public final class QwenDiT {
 
     public init(file: GGUFFile, context: MetalContext, sequence: QwenSequence) throws {
         self.file = file
+        // sd.cpp's conversions name the tensors `model.diffusion_model.…`; Diffusers-layout GGUFs (Qwen-Image 2.1
+        // Uncensored Omni) have no prefix.
+        namePrefix = file.tensors.keys.contains { $0.hasPrefix(QwenDiT.prefix) } ? QwenDiT.prefix : ""
         self.context = context
         self.dequant = GPUDequant(context: context)
         self.sequence = sequence
@@ -226,10 +244,10 @@ public final class QwenDiT {
         var norms: [Float] = []
         for layer in 0..<QwenDiT.layers {
             for which in ["norm_q", "norm_k"] {
-                norms += try Dequant.array(file, QwenDiT.prefix + "transformer_blocks.\(layer).attn.\(which).weight").prefix(QwenDiT.headDim)
+                norms += try Dequant.array(file, namePrefix + "transformer_blocks.\(layer).attn.\(which).weight").prefix(QwenDiT.headDim)
             }
         }
-        let tn = try Dequant.array(file, QwenDiT.prefix + "txt_in.text_norm.weight")
+        let tn = try Dequant.array(file, namePrefix + "txt_in.text_norm.weight")
         fill = (sequence.ropeTable(), norms, (0..<d).map { tn[$0] + 1 })
         current = try Memory(device: context.device, sequence: sequence, firstRow: 0, halfWeights: half, fill: fill)
     }
@@ -269,8 +287,9 @@ public final class QwenDiT {
 
     /// `y = W x` for each `x`, W a Linear weight `[out, in]` of the file unpacked once on the CPU.
     func linearCPU(_ name: String, _ xs: [[Float]]) throws -> [[Float]] {
-        let t = try file.tensor(QwenDiT.prefix + name)
-        let w = try Dequant.array(file, t.name)
+        let t = try weight(name)
+        var w = try Dequant.array(file, t.name)
+        loras?.addCPU(name, into: &w)
         return xs.map { x in
             var y = [Float](repeating: 0, count: t.rows)
             cblas_sgemv(CblasRowMajor, CblasNoTrans, Int32(t.rows), Int32(t.columns), 1, w, Int32(t.columns), x, 1, 0, &y, 1)
@@ -594,17 +613,39 @@ public final class QwenDiT {
     /// first (diffusers' single_file_utils and sd.cpp's qwen_image_2_1.hpp split it the same way): each half is
     /// then a view of the fused tensor's rows, a quantized row being contiguous, so nothing is copied.
     func weight(_ name: String) throws -> GGUFTensor {
-        if let t = file.tensors[QwenDiT.prefix + name] { return t }
+        if let t = file.tensors[namePrefix + name] { return t }
         for (part, half) in [("img_mlp.gate_layer.weight", 0), ("img_mlp.proj.weight", 1)] where name.hasSuffix(part) {
-            let fused = try file.tensor(QwenDiT.prefix + name.dropLast(part.count) + "img_mlp.gate_up.weight")
+            let fused = try file.tensor(namePrefix + name.dropLast(part.count) + "img_mlp.gate_up.weight")
             guard let type = fused.type, fused.dims.count == 2, fused.rows % 2 == 0 else {
                 throw GGUFFile.Failure.unsupported("\(fused.name): \(fused.dims)")
             }
             let rows = fused.rows / 2
-            return GGUFTensor(name: QwenDiT.prefix + name, dims: [fused.columns, rows], typeID: fused.typeID,
+            return GGUFTensor(name: namePrefix + name, dims: [fused.columns, rows], typeID: fused.typeID,
                               offset: fused.offset + half * rows * type.bytes(count: fused.columns))
         }
-        return try file.tensor(QwenDiT.prefix + name)
+        return try file.tensor(namePrefix + name)
+    }
+
+    /// A Linear weight's `[n, k]` (rows, columns), nil when the file has no such weight.
+    func weightShape(_ name: String) -> (n: Int, k: Int)? {
+        guard let t = try? weight(name), t.dims.count == 2 else { return nil }
+        return (t.rows, t.columns)
+    }
+
+    /// **The LoRAs of the image being made** (`LoraSet`), added to each weight as it is unpacked. A change drops what
+    /// was computed with the weights before: the modulation rows and the prefix's K and V.
+    var loras: LoraSet? {
+        didSet {
+            guard oldValue?.key != loras?.key else { return }
+            modulationCache = [:]
+            cachedConditioning = nil
+        }
+    }
+
+    /// The name the Neural Engine's per-weight caches know `name` by: its own, or with the LoRAs' key when they change it.
+    func weightKey(_ name: String) -> String {
+        guard let loras, loras.has(name) else { return name }
+        return name + "#" + loras.key
     }
 
     /// The input the last split product cast to fp16 (slice offset, first row, k); forgotten by any kernel or attention.
@@ -633,6 +674,7 @@ public final class QwenDiT {
             try gpu("dequant", commands) {
                 try dequant.encode(tensor, of: file, into: arena.buffer, outOffset: reserves[index].offset, transposed: true,
                                    output: halfWeights ? .f16 : .f32, commands: $0)
+                loras?.add(name, into: (arena.buffer, reserves[index].offset), half: halfWeights, commands: $0)
             }
         }
         unpackedAhead = nil
@@ -674,13 +716,14 @@ public final class QwenDiT {
                 ahead = { [self] commands in
                     try dequant.encode(t, of: file, into: arena.buffer, outOffset: reserves[other].offset, transposed: true,
                                        output: halfWeights ? .f16 : .f32, commands: commands)
-                    try coexecutor.prepareWeight(next, w: operand(reserves[other], 0, t.rows), k: t.columns, n: t.rows, commands: commands)
+                    loras?.add(next, into: (arena.buffer, reserves[other].offset), half: halfWeights, commands: commands)
+                    try coexecutor.prepareWeight(weightKey(next), w: operand(reserves[other], 0, t.rows), k: t.columns, n: t.rows, commands: commands)
                     unpackedAhead = (next, other)
                 }
             }
             let ready = castInput.map { $0 == (a.offset, aRow, kk) } ?? false
-            try coexecutor.encode(weight: name, a: operand(a, aRow, kk), w: operand(reserve, 0, nn), c: operand(c, cRow, nn),
-                                  m: m, k: kk, n: nn, commands: commands, readers: readers, castReady: ready, keepOutput: keepOutput,
+            try coexecutor.encode(weight: weightKey(name), a: operand(a, aRow, kk), w: operand(reserve, 0, nn), c: operand(c, cRow, nn),
+                                  m: m, k: kk, n: nn, commands: commands, readers: readers.map(weightKey), castReady: ready, keepOutput: keepOutput,
                                   ahead: ahead, gpuRows: gpuRows)
             castInput = c.offset == a.offset ? nil : (a.offset, aRow, kk)
         } else {
@@ -722,7 +765,7 @@ public final class QwenDiT {
     /// (`Coexecutor.RowPack`); nil: they are written in fp32 and packed by the product.
     func rowPack(count: Int, k: Int, n: Int, readers: [String]) -> Coexecutor.RowPack? {
         guard fusedCast, !profiling, !probing, let coexecutor else { return nil }
-        return coexecutor.rowPack(m: QwenDiT.padded(count), k: k, n: n, readers: readers)
+        return coexecutor.rowPack(m: QwenDiT.padded(count), k: k, n: n, readers: readers.map(weightKey))
     }
 
     struct AnePack { var row0, real, surfaces, kSplit: UInt32 }

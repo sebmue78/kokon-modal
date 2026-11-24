@@ -31,7 +31,7 @@ export const CATALOG_MODELS: Record<string, CatalogModel> = {
     full: "Qwen-Image 2.1 Uncensored Omni",
     hint: "Qwen-Image 2.1 without content filter: new images and edits, 8 steps with its Turbo LoRA (non-commercial license)",
     about:
-      "chatrlabs' uncensored version of the full Qwen-Image 2.1: new images, edits of a whole photo, combining images and brushed changes, like Qwen-Image 2.1 Turbo. Its Turbo LoRA is downloaded with it and switched on (8 steps without CFG); turned off, the model runs 35 steps at CFG 5, about 6x slower. On a Mac it uses the standard engine (Kokon's Mac engine has no LoRAs). Qwen Research License: research and evaluation, non-commercial.",
+      "chatrlabs' uncensored version of the full Qwen-Image 2.1: new images, edits of a whole photo, combining images and brushed changes, like Qwen-Image 2.1 Turbo. Its Turbo LoRA is downloaded with it and switched on (8 steps without CFG); turned off, the model runs 35 steps at CFG 5, about 6x slower. On a Mac, Kokon's Mac engine runs it with its Turbo LoRA; without the LoRA (CFG 5) the standard engine does. Qwen Research License: research and evaluation, non-commercial.",
   },
   "flux-3-image-klein": {
     name: "FLUX.3 Klein",

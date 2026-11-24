@@ -1344,10 +1344,10 @@ impl AppConfig {
     /// Kokon's Mac engine runs instead of sd-server: chosen in Settings, on the Metal backend only.
     pub fn uses_mac_engine(&self) -> bool {
         // Kokon's Mac engine runs Qwen-Image 2.1 only; other models always run on sd-server.
-        // Fork: nor the 16-bit Qwen files (the Mac engine is checked against the 4-bit file only), nor
-        // Uncensored Omni (the full model's split MLP layout, CFG 5, and its Turbo LoRA: the Mac
-        // engine has none of these).
-        let other = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(|p| p.model != QWEN_IMAGE_21 || p.id == QWEN_F16_PROFILE_ID);
+        // Fork: nor the 16-bit Qwen files (the Mac engine is checked against the 4-bit file only).
+        // Uncensored Omni runs on it with LoRAs (its Turbo LoRA); a job with CFG goes to sd-server
+        // (`engine::job_config`).
+        let other = self.profiles.iter().find(|p| p.id == self.active_profile).is_some_and(|p| !p.is_qwen() || p.id == QWEN_F16_PROFILE_ID);
         self.mac_engine && self.gpu_backend == GpuBackend::Metal && !other
     }
 

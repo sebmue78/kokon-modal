@@ -29,9 +29,9 @@ kokon-engine-mac: Kokon's Apple Silicon engine (in development)
                                            text to image, Turbo's 8 steps (default 1024x1024, seed 42, out.png); an edit
                                            with --ref (sides multiples of 32; the size defaults to the last reference's)
   serve --diffusion-model <dit.gguf> --vae <vae.safetensors> --llm <encoder.gguf> [--llm_vision <mmproj.gguf>]
-        [--listen-ip 127.0.0.1] [--listen-port 1234]
+        [--lora-model-dir <dir>] [--listen-ip 127.0.0.1] [--listen-port 1234]
                                            the engine as a server speaking sd-server's /sdcpp/v1 API (text to image;
-                                           edits with --llm_vision)
+                                           edits with --llm_vision; LoRAs from --lora-model-dir)
   bench [--quick] [--out report.md] [--encoder P --dit P --vae P]
                                            a few minutes: this Mac's paths, speed at 1024², accuracy against the fp32 path;
                                            prints a report to paste in a GitHub issue (Kokon's model files by default)
@@ -150,6 +150,7 @@ do {
         try Checks.noise(dump: arguments[1])
     case "serve":
         var (ip, port, dit, vae, llm, vision) = ("127.0.0.1", UInt16(1234), "", "", "", String?.none)
+        var loraDir: String?
         var options = arguments.dropFirst().makeIterator()
         while let option = options.next() {
             guard let value = options.next() else { fail("\(option) needs a value\n\n" + usage) }
@@ -160,13 +161,14 @@ do {
             case "--vae": vae = value
             case "--llm": llm = value
             case "--llm_vision": vision = value
+            case "--lora-model-dir": loraDir = value
             default: fail("unknown option \(option)\n\n" + usage)
             }
         }
         guard !dit.isEmpty, !vae.isEmpty, !llm.isEmpty else { fail("serve needs --diffusion-model, --vae and --llm\n\n" + usage) }
         setvbuf(stdout, nil, _IOLBF, 0)   // qls-core follows the log file stdout goes to
         print("kokon-engine-mac (experimental), Qwen-Image 2.1 Turbo")
-        let engine = try EngineServer(paths: .init(diffusionModel: dit, vae: vae, textEncoder: llm, vision: vision))
+        let engine = try EngineServer(paths: .init(diffusionModel: dit, vae: vae, textEncoder: llm, vision: vision, loraDir: loraDir))
         let server = try HTTPServer(host: ip, port: port) { engine.handle($0) }
         print("[INFO   ] engine-mac - listening on: http://\(ip):\(server.port)")
         server.run()

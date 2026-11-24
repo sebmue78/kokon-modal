@@ -85,6 +85,9 @@ public final class QwenPipeline {
         public init(rgba: [UInt8], width: Int, height: Int) { (self.rgba, self.width, self.height) = (rgba, width, height) }
     }
 
+    /// The LoRAs of the last image (`LoraSet`), kept for the next one.
+    var loraSet: LoraSet?
+
     /// Text to image at `width` × `height` (multiples of 32). `noise`: a latent `[64, h, w]` to start from instead of
     /// the seed's; `conditioning`: the encoder's output `[T, 4096]` to use instead of encoding `prompt` (the checks);
     /// `step`: called after each step with its index and the packed latent `[h·w, 64]`.
@@ -143,7 +146,8 @@ public final class QwenPipeline {
     public func generate(prompt: String, references: [Reference] = [], initImage: InitImage? = nil, width: Int, height: Int,
                          seed: UInt64, noise: [Float]? = nil, conditioning given: (rows: [Float], slots: [Bool])? = nil,
                          referenceLatents givenLatents: [Float]? = nil, initLatent givenInit: [Float]? = nil,
-                         sigmas: [Float] = QwenPipeline.turboSigmas, step: ((Int, [Float]) -> Void)? = nil) throws -> [Float] {
+                         sigmas: [Float] = QwenPipeline.turboSigmas, loras: [LoraRequest] = [],
+                         step: ((Int, [Float]) -> Void)? = nil) throws -> [Float] {
         guard width % 32 == 0, height % 32 == 0, width >= 64, height >= 64 else {
             throw QwenSequence.Failure.layout("\(width)×\(height): each side must be a multiple of 32, at least 64")
         }
@@ -258,6 +262,18 @@ public final class QwenPipeline {
             }
             dit.cancelled = cancelled
             defer { dit.cancelled = { false } }
+            // The LoRAs, read once and kept while the next image asks for the same ones.
+            if loras.isEmpty {
+                loraSet = nil
+            } else if loraSet?.requests != loras {
+                loraSet = nil
+                let loraStart = DispatchTime.now().uptimeNanoseconds
+                let set = try LoraSet(loras, device: context.device, shape: dit.weightShape)
+                loraSet = set
+                log(String(format: "LoRAs: %d module(s) of %d file(s) in %.2f s%@", set.applied, loras.count, since(loraStart),
+                           set.unmatched.isEmpty ? "" : "; \(set.unmatched.count) module(s) not in this model, skipped (\(set.unmatched.prefix(3).joined(separator: ", ")))"))
+            }
+            dit.loras = loraSet
             try dit.prepareModulation([0] + schedule.dropLast())
             timings["dit load"] = since(t)
             let memory = dit.memoryBytes
