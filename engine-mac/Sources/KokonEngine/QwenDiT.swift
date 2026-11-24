@@ -196,6 +196,13 @@ public final class QwenDiT {
     public var cancelled: () -> Bool = { false }
     public struct Cancelled: Error {}
 
+    /// The latents held a value that is not finite (an fp16 overflow in a product or the attention): the image
+    /// would decode black. Kokon reads "non-finite" in the message and makes the image on the standard engine.
+    public struct NonFinite: Error, CustomStringConvertible {
+        public let step: Int, values: Int
+        public var description: String { "non-finite latents after step \(step) (\(values) values): the Mac engine's numbers overflowed" }
+    }
+
     public init(file: GGUFFile, context: MetalContext, sequence: QwenSequence) throws {
         self.file = file
         // sd.cpp's conversions name the tensors `model.diffusion_model.…`; Diffusers-layout GGUFs (Qwen-Image 2.1

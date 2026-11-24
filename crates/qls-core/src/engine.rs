@@ -108,6 +108,9 @@ struct Job {
     request: GenerationRequest,
     cancel: bool,
     retried_oom: bool,
+    /// Fork: Kokon's Mac engine gave non-finite values for this job (an fp16 overflow, a black image): it runs again
+    /// on the standard engine.
+    standard_engine: bool,
     workspace: Option<PathBuf>,
     /// The prompt enhancer's finished text, kept for a retry (out of memory).
     enhanced: Option<String>,
@@ -881,7 +884,7 @@ impl Engine {
         };
         {
             let mut jobs = self.jobs.lock().unwrap();
-            jobs.insert(id.clone(), Job { view, request, cancel: false, retried_oom: false, workspace, enhanced: None });
+            jobs.insert(id.clone(), Job { view, request, cancel: false, retried_oom: false, standard_engine: false, workspace, enhanced: None });
             let mut order = self.order.lock().unwrap();
             order.push_back(id.clone());
             // Keep memory bounded: drop the oldest finished jobs.
@@ -1359,8 +1362,9 @@ impl Engine {
         // Fork: Kokon's Mac engine runs without CFG only: a job with CFG (Uncensored Omni without its
         // Turbo LoRA) runs on sd-server, which starts in its place and hands back to the Mac engine
         // with the next job without CFG.
+        let overflowed = self.jobs.lock().unwrap().get(id).is_some_and(|j| j.standard_engine);
         let standard_engine = job_uses_standard_engine(&cfg, rec.cfg_scale);
-        if standard_engine {
+        if standard_engine || overflowed {
             cfg.mac_engine = false;
         }
         let vram = self.planning_vram(&cfg);
@@ -1372,7 +1376,9 @@ impl Engine {
         let mut seed = request.seed.unwrap_or_else(random_seed);
         let mut notes = plan.notes.clone();
         notes.extend(lora_note);
-        if standard_engine {
+        if overflowed {
+            notes.push("Made on the standard engine: on Kokon's Mac engine this image's numbers overflowed (it would have come out black).".into());
+        } else if standard_engine {
             notes.push(format!("Made on the standard engine: Kokon's Mac engine runs without CFG only (this image uses CFG {}).", trim_cfg(rec.cfg_scale)));
         }
         // A seed the user chose that made one of the references (see `avoid_reference_seeds`).
@@ -1622,6 +1628,11 @@ impl Engine {
                 BackendJobStatus::Cancelled => return Err(AppError::new(ErrorCode::Cancelled, "Cancelled.")),
                 _ => {
                     let msg = backend_job.error.map(|e| format!("{}: {}", e.code, e.message)).unwrap_or_default();
+                    // Fork: the Mac engine's numbers overflowed (`QwenDiT.NonFinite`): once more on the standard engine.
+                    if cfg.uses_mac_engine() && msg.contains("non-finite") && self.retry_on_standard_engine(id) {
+                        tracing::warn!("job {id}: {msg}; again on the standard engine");
+                        return Ok(());
+                    }
                     let smaller = Size::new(((plan.working.width as f64) * 0.75) as u32 / 32 * 32, ((plan.working.height as f64) * 0.75) as u32 / 32 * 32);
                     let err = translate_generation_failure(&msg, &job_log.join("\n"), (plan.working.width, plan.working.height), Some((smaller.width, smaller.height)));
                     return self.maybe_retry_oom(id, err).await;
@@ -2004,6 +2015,31 @@ impl Engine {
             }
         }
         Err(AppError::new(ErrorCode::Cancelled, "Cancelled."))
+    }
+
+    /// Fork: puts job `id` back at the front of the queue to run on the standard engine (`Job::standard_engine`),
+    /// once. False when it already did.
+    fn retry_on_standard_engine(&self, id: &str) -> bool {
+        {
+            let mut jobs = self.jobs.lock().unwrap();
+            let Some(j) = jobs.get_mut(id) else { return false };
+            if j.standard_engine {
+                return false;
+            }
+            j.standard_engine = true;
+            j.view.status = JobStatus::Queued;
+            j.view.stage = None;
+            j.view.step = None;
+        }
+        {
+            let mut order = self.order.lock().unwrap();
+            if let Some(pos) = order.iter().position(|x| x == id) {
+                order.remove(pos);
+            }
+            order.push_front(id.to_string());
+        }
+        self.wake.notify_one();
+        true
     }
 
     /// One automatic retry for out-of-memory: enable VAE tiling, then lower resolution.
