@@ -114,3 +114,31 @@ fn old_profiles_without_a_tokenizer_still_load() {
     assert_eq!(p.tokenizer, None);
     assert_eq!(p.recommended_settings.cfg_scale, 1.0, "older settings keep Turbo's CFG");
 }
+
+/// Fork: Juggernaut Moss Turbo: KandooAI's GGUF with MOSS-Image's text encoder, tokenizer and VAE.
+#[test]
+fn juggernaut_shares_moss_files_and_borrows_a_prompt_writer() {
+    use crate::config::{JUGGERNAUT_MOSS_TURBO, JUGGERNAUT_PROFILE_ID, OFFICIAL_PROFILE_ID};
+    let dir = tempfile::tempdir().unwrap();
+    let mut c = moss_cfg(dir.path(), "24gb");
+    let moss = c.profile().clone();
+    c.use_extra_catalog(JUGGERNAUT_PROFILE_ID);
+    let p = c.profile().clone();
+    assert_eq!((p.id.as_str(), p.model.as_str()), (JUGGERNAUT_PROFILE_ID, JUGGERNAUT_MOSS_TURBO));
+    assert_eq!(p.diffusion_model, catalog::JUGGERNAUT_Q8_0.path(dir.path()));
+    assert_eq!((&p.text_encoder, &p.vae, &p.tokenizer), (&moss.text_encoder, &moss.vae, &moss.tokenizer));
+    assert_eq!(catalog::juggernaut_files(catalog::preset("8gb").unwrap()).id, catalog::JUGGERNAUT_Q4_0.id);
+    let rec = &p.recommended_settings;
+    assert_eq!((rec.steps, rec.cfg_scale, rec.simple_flow_shift, rec.text_to_image, rec.reference_edits), (6, 1.0, 5.0, true, false));
+    // Its Qwen3.5 cannot write Prompt+ prompts: an installed model with Qwen3-VL does.
+    assert!(!p.writes_prompts() && !moss.writes_prompts());
+    assert!(c.prompt_writer().is_none(), "nothing installed");
+    let official = c.profiles.iter().find(|p| p.id == OFFICIAL_PROFILE_ID).unwrap().clone();
+    for (_, f, _) in official.files() {
+        std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+        std::fs::write(f, b"x").unwrap();
+    }
+    assert_eq!(c.prompt_writer().map(|p| p.id.as_str()), Some(OFFICIAL_PROFILE_ID));
+    c.use_official();
+    assert!(c.prompt_writer().is_none(), "Qwen writes its own");
+}

@@ -24,6 +24,40 @@ pub const T2I_SYSTEM_PROMPT: &str = r#"You write prompts for an image generation
 - Write in English whatever language the user writes in, about 80 to 150 words, in the present tense, as a description of the image, not as instructions. A scene with several people or many objects may need up to about 250 words: give each one its own sentence (how it looks, where it is, what it does).
 Output only the prompt."#;
 
+/// Fork: Prompt+ instructions for new images with Juggernaut Moss Turbo, from KandooAI's prompting guide
+/// (`catalog::JUGGERNAUT_GUIDE`, 24 pages, read 2026-11-24): its long training captions always follow
+/// one order (image type, subject, surroundings, light and colours, camera and focus, text in quotes,
+/// an optional look sentence), whatever is left out is made up (gibberish signs), whatever is named ends
+/// up in the image, and quality tags and camera names do nothing. Its cheat-sheet words are the ones
+/// the model reacts to best.
+pub const JUGGERNAUT_T2I_PROMPT: &str = r#"You write prompts for Juggernaut Moss, an image model trained on long, plain English captions of photographs and film stills. Rewrite the user's request as one such caption: one paragraph of full sentences, always in this order.
+1. Image type: start with it. "A professional photograph of ...", "A film still from a 1970s drama movie of ...", "A candid street photograph of ...", "A casual smartphone snapshot of ...", "A professional food photograph of ...", "A black and white photograph of ...". If the user names no medium, choose the photograph that fits the request. Put a shot size or position in it when it matters: "A medium shot photograph of ...", "An extreme close-up photograph of the face of ...", "An off-center photograph of ...".
+2. Subject: who or what, with age, face, hair, clothes, pose, expression and where they look; for objects, food or products their exact look, materials and condition. Say where the subject is in the frame and how much of it is seen ("in the foreground on the right, seen from the waist up").
+3. Surroundings: what is actually there, in front, in the middle and behind, named one by one. Never just "a harbor background".
+4. Light and colours: where the light comes from in this scene (a window on the left, a lamp on the table, a neon sign outside, overcast sky, low sun) and what it does on the subject (one half of the face in shadow, a rim light on the hair, long shadows). Light must make sense in the place: no studio softbox in a cafe. Then one sentence "The color palette is ..." with the main colours.
+5. Camera and focus: shot size (close-up, medium shot, medium close-up, long shot), angle (eye level, low angle looking up, high angle looking down, profile, from behind, aerial) and lens (35mm, 50mm, 85mm, 24mm wide-angle), and what is sharp. Without this the model makes a centered front view, so always say it. The model blurs backgrounds by default; when the background or a wide scene must stay sharp, write "Shot with a 24mm wide-angle lens at f/11, deep depth of field, everything from the foreground to the far background in sharp focus."
+6. Text: the model fills every sign, label, cover, poster, screen and boat name it imagines with gibberish, and "no text" does not stop it. Copy text the user asks for exactly, in its original language and script, inside double quotes, and say where it is and how it looks: a neon sign that reads "OPEN LATE" in pink letters. Where such things belong in the scene but the user gave no text, describe them without text (a plain wooden sign, books with plain cloth covers, a blank screen). If the image has text, end this part with "These are the only texts in the image."
+7. Look (optional): one closing sentence about the overall look when it suits the request: "The image has a matte look with soft, faded colors.", "The image has a vintage look, like a photo from the 1970s, with warm faded colors and grain.", "The image is high contrast with deep blacks and bright highlights.", "The color grading is teal and orange, like a modern movie."
+Rules:
+- Keep everything the user specified (objects, counts, colours, positions, style) and never contradict it. If the request is already detailed, keep all of it, put it in this order and only add what is missing. Counts are exact and per group.
+- Translate the meaning, not word by word. A "red" cat in Italian, French or Spanish is a ginger cat.
+- Everything you name appears in the image. Never mention what must not be there, not even as "no ..." or "out of the frame": describe what is there instead. Shoes or feet make a full-body shot; for a close-up describe only what the close-up shows. For a silhouette do not describe the face.
+- Everything must fit the image type. Black and white: no colour words at all; use "deep blacks, bright whites, fine film grain". A painting, drawing or illustration: describe the style itself (bold black ink outlines, flat colors, simple cel shading, visible brush strokes) in several sentences and add "Nothing looks like a photograph."; then use no lens, depth of field, skin texture or other camera words.
+- Use the plain words the model knows best: professional photograph, cinematic, film still, film grain, shallow depth of field, deep depth of field, close-up, medium shot, long shot, eye level, low angle, high angle, diffused, overcast, soft shadows, harsh shadows, deep shadows, golden hour, low-key, natural daylight, vibrant, muted, earthy, high contrast, moody, desaturated, warm tones, cool tones, mist, fog, wet, weathered.
+- No quality tags (masterpiece, best quality, 8k, ultra detailed, hyperrealistic), no camera brand or model names, no tag lists: full sentences only. No size or aspect words: the app sets the size.
+- People: only what is visible (life stage, expression, pose, hair, clothing). No brand names unless the user gave them. Add nothing to people or their clothing that the user did not ask for.
+- Write in English whatever language the user writes in, in the present tense, as a description of the image, not as instructions: about 100 to 180 words, up to about 250 for scenes with several people or many objects, each with its own sentence.
+Output only the prompt."#;
+
+/// Fork: the built-in Prompt+ instructions for new images with model `model` (`ModelProfile::model`),
+/// when it has its own; the others use [`T2I_SYSTEM_PROMPT`].
+pub fn model_t2i_prompt(model: &str) -> Option<&'static str> {
+    match model {
+        crate::config::JUGGERNAUT_MOSS_TURBO => Some(JUGGERNAUT_T2I_PROMPT),
+        _ => None,
+    }
+}
+
 /// Built-in system prompt for image-grounded edits and combines.
 pub const EDIT_SYSTEM_PROMPT: &str = r#"You write prompts for an image editing model. You see the input image and the user's instruction. Rewrite the instruction as one precise English editing instruction.
 - Start with the operation (Change, Replace, Remove, Add, Turn, Place, ...) and say exactly what changes, where it is in the image and what it becomes. Make the change complete and clearly visible, not faint.
@@ -204,8 +238,20 @@ pub fn expand_request(sides: &str, prompt: &str, image: String, seed: i64) -> Te
     }
 }
 
-/// The system prompt for `mode`: the one saved in Settings, or the built-in one.
+/// The system prompt for `mode`: the one saved in Settings, or the built-in one. Fork: for new images,
+/// the active model's own first ([`AppConfig::enhancer_model_prompts`], [`model_t2i_prompt`]).
 pub fn system_prompt(cfg: &AppConfig, mode: ResolvedMode) -> String {
+    // Fork: new images with the model's own instructions (the user's for this model, else its built-in
+    // ones), before the general ones.
+    if mode == ResolvedMode::Generate {
+        let model = &cfg.profile().model;
+        if let Some(own) = cfg.enhancer_model_prompts.get(model).map(|p| p.trim()).filter(|p| !p.is_empty()) {
+            return own.to_string();
+        }
+        if let Some(builtin) = model_t2i_prompt(model) {
+            return builtin.to_string();
+        }
+    }
     let (custom, default) = match mode {
         ResolvedMode::Generate => (&cfg.enhancer_t2i_prompt, T2I_SYSTEM_PROMPT),
         ResolvedMode::Compose => (&cfg.enhancer_compose_prompt, COMPOSE_SYSTEM_PROMPT),
@@ -352,6 +398,34 @@ mod tests {
         assert_eq!(request(&cfg, ResolvedMode::Generate, "a cat", vec![], 1, false).system_prompt, T2I_SYSTEM_PROMPT);
         cfg.enhancer_edit_prompt = "My own rules.".into();
         assert_eq!(request(&cfg, ResolvedMode::Edit, "x", vec!["PNG".into()], 1, false).system_prompt, "My own rules.");
+    }
+
+    #[test]
+    fn each_model_can_have_its_own_instructions_for_new_images() {
+        let mut cfg = AppConfig::default();
+        cfg.normalize();
+        // Qwen-Image 2.1: the general ones.
+        assert_eq!(system_prompt(&cfg, ResolvedMode::Generate), T2I_SYSTEM_PROMPT);
+        // Juggernaut Moss Turbo: its built-in ones for new images, even over the user's general ones.
+        cfg.enhancer_t2i_prompt = "General.".into();
+        cfg.active_profile = crate::config::JUGGERNAUT_PROFILE_ID.into();
+        assert_eq!(cfg.profile().model, crate::config::JUGGERNAUT_MOSS_TURBO);
+        assert_eq!(system_prompt(&cfg, ResolvedMode::Generate), JUGGERNAUT_T2I_PROMPT);
+        assert!(JUGGERNAUT_T2I_PROMPT.contains("These are the only texts in the image.") && JUGGERNAUT_T2I_PROMPT.chars().count() < MAX_SYSTEM_PROMPT_CHARS);
+        // The user's own for this model win; edits keep the general ones.
+        cfg.enhancer_model_prompts.insert(crate::config::JUGGERNAUT_MOSS_TURBO.into(), " Mine. ".into());
+        assert_eq!(system_prompt(&cfg, ResolvedMode::Generate), "Mine.");
+        assert_eq!(system_prompt(&cfg, ResolvedMode::Edit), EDIT_SYSTEM_PROMPT);
+        // Saved: only text that differs from the model's built-in one.
+        cfg.enhancer_model_prompts.insert(crate::config::QWEN_IMAGE_21.into(), T2I_SYSTEM_PROMPT.into());
+        cfg.enhancer_model_prompts.insert(crate::config::MOSS_IMAGE_SFT.into(), " ".into());
+        cfg.normalize();
+        assert_eq!(cfg.enhancer_model_prompts.keys().collect::<Vec<_>>(), [crate::config::JUGGERNAUT_MOSS_TURBO]);
+        cfg.enhancer_model_prompts.insert(crate::config::JUGGERNAUT_MOSS_TURBO.into(), format!("{JUGGERNAUT_T2I_PROMPT}\n"));
+        cfg.normalize();
+        assert!(cfg.enhancer_model_prompts.is_empty());
+        cfg.enhancer_model_prompts.insert("x".into(), "x".repeat(MAX_SYSTEM_PROMPT_CHARS + 1));
+        assert!(cfg.validate().is_err());
     }
 
     #[test]

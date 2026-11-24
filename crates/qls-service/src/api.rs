@@ -279,7 +279,8 @@ async fn status(State(s): St) -> Json<Value> {
             "samplers": srv.capabilities.as_ref().map(|c| c.samplers.clone()).unwrap_or_default(),
             "schedulers": srv.capabilities.as_ref().map(|c| c.schedulers.clone()).unwrap_or_default(),
             "upscale": srv.capabilities.as_ref().map(|c| c.upscale),
-            "text_generation": srv.capabilities.as_ref().map(|c| c.text_generation),
+            // Fork: a model whose text encoder cannot write borrows another installed one's (`AppConfig::prompt_writer`).
+            "text_generation": srv.capabilities.as_ref().map(|c| c.text_generation || cfg.prompt_writer().is_some()),
         },
         "upscaler": { "model": cfg.upscaler().map(|u| u.0).unwrap_or_else(|| cfg.upscaler_model.clone()), "available": cfg.upscaler_file().is_some() },
         "engine": { "release": catalog::engine_tag(), "update_needed": engine_update },
@@ -664,7 +665,10 @@ async fn get_config(State(s): St) -> Json<AppConfig> {
 /// The prompt enhancer's built-in system prompts (Settings shows them for "" and restores them).
 async fn enhancer_defaults() -> Json<Value> {
     use qls_core::enhancer;
-    Json(json!({ "t2i": enhancer::T2I_SYSTEM_PROMPT, "edit": enhancer::EDIT_SYSTEM_PROMPT, "compose": enhancer::COMPOSE_SYSTEM_PROMPT, "max_chars": enhancer::MAX_SYSTEM_PROMPT_CHARS }))
+    // Fork: the models with built-in instructions of their own for new images, by model id.
+    let models: serde_json::Map<String, Value> =
+        [qls_core::config::JUGGERNAUT_MOSS_TURBO].iter().filter_map(|m| enhancer::model_t2i_prompt(m).map(|p| (m.to_string(), json!(p)))).collect();
+    Json(json!({ "t2i": enhancer::T2I_SYSTEM_PROMPT, "edit": enhancer::EDIT_SYSTEM_PROMPT, "compose": enhancer::COMPOSE_SYSTEM_PROMPT, "models": models, "max_chars": enhancer::MAX_SYSTEM_PROMPT_CHARS }))
 }
 
 async fn put_config(State(s): St, Extension(caller): Extension<Caller>, Json(mut cfg): Json<AppConfig>) -> ApiResult<Json<Value>> {

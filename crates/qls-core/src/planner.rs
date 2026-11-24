@@ -793,6 +793,24 @@ pub fn qwen21_sigmas(steps: u32, size: Size, terminal: bool) -> Vec<f32> {
     sigmas.into_iter().map(|s| s as f32).collect()
 }
 
+/// Fork: ComfyUI's "simple" schedule of a flow model (`ModelSamplingSD3` with `shift`), which
+/// Juggernaut Moss Turbo was distilled and tested with: the timesteps 1000, 1000 - 1000/n, ... of the
+/// 1000-step table, shifted (`shift·t / (1 + (shift - 1)·t)`), then 0. sd-server's own discrete
+/// schedule spreads `steps` points down to t = 0.001, so at 6 steps its last step does almost nothing.
+pub fn simple_flow_sigmas(steps: u32, shift: f32) -> Vec<f32> {
+    let n = steps.max(1);
+    let shift = shift as f64;
+    let mut sigmas: Vec<f32> = (0..n)
+        .map(|i| {
+            let index = 999 - (i as f64 * 1000.0 / n as f64) as i64;
+            let t = (index.max(0) + 1) as f64 / 1000.0;
+            (shift * t / (1.0 + (shift - 1.0) * t)) as f32
+        })
+        .collect();
+    sigmas.push(0.0);
+    sigmas
+}
+
 /// Area of the inpaint guide reference (the region with the painted area marked), as a
 /// share of the working canvas: enough to locate the area, cheap in tokens.
 pub const INPAINT_GUIDE_AREA: f64 = 0.25;
@@ -1369,6 +1387,8 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
             Vec::new()
         } else if rec.turbo_sigmas {
             TURBO_SIGMAS.to_vec()
+        } else if rec.simple_flow_shift > 0.0 {
+            simple_flow_sigmas(steps, rec.simple_flow_shift)
         } else if rec.qwen_prompts {
             // Fork: Qwen-Image 2.1's own schedule, spelled out: the same as sd-server's (with its terminal
             // stretch unless a speed LoRA drops it), and what Kokon's Mac engine needs for any step count.
@@ -1441,6 +1461,24 @@ mod tests {
         // With the stretch: what the server sends on its own (shift_terminal 0.02).
         close(qwen21_sigmas(8, square, true), &[1.0, 0.916024, 0.820046, 0.709295, 0.580075, 0.427347, 0.244054, 0.02, 0.0]);
         close(qwen21_sigmas(8, Size { width: 896, height: 1184 }, false), &[1.0, 0.933509, 0.857488, 0.769731, 0.667293, 0.546154, 0.400677, 0.22271, 0.0]);
+    }
+
+    /// Juggernaut Moss Turbo: ComfyUI's simple schedule at shift 5 (worked out with ComfyUI's
+    /// `ModelSamplingDiscreteFlow` and `simple_scheduler` formulas in Python on 2026-11-24).
+    #[test]
+    fn juggernaut_gets_the_simple_schedule() {
+        let want = [1.0, 0.961716, 0.909215, 0.833333, 0.714897, 0.5006, 0.0];
+        let got = simple_flow_sigmas(6, 5.0);
+        assert_eq!(got.len(), want.len());
+        for (g, w) in got.iter().zip(want) {
+            assert!((g - w).abs() < 1e-5, "{got:?}");
+        }
+        let jm = RecommendedSettings::juggernaut_moss_turbo();
+        assert_eq!((jm.steps, jm.cfg_scale, jm.sampler.as_str()), (6, 1.0, "euler_a"));
+        let p = plan(&req("a fisherman"), &inputs(&[]), &jm).unwrap();
+        assert_eq!(p.custom_sigmas, simple_flow_sigmas(6, 5.0));
+        // About 2 MP at Balanced, never the 1 MP MOSS-Image SFT starts at.
+        assert!(p.working.width as u64 * p.working.height as u64 >= 1_600_000, "{:?}", p.working);
     }
 
     #[test]

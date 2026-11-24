@@ -51,11 +51,13 @@ are downloaded the first time you choose them (the app asks first, then shows th
 | **Fibo 2.0 Dev** (Bria, 8B) | New images, edits of a whole photo, combining up to 10 images (`<image_1>`, `<image_2>`), brushed changes and areas (seeing the photo) | 20, CFG 5 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
 | **Fibo 2.0 Edit Turbo** (Bria, 8B) | Fast edits of a whole photo and combining images; no new images from text | 4 | yes, sees your images | CC BY-NC 4.0: non-commercial only |
 | **Krea 2 Turbo** (Krea, 12.9B) | New images from text, up to 2K; brushed changes and Expand as plain inpainting | 8 | yes | Krea 2 Community License |
-| **MOSS-Image SFT** (OpenMOSS, 5B) | New images from text, with CFG and negative prompts; brushed changes and Expand | 20 | no (its Qwen3.5 encoder can't write text in the engine) | Apache-2.0 |
+| **MOSS-Image SFT** (OpenMOSS, 5B) | New images from text, with CFG and negative prompts; brushed changes and Expand | 20 | yes, written by another installed model (see below) | Apache-2.0 |
+| **Juggernaut Moss Turbo** (KandooAI, MOSS-Image fine-tune) | Photographic new images and film stills from text, about 2 MP; brushed changes and Expand | 6 | yes, with instructions from KandooAI's prompting guide, written by another installed model | Apache-2.0 |
 
 Download sizes on a 24 GB card (smaller files are picked for smaller cards): Qwen-Image about
 12 GB, FLUX.3 about 12 GB, Fibo 2.0 Dev or Edit Turbo about 16 GB each, Krea 2 about 18 GB,
-MOSS-Image about 12 GB, Qwen-Image 2.1 Uncensored Omni about 8.4 GB after Qwen-Image 2.1 (it uses
+MOSS-Image about 12 GB, Juggernaut Moss Turbo 5.7 GB after MOSS-Image (it uses MOSS-Image's text
+encoder, tokenizer and decoder; 3.3 GB on cards under 14 GB), Qwen-Image 2.1 Uncensored Omni about 8.4 GB after Qwen-Image 2.1 (it uses
 Qwen's text encoder and decoder; 5.1 GB on cards under 14 GB). On a Mac, Kokon's Mac engine runs Omni
 with its Turbo LoRA; without it (CFG 5) a job runs on the standard engine. FLUX.3, Fibo 2.0 and Krea 2 share their text encoder (Qwen3-VL 4B), and
 FLUX.3, Fibo 2.0 and MOSS-Image their decoder (the FLUX.2 VAE): a shared file is downloaded once,
@@ -63,7 +65,17 @@ so the second of them is much smaller (Fibo 2.0 after FLUX.3: about 10 GB). Ever
 download.
 
 The image sizes of the quality presets follow the model: Qwen-Image 2.1 and Krea 2 go up to 2K,
-FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardware).
+FLUX.3, Fibo 2.0 and MOSS-Image to 1.5K for now (not measured yet on real hardware). Juggernaut Moss
+Turbo starts at about 1.6 MP: its author advises 1.5 to 2.4 MP and never 1 MP.
+
+MOSS-Image and Juggernaut Moss encode prompts with Qwen3.5 9B, which the engine cannot use to write
+text. Prompt+ for them is written by another installed model with a Qwen3-VL text encoder
+(Qwen-Image 2.1 first): the engine loads only that text encoder, writes the prompt with the instructions
+of the model in use, then loads the model in use. That adds a model load before the image.
+
+Prompt+ instructions for new images can be set per model (Settings → General → Prompt+). Juggernaut
+Moss Turbo comes with its own, written from [KandooAI's prompting guide](https://huggingface.co/Kandoo/Juggernaut-Moss-Turbo-Beta/blob/main/Juggernaut_Moss_Prompting_Guide.pdf)
+(image type, subject, surroundings, light and colours, camera, text in quotes, look).
 
 ## What's different from Kokon
 

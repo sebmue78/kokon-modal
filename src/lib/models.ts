@@ -66,6 +66,13 @@ export const CATALOG_MODELS: Record<string, CatalogModel> = {
     hint: "New images from text (with negative prompts), brushed changes and Expand",
     about: `OpenMOSS's 5B model, 20 steps with CFG, negative prompts work (Apache-2.0). ${TEXT_ONLY}`,
   },
+  // Its own model id: its LoRAs and Prompt+ instructions are not MOSS-Image SFT's.
+  "juggernaut-moss-turbo": {
+    name: "Juggernaut Moss",
+    full: "Juggernaut Moss Turbo",
+    hint: "Photographic new images from text in 6 steps, brushed changes and Expand",
+    about: `KandooAI's fine-tune of MOSS-Image for photography and film stills, with his Turbo built in: 6 steps without CFG, about 2 MP (Apache-2.0, commercial use allowed). Shares MOSS-Image's text encoder, so with MOSS-Image installed only the image model is new. Prompt+ follows KandooAI's prompting guide for it; another installed model (Qwen-Image 2.1 first) writes the prompt, which adds a model load. ${TEXT_ONLY}`,
+  },
 };
 
 /** The catalog ids, e.g. for the "<id>:<preset>" label of a running download. */

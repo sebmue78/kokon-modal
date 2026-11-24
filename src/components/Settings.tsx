@@ -150,6 +150,63 @@ function EnhancerPrompt(props: { label: string; help: string; value: string; bui
   );
 }
 
+/** Fork: Prompt+ instructions for new images per model: one model at a time, its own text or the instructions
+ * it uses without one (its built-in ones, else the general "New images" ones). */
+function ModelPrompts(props: {
+  cfg: AppConfig;
+  defaults: { t2i: string; models?: Record<string, string>; max_chars: number } | null;
+  model: string | null;
+  setModel: (m: string) => void;
+  onChange: (m: Record<string, string>) => void;
+}) {
+  const { cfg, defaults } = props;
+  const models: { model: string; name: string }[] = [];
+  for (const p of cfg.profiles) {
+    if (models.some((m) => m.model === p.model)) continue;
+    const name = EXTRA_MODELS[p.id]?.full ?? (p.model === "qwen-image-2.1" ? "Qwen-Image 2.1" : p.displayName);
+    models.push({ model: p.model, name });
+  }
+  const active = cfg.profiles.find((p) => p.id === cfg.activeProfile)?.model;
+  const model = props.model ?? active ?? models[0]?.model ?? "";
+  const own = cfg.enhancerModelPrompts ?? {};
+  const builtin = defaults === null ? null : (defaults.models?.[model] ?? (cfg.enhancerT2iPrompt?.trim() || defaults.t2i));
+  const hasOwnBuiltin = !!defaults?.models?.[model];
+  return (
+    <>
+      <div className="field">
+        <span>New images, per model</span>
+        <select className="input" value={model} onChange={(e) => props.setModel(e.target.value)}>
+          {models.map((m) => (
+            <option key={m.model} value={m.model}>
+              {m.name}
+              {defaults?.models?.[m.model] ? " · own built-in instructions" : ""}
+              {own[m.model]?.trim() ? " · your instructions" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+      <EnhancerPrompt
+        key={model}
+        label={models.find((m) => m.model === model)?.name ?? model}
+        help={
+          hasOwnBuiltin
+            ? "This model has its own built-in instructions for new images (from its author's prompting guide), used instead of the general ones above. Your text here is used for this model only."
+            : "Without text of its own, this model uses the general instructions for new images above. Your text here is used for this model only."
+        }
+        value={own[model] ?? ""}
+        builtin={builtin}
+        max={defaults?.max_chars ?? 20000}
+        onChange={(v) => {
+          const next = { ...own };
+          if (v.trim() === "") delete next[model];
+          else next[model] = v;
+          props.onChange(next);
+        }}
+      />
+    </>
+  );
+}
+
 /** Settings → Performance on a Mac: runs `kokon-engine-mac bench` on this Mac and gives the report to paste on
  * GitHub. `blocked`: why it cannot run with the saved settings. */
 function MacBench({ blocked }: { blocked: string | null }) {
@@ -313,7 +370,9 @@ export function Settings() {
   const [legacy, setLegacy] = useState<{ files: string[]; bytes: number } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [theme, setTheme] = useState(themeChoice);
-  const [enhancerDefaults, setEnhancerDefaults] = useState<{ t2i: string; edit: string; compose?: string; max_chars: number } | null>(null);
+  const [enhancerDefaults, setEnhancerDefaults] = useState<{ t2i: string; edit: string; compose?: string; models?: Record<string, string>; max_chars: number } | null>(null);
+  // Fork: the model whose own Prompt+ instructions are shown (the active one at first).
+  const [promptModel, setPromptModel] = useState<string | null>(null);
   const textGeneration = useStore((s) => s.status?.server.text_generation);
 
   useEffect(() => {
@@ -551,7 +610,7 @@ export function Settings() {
               </div>
               <EnhancerPrompt
                 label="New images"
-                help="Used when creating an image from the prompt alone."
+                help="Used when creating an image from the prompt alone, for every model without instructions of its own (below)."
                 value={cfg.enhancerT2iPrompt ?? ""}
                 builtin={enhancerDefaults?.t2i ?? null}
                 max={enhancerDefaults?.max_chars ?? 20000}
@@ -573,6 +632,7 @@ export function Settings() {
                 max={enhancerDefaults?.max_chars ?? 20000}
                 onChange={(v) => set({ enhancerComposePrompt: v })}
               />
+              <ModelPrompts cfg={cfg} defaults={enhancerDefaults} model={promptModel} setModel={setPromptModel} onChange={(m) => set({ enhancerModelPrompts: m })} />
             </>
           )}
 

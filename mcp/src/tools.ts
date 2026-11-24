@@ -605,18 +605,19 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
   "fibo-2.0-dev": { name: "Fibo 2.0 Dev", can: "new images, edits, combining up to 10 images (refer to them as <image_1>, <image_2>), inpainting (one area per pass), outpainting", best_for: "new images, edits and combining images when there is time: 20 steps with CFG, slower than the Turbo models", tasks: QWEN_TASKS, commercial: false },
   "fibo-2.0-edit-turbo": { name: "Fibo 2.0 Edit Turbo", can: "edits, combining up to 10 images, inpainting (one area per pass), outpainting; no new images from text", best_for: "fast edits of a whole photo (4 steps)", tasks: ["edit", "combine", "change_part", "remove", "outpaint"], commercial: false },
   "krea-2-turbo": { name: "Krea 2 Turbo", can: "new images from text up to 2K, layout (as words), inpainting and outpainting as plain masked inpainting; no edits of a whole photo, no reference images", best_for: "new images from text, up to 2K; filling or expanding an area from a description", tasks: ["new_image", "layout", "change_part", "remove", "outpaint"], commercial: null },
+  "juggernaut-moss-turbo": { name: "Juggernaut Moss Turbo", can: "new images from text (6 steps, no CFG), layout (as words), inpainting and outpainting as plain masked inpainting; no edits of a whole photo, no reference images", best_for: "photographic images and film stills, fast, under an open license (Apache-2.0); long prompts in the order image type, subject, surroundings, light and colours, camera, text in quotes (or use Prompt+)", tasks: ["new_image", "layout", "change_part", "remove", "outpaint"], commercial: true },
   "moss-image-sft": { name: "MOSS-Image SFT", can: "new images from text (CFG), layout (as words), inpainting and outpainting as plain masked inpainting; no edits of a whole photo, no reference images", best_for: "new images from text under an open license (Apache-2.0)", tasks: ["new_image", "layout", "change_part", "remove", "outpaint"], commercial: true },
 };
 
 /** Fork: the models to prefer per task, best first (by what they can, not by taste). */
 export const TASK_PICKS: Record<Task, string[]> = {
-  new_image: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "moss-image-sft"],
-  layout: ["flux-3-image-klein", "qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
+  new_image: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "juggernaut-moss-turbo", "moss-image-sft"],
+  layout: ["flux-3-image-klein", "qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "fibo-2.0-dev", "krea-2-turbo", "juggernaut-moss-turbo", "moss-image-sft"],
   edit: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev"],
   combine: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev"],
-  change_part: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
-  remove: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "moss-image-sft"],
-  outpaint: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "fibo-2.0-edit-turbo", "moss-image-sft"],
+  change_part: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "juggernaut-moss-turbo", "moss-image-sft"],
+  remove: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "flux-3-image-klein", "fibo-2.0-edit-turbo", "fibo-2.0-dev", "krea-2-turbo", "juggernaut-moss-turbo", "moss-image-sft"],
+  outpaint: ["qwen-image-2.1", "qwen-image-2.1-turbo-f16", "qwen-image-2.1-user", "qwen-image-2.1-omni", "krea-2-turbo", "flux-3-image-klein", "fibo-2.0-dev", "fibo-2.0-edit-turbo", "juggernaut-moss-turbo", "moss-image-sft"],
 };
 
 /** The task a job body asks for. */

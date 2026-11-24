@@ -1,17 +1,28 @@
-- **Kokon's Mac engine runs LoRAs.** On a Mac, Qwen-Image 2.1 and Qwen-Image 2.1 Uncensored Omni
-  now use your LoRAs on the fast Mac engine. Before, the Mac engine left them out and said
-  "This inference engine can't use LoRAs".
-  - The engine adds each LoRA to a weight just as it unpacks it for the product. The model files
-    are never changed, and nothing stays merged between images.
-  - LoRAs are applied the same way as on the standard engine (strength, alpha and rank, several
-    LoRAs at once).
-  - Plain LoRAs only. LoHa, LoKr, DoRA and full-weight LoRAs get a clear message and still run on
-    the standard engine (turn the Mac engine off for them).
-- **Uncensored Omni on the Mac engine.** With its Turbo LoRA (8 steps, CFG off), Omni now runs on
-  Kokon's Mac engine, about 2.5–3x faster than on the standard engine.
-  - The engine reads Omni's GGUF as it is (Diffusers' tensor names, split MLP layers).
-  - A job with CFG (Omni with its Turbo LoRA turned off, CFG 5) runs on the standard engine by
-    itself. The job notes say so, and the next job without CFG goes back to the Mac engine.
-- Qwen-Image 2.1 models now always send their sampling schedule (custom sigmas), the same one the
-  standard engine uses by itself. This lets the Mac engine run step counts other than Turbo's 8
-  (for example a LoRA's own steps).
+- **New model: Juggernaut Moss Turbo** (KandooAI, Apache-2.0, commercial use allowed). A fine-tune of
+  MOSS-Image for photography and film stills, with KandooAI's own Turbo built in: 6 steps without CFG.
+  - Choose it in the model menu at the top. The first time, it downloads KandooAI's GGUF: Q8_0
+    (5.7 GB) on cards with 14 GB or more, Q4_0 (3.3 GB) below that.
+  - It shares MOSS-Image's text encoder, tokenizer and decoder. With MOSS-Image installed, only the
+    image model is downloaded.
+  - Settings from its model card: euler_ancestral with ComfyUI's "simple" schedule at shift 5. Kokon
+    sends that schedule itself, because the engine's own schedule loses the last of the 6 steps.
+  - Image sizes start at about 1.6 MP (Fast) and go up to 2.4 MP (Quality). The author advises
+    1.5 to 2.4 MP and never 1 MP.
+  - Like MOSS-Image, it makes new images from text, plus brushed changes and Expand. It does not
+    edit a whole photo.
+- **Prompt+ instructions per model.** Settings → General → Prompt+ has a new part: "New images, per
+  model". Choose a model and write instructions that apply to it alone. Models without their own
+  instructions keep using the general ones, as before.
+- **Juggernaut Moss gets its own Prompt+ instructions**, written from KandooAI's 24-page prompting
+  guide. Prompt+ writes the prompt the way the model was trained:
+  - in a fixed order: image type, subject, surroundings, light and colours, camera and focus, text in
+    quotes, then an optional look sentence;
+  - signs and labels are described, so the model does not invent gibberish text;
+  - nothing is named that should not appear;
+  - no quality tags or camera names.
+- **Prompt+ for MOSS-Image and Juggernaut Moss.** Their text encoder (Qwen3.5) cannot write text in
+  the engine, so until now Prompt+ was missing for both.
+  - Prompt+ now borrows another installed model's text encoder for them, Qwen-Image 2.1 first. The
+    engine loads only that text encoder, writes the prompt with the instructions of the model in use,
+    then loads the model in use.
+  - This adds a model load before the image. The job notes say which model wrote the prompt.
