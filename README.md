@@ -56,8 +56,8 @@ are downloaded the first time you choose them (the app asks first, then shows th
 Download sizes on a 24 GB card (smaller files are picked for smaller cards): Qwen-Image about
 12 GB, FLUX.3 about 12 GB, Fibo 2.0 Dev or Edit Turbo about 16 GB each, Krea 2 about 18 GB,
 MOSS-Image about 12 GB, Qwen-Image 2.1 Uncensored Omni about 8.4 GB after Qwen-Image 2.1 (it uses
-Qwen's text encoder and decoder; 5.1 GB on cards under 14 GB). Omni runs on the standard engine on a
-Mac too (Kokon's Mac engine has no LoRAs). FLUX.3, Fibo 2.0 and Krea 2 share their text encoder (Qwen3-VL 4B), and
+Qwen's text encoder and decoder; 5.1 GB on cards under 14 GB). On a Mac, Kokon's Mac engine runs Omni
+with its Turbo LoRA; without it (CFG 5) a job runs on the standard engine. FLUX.3, Fibo 2.0 and Krea 2 share their text encoder (Qwen3-VL 4B), and
 FLUX.3, Fibo 2.0 and MOSS-Image their decoder (the FLUX.2 VAE): a shared file is downloaded once,
 so the second of them is much smaller (Fibo 2.0 after FLUX.3: about 10 GB). Every file is pinned by URL, size and SHA-256 and checked after
 download.

@@ -769,8 +769,10 @@ pub const TURBO_STEPS: u32 = TURBO_SIGMAS.len() as u32 - 1;
 /// Fork: Qwen-Image 2.1's own schedule for `steps` at `size`, as Diffusers' QwenImage21Pipeline and
 /// sd.cpp's server build it: t from 1 to 1/steps, shifted by the image's token count (16x16 pixels
 /// per token; mu from 0.5 at 256 tokens to 0.9 at 8192, exponential), optionally stretched so the
-/// last step ends at 0.02, then 0. Sent only without the stretch (`terminal: false`): what speed
-/// LoRAs of the full model are distilled for (chatrlabs' Omni Turbo: `shift_terminal=None`).
+/// last step ends at 0.02, then 0. Sent for every Qwen model without Turbo's saved schedule: with
+/// the stretch it is sd-server's own; without it (`terminal: false`) what speed LoRAs of the full
+/// model are distilled for (chatrlabs' Omni Turbo: `shift_terminal=None`); and Kokon's Mac engine
+/// knows no schedule of its own but Turbo's.
 pub fn qwen21_sigmas(steps: u32, size: Size, terminal: bool) -> Vec<f32> {
     let n = steps.max(1) as usize;
     let seq = (size.height / 16) as f64 * (size.width / 16) as f64;
@@ -1367,8 +1369,10 @@ pub fn plan(req: &GenerationRequest, inputs: &PlanInputs, rec: &RecommendedSetti
             Vec::new()
         } else if rec.turbo_sigmas {
             TURBO_SIGMAS.to_vec()
-        } else if rec.no_terminal_shift {
-            qwen21_sigmas(steps, working.canvas, false)
+        } else if rec.qwen_prompts {
+            // Fork: Qwen-Image 2.1's own schedule, spelled out: the same as sd-server's (with its terminal
+            // stretch unless a speed LoRA drops it), and what Kokon's Mac engine needs for any step count.
+            qwen21_sigmas(steps, working.canvas, !rec.no_terminal_shift)
         } else {
             Vec::new()
         },
@@ -1437,6 +1441,25 @@ mod tests {
         // With the stretch: what the server sends on its own (shift_terminal 0.02).
         close(qwen21_sigmas(8, square, true), &[1.0, 0.916024, 0.820046, 0.709295, 0.580075, 0.427347, 0.244054, 0.02, 0.0]);
         close(qwen21_sigmas(8, Size { width: 896, height: 1184 }, false), &[1.0, 0.933509, 0.857488, 0.769731, 0.667293, 0.546154, 0.400677, 0.22271, 0.0]);
+    }
+
+    #[test]
+    fn qwen_models_spell_out_their_schedule() {
+        let r = req("a cat");
+        let i = inputs(&[]);
+        // The full model (Omni): sd-server's own schedule, with the terminal stretch.
+        let full = RecommendedSettings { steps: 35, cfg_scale: 5.0, turbo_sigmas: false, ..RecommendedSettings::default() };
+        let p = plan(&r, &i, &full).unwrap();
+        assert_eq!(p.custom_sigmas, qwen21_sigmas(35, p.working, true));
+        assert_eq!(p.custom_sigmas.len(), 36);
+        assert!((p.custom_sigmas[34] - 0.02).abs() < 1e-6);
+        // With a speed LoRA: without it.
+        let fast = RecommendedSettings { steps: 8, cfg_scale: 1.0, no_terminal_shift: true, ..full.clone() };
+        let p = plan(&r, &i, &fast).unwrap();
+        assert_eq!(p.custom_sigmas, qwen21_sigmas(8, p.working, false));
+        // Other models: the server's own.
+        let other = RecommendedSettings { qwen_prompts: false, ..full };
+        assert!(plan(&r, &i, &other).unwrap().custom_sigmas.is_empty());
     }
 
     fn rec() -> RecommendedSettings {
