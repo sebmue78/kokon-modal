@@ -273,6 +273,10 @@ fn krea_inpaints_with_the_mask_only() {
             "{action:?}: no reference images"
         );
         assert!(j.request.init_image.is_some() && j.request.mask_image.is_some());
+        // Fork: Prompt+ sees the area outlined and its description is used as it is.
+        let v = j.enhancer.as_ref().expect("a Prompt+ view");
+        assert!(matches!(v.kind, crate::pipeline::EnhancerKind::Area { plain: true, .. }));
+        assert_eq!(v.prompt(&p, " a red apple on the table "), "a red apple on the table");
         assert!(
             !j.request.prompt.contains("<image"),
             "{action:?}: no Qwen instruction: {}",

@@ -71,7 +71,8 @@ pub struct EnhancerView {
 
 pub enum EnhancerKind {
     /// The untouched region with the area highlighted in `color` (named in the model's instruction).
-    Area { action: InpaintAction, color: String },
+    /// Fork: `plain`: the model inpaints from a description alone (Krea 2, MOSS-Image, Juggernaut Moss).
+    Area { action: InpaintAction, color: String, plain: bool },
     /// The canvas with the new areas empty; `sides`: "left and top".
     Expand { sides: String },
 }
@@ -80,7 +81,9 @@ impl EnhancerView {
     /// The image model's prompt with Prompt+'s text in place of the user's words.
     pub fn prompt(&self, plan: &Plan, text: &str) -> String {
         match &self.kind {
-            EnhancerKind::Area { action, color } => written_inpaint_prompt(*action, text, color),
+            // Fork: plain masked inpainting takes the description as it is.
+            EnhancerKind::Area { plain: true, .. } => text.trim().to_string(),
+            EnhancerKind::Area { action, color, .. } => written_inpaint_prompt(*action, text, color),
             EnhancerKind::Expand { .. } => effective_prompt(plan, text),
         }
     }
@@ -469,6 +472,14 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
             // (an old man's head filling the area) and ignored the scene.
             if !plan.qwen_prompts && !plan.reference_edits {
                 // Plain masked inpainting (Krea 2, MOSS-Image): the latent mask alone tells the model where to paint.
+                // Fork: Prompt+ sees the region with the area outlined and describes what it shows.
+                let enhancer = if plan.marks {
+                    None
+                } else {
+                    let (color_name, color) = imaging::pick_highlight(&content, &m_content);
+                    let view = imaging::outline(&content, &m_content, color);
+                    Some(EnhancerView { image: png_b64(&for_enhancer(&view))?, kind: EnhancerKind::Area { action, color: color_name.to_string(), plain: true } })
+                };
                 drop(content);
                 req.init_image = Some(png_b64(&pad(&image1))?);
                 req.prompt = plain_inpaint_prompt(action, prompt);
@@ -479,7 +490,7 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
                 return Ok(PreparedJob {
                     request: req,
                     post: PostProcess { kind, keep_alpha, working: plan.working, content: plan.content, output: plan.output, mode: plan.mode, outpaint: plan.outpaint },
-                    enhancer: None,
+                    enhancer,
                 });
             }
             // Image 2 (guide): the area marked in a color named in the prompt. The model gets
@@ -497,7 +508,7 @@ pub fn prepare(plan: &Plan, prompt: &str, seed: i64, images: &[LoadedImage], mas
                     // Prompt+ sees the region as it is, the area only outlined: image 1 is blurred there
                     // for Remove and Replace, and a tint over it was read as a thing of its own.
                     let view = imaging::outline(&imaging::resize(&content, gc.content.width, gc.content.height), &guide_mask, color);
-                    enhancer = Some(EnhancerView { image: png_b64(&for_enhancer(&view))?, kind: EnhancerKind::Area { action, color: color_name.to_string() } });
+                    enhancer = Some(EnhancerView { image: png_b64(&for_enhancer(&view))?, kind: EnhancerKind::Area { action, color: color_name.to_string(), plain: false } });
                     guide
                 } else {
                     // Fork: areas with a text, each in its own color; the brushed rest in the last one.
@@ -1411,7 +1422,7 @@ mod tests {
     fn prompt_plus_sees_the_area_unblurred_and_its_text_goes_in_kokons_instruction() {
         let (_, _, j) = inpaint_job("", InpaintAction::Remove);
         let v = j.enhancer.as_ref().expect("an area has a Prompt+ view");
-        let EnhancerKind::Area { action, color } = &v.kind else { panic!("not an area") };
+        let EnhancerKind::Area { action, color, .. } = &v.kind else { panic!("not an area") };
         assert_eq!(*action, InpaintAction::Remove);
         assert_ne!(v.image, j.request.ref_images[0], "not the blurred image 1");
         // Expand: Prompt+ sees the canvas, and Kokon's outpaint instruction goes in front of its text.

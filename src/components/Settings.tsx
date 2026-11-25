@@ -19,7 +19,7 @@ import { CATALOG_MODELS } from "../lib/models";
 /** Fork: catalog models besides Qwen, by profile id (qls-core `EXTRA_CATALOG_PROFILES`). */
 /** Fork: catalog models besides Qwen, by profile id (`lib/models.ts`). */
 const EXTRA_MODELS = CATALOG_MODELS;
-import type { AppConfig, Check, InstallStatus, MacBenchState, ModelProfile, ModelsStatus, SetupReport, TextEncoderPlacement } from "../lib/types";
+import type { AppConfig, Check, EnhancerDefaults, InstallStatus, MacBenchState, ModelProfile, ModelPrompts as ModelPromptsT, ModelsStatus, PromptKind, SetupReport, TextEncoderPlacement } from "../lib/types";
 import { IconButton, Seg, Switch } from "./ui";
 import { autoCheckEnabled, checkForUpdate } from "../lib/updates";
 
@@ -152,54 +152,123 @@ function EnhancerPrompt(props: { label: string; help: string; value: string; bui
 
 /** Fork: Prompt+ instructions for new images per model: one model at a time, its own text or the instructions
  * it uses without one (its built-in ones, else the general "New images" ones). */
+const PROMPT_KINDS: { kind: PromptKind; label: string; help: string }[] = [
+  { kind: "new", label: "New images", help: "Writing a new image from text (and a layout)." },
+  { kind: "edit", label: "Edits", help: "Edits of a photo, coloured marks and combines." },
+  { kind: "compose", label: "From references", help: "A new image made with reference images." },
+  { kind: "area", label: "Painted area", help: "What goes into a brushed area." },
+  { kind: "expand", label: "Expand", help: "What the new borders of an expanded image show." },
+];
+
+/** Fork: the Prompt+ kinds a model does (its capabilities). */
+function modelKinds(p: ModelProfile): PromptKind[] {
+  const c = p.capabilities ?? {};
+  const has = (k: string) => c[k] !== false;
+  return PROMPT_KINDS.map((k) => k.kind).filter((k) =>
+    k === "new" ? has("text_to_image") : k === "edit" ? has("edit") || has("multi_reference") : k === "compose" ? has("multi_reference") : k === "area" ? has("inpaint") : has("outpaint"),
+  );
+}
+
+/** Fork: Prompt+ instructions per model and kind of text: one model and kind at a time, its own text or the
+ * instructions it uses without one (its built-in ones, else the general ones). */
 function ModelPrompts(props: {
   cfg: AppConfig;
-  defaults: { t2i: string; models?: Record<string, string>; max_chars: number } | null;
+  defaults: EnhancerDefaults | null;
   model: string | null;
   setModel: (m: string) => void;
-  onChange: (m: Record<string, string>) => void;
+  kind: PromptKind;
+  setKind: (k: PromptKind) => void;
+  onChange: (m: Record<string, ModelPromptsT>) => void;
 }) {
   const { cfg, defaults } = props;
-  const models: { model: string; name: string }[] = [];
+  const models: { model: string; name: string; profile: ModelProfile }[] = [];
   for (const p of cfg.profiles) {
     if (models.some((m) => m.model === p.model)) continue;
     const name = EXTRA_MODELS[p.id]?.full ?? (p.model === "qwen-image-2.1" ? "Qwen-Image 2.1" : p.displayName);
-    models.push({ model: p.model, name });
+    models.push({ model: p.model, name, profile: p });
   }
   const active = cfg.profiles.find((p) => p.id === cfg.activeProfile)?.model;
   const model = props.model ?? active ?? models[0]?.model ?? "";
+  const entry = models.find((m) => m.model === model);
+  const kinds = entry ? modelKinds(entry.profile) : PROMPT_KINDS.map((k) => k.kind);
+  const kind = kinds.includes(props.kind) ? props.kind : (kinds[0] ?? "new");
   const own = cfg.enhancerModelPrompts ?? {};
-  const builtin = defaults === null ? null : (defaults.models?.[model] ?? (cfg.enhancerT2iPrompt?.trim() || defaults.t2i));
-  const hasOwnBuiltin = !!defaults?.models?.[model];
+  const mine = own[model] ?? {};
+  const rec = (entry?.profile.recommendedSettings ?? {}) as Record<string, unknown>;
+  // A painted area of a model that inpaints from words alone is a description, not an instruction.
+  const plain = !rec.qwen_prompts && !rec.reference_edits;
+  const general = (): string | null => {
+    if (!defaults) return null;
+    const g = defaults.general;
+    switch (kind) {
+      case "new":
+        return cfg.enhancerT2iPrompt?.trim() || defaults.t2i;
+      case "edit":
+        return cfg.enhancerEditPrompt?.trim() || defaults.edit;
+      case "compose":
+        return cfg.enhancerComposePrompt?.trim() || defaults.compose || null;
+      case "area":
+        return (plain ? g?.plain_area : g?.area) ?? null;
+      case "expand":
+        return g?.expand ?? null;
+    }
+  };
+  const ownBuiltin = defaults?.models?.[model]?.[kind];
+  const builtin = ownBuiltin ?? general();
+  const kindInfo = PROMPT_KINDS.find((k) => k.kind === kind)!;
+  const marks = (m: string) => {
+    const b = defaults?.models?.[m] ? " · own built-in instructions" : "";
+    const y = Object.values(own[m] ?? {}).some((t) => t?.trim()) ? " · your instructions" : "";
+    return b + y;
+  };
   return (
     <>
       <div className="field">
-        <span>New images, per model</span>
+        <span>Instructions per model</span>
         <select className="input" value={model} onChange={(e) => props.setModel(e.target.value)}>
           {models.map((m) => (
             <option key={m.model} value={m.model}>
               {m.name}
-              {defaults?.models?.[m.model] ? " · own built-in instructions" : ""}
-              {own[m.model]?.trim() ? " · your instructions" : ""}
+              {marks(m.model)}
             </option>
           ))}
         </select>
       </div>
+      <div className="field">
+        <span>For</span>
+        <select className="input" value={kind} onChange={(e) => props.setKind(e.target.value as PromptKind)}>
+          {kinds.map((k) => {
+            const info = PROMPT_KINDS.find((x) => x.kind === k)!;
+            const tags = (defaults?.models?.[model]?.[k] ? " · built-in" : "") + (mine[k]?.trim() ? " · yours" : "");
+            return (
+              <option key={k} value={k}>
+                {info.label}
+                {tags}
+              </option>
+            );
+          })}
+        </select>
+      </div>
       <EnhancerPrompt
-        key={model}
-        label={models.find((m) => m.model === model)?.name ?? model}
+        key={model + "/" + kind}
+        label={`${entry?.name ?? model}: ${kindInfo.label}`}
         help={
-          hasOwnBuiltin
-            ? "This model has its own built-in instructions for new images (from its author's prompting guide), used instead of the general ones above. Your text here is used for this model only."
-            : "Without text of its own, this model uses the general instructions for new images above. Your text here is used for this model only."
+          (ownBuiltin
+            ? "This model has its own built-in instructions for this (from its maker's prompting guide), used instead of the general ones. "
+            : "Without text of its own, this model uses the general instructions for this. ") +
+          kindInfo.help +
+          " Your text here is used for this model only."
         }
-        value={own[model] ?? ""}
+        value={mine[kind] ?? ""}
         builtin={builtin}
         max={defaults?.max_chars ?? 20000}
         onChange={(v) => {
+          const nextModel: ModelPromptsT = { ...mine };
+          if (v.trim() === "") delete nextModel[kind];
+          else nextModel[kind] = v;
           const next = { ...own };
-          if (v.trim() === "") delete next[model];
-          else next[model] = v;
+          if (Object.values(nextModel).some((t) => t?.trim())) next[model] = nextModel;
+          else delete next[model];
           props.onChange(next);
         }}
       />
@@ -370,9 +439,10 @@ export function Settings() {
   const [legacy, setLegacy] = useState<{ files: string[]; bytes: number } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [theme, setTheme] = useState(themeChoice);
-  const [enhancerDefaults, setEnhancerDefaults] = useState<{ t2i: string; edit: string; compose?: string; models?: Record<string, string>; max_chars: number } | null>(null);
+  const [enhancerDefaults, setEnhancerDefaults] = useState<EnhancerDefaults | null>(null);
   // Fork: the model whose own Prompt+ instructions are shown (the active one at first).
   const [promptModel, setPromptModel] = useState<string | null>(null);
+  const [promptKind, setPromptKind] = useState<PromptKind>("new");
   const textGeneration = useStore((s) => s.status?.server.text_generation);
 
   useEffect(() => {
@@ -632,7 +702,7 @@ export function Settings() {
                 max={enhancerDefaults?.max_chars ?? 20000}
                 onChange={(v) => set({ enhancerComposePrompt: v })}
               />
-              <ModelPrompts cfg={cfg} defaults={enhancerDefaults} model={promptModel} setModel={setPromptModel} onChange={(m) => set({ enhancerModelPrompts: m })} />
+              <ModelPrompts cfg={cfg} defaults={enhancerDefaults} model={promptModel} setModel={setPromptModel} kind={promptKind} setKind={setPromptKind} onChange={(m) => set({ enhancerModelPrompts: m })} />
             </>
           )}
 

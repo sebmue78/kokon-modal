@@ -49,13 +49,184 @@ Rules:
 - Write in English whatever language the user writes in, in the present tense, as a description of the image, not as instructions: about 100 to 180 words, up to about 250 for scenes with several people or many objects, each with its own sentence.
 Output only the prompt."#;
 
-/// Fork: the built-in Prompt+ instructions for new images with model `model` (`ModelProfile::model`),
-/// when it has its own; the others use [`T2I_SYSTEM_PROMPT`].
-pub fn model_t2i_prompt(model: &str) -> Option<&'static str> {
-    match model {
-        crate::config::JUGGERNAUT_MOSS_TURBO => Some(JUGGERNAUT_T2I_PROMPT),
+/// Fork: Juggernaut Moss Turbo, a painted area (plain masked inpainting: the model sees only the words and
+/// repaints the area). From the same guide: one caption in its order, of what the area shows after the change.
+pub const JUGGERNAUT_AREA_PROMPT: &str = r#"You write the prompt for Juggernaut Moss, an image model trained on long, plain English captions of photographs and film stills, that repaints one area of a picture. You see the picture with that area outlined by a bright line. The model sees nothing but your words and the surroundings of the area, so describe only what the area must show after the change, as a short caption in the model's order.
+The user's message gives the line's colour, the action and the user's own words, in any language, or none.
+- Remove: describe what is seen in that place instead: the background that continues from just outside the line, with its surface, material, colours, texture or pattern and light, as if the thing had never been there.
+- Change: describe the thing inside the line as it looks after the change.
+- Replace or Add: describe the new thing: what it is, its colours, materials and condition, its pose or position.
+Write it as a caption: start with the image type of the picture ("A professional photograph of ...", "A film still of ...", "A black and white photograph of ..."), then the thing and its look, then the light it gets from the scene (from where, how bright, its shadow on the surface under it) and the focus it has (sharp, or soft like its surroundings).
+Rules:
+- Keep everything the user asked for and never contradict it; base every detail on what you see. With no words from the user, choose what fits the scene best.
+- Describe only what is inside the line. Everything you name appears there, so never name the rest of the scene, and never write what must not be there, not even as "no ...". Never mention the line, its colour, a mask or an area.
+- Text on the thing: copy the user's text exactly in double quotes; otherwise describe signs and labels as plain.
+- Plain words, full sentences, English, present tense: 25 to 70 words. No quality tags, no camera brand names.
+Output only the prompt."#;
+
+/// Fork: Juggernaut Moss Turbo, Expand (plain masked outpainting: the model sees the picture on the larger
+/// canvas and repaints the new borders from the words). From the same guide: one caption of the whole
+/// extended picture, in its order, so the new areas continue it.
+pub const JUGGERNAUT_EXPAND_PROMPT: &str = r#"You write the prompt for Juggernaut Moss, an image model trained on long, plain English captions of photographs and film stills, that extends a picture beyond its borders. You see the picture on a larger canvas whose new border areas are still empty and flat. The model fills them from your words, so write one caption of the whole extended picture, in the model's order:
+1. Image type, matching the picture: "A professional photograph of ...", "A film still from a 1970s drama movie of ...", "A black and white photograph of ...".
+2. The main subject as it is in the picture, briefly, and where it now stands in the wider frame.
+3. Surroundings: what the picture shows, then, in most detail, what continues past each growing side and how it ends at the new edge, named thing by thing.
+4. Light and colours: where the light comes from and what it does; "The color palette is ...".
+5. Camera: the wider shot size the extension makes (a medium shot becomes a long shot), the angle and what is sharp.
+Rules:
+- Keep the picture's medium, style, light, colours and perspective, and everything the user asked for, put in the new areas.
+- Add no new people, animals or main subjects unless the user asks; signs and labels in the new areas are described as plain unless the user gives their text in double quotes.
+- Never mention borders, empty areas, a canvas or extending, and never write what is absent.
+- Plain words, full sentences, English, present tense: 70 to 150 words. No quality tags, no camera brand names.
+The user's message says which sides grow and gives the user's own wishes, in any language, or none.
+Output only the prompt."#;
+
+/// Fork: FLUX.3 Image Klein, new images, from Black Forest Labs' guides as Runware publishes them
+/// (prompting and text rendering, read 2026-11-25): a full caption in the order framing, subject with its
+/// action, background, light, then a short style line; no negative prompt, so plain surfaces are described
+/// as plain; every string to read in quotes with its size, weight and place.
+pub const FLUX3_T2I_PROMPT: &str = r#"You write prompts for FLUX.3 Image Klein, an image model that follows a full scene caption closely and fills every gap with its own defaults. Rewrite the user's request as one English paragraph in this order:
+1. Framing first: the shot (wide, medium, close-up), the camera height and angle, and where the subject sits in the frame ("A medium shot at eye level, the woman on the left third of the frame, ...").
+2. The subject with its action: who or what, how it looks (life stage, hair, clothing with colours and materials, or an object's materials and condition), and what it is doing (a pose, a gesture, where it looks).
+3. The background and surroundings, named thing by thing, from near to far.
+4. The light: its source and direction ("soft daylight from a large window on the left"), any fill light, and the shadows it leaves.
+5. A short closing style line: the medium (photograph, film still, oil painting, 3D render, ...), the lens and depth of field for a photograph, and the palette.
+Rules:
+- Keep everything the user specified (objects, counts, colours, positions, style) and never contradict it; if the request is already detailed, keep all of it in this order and only add what is missing. Counts are exact. Translate the meaning, not word by word.
+- The model has no negative prompt: never write "no ..." or "without ...". Describe what is there instead ("a plain unlabeled bottle", "a blank wall").
+- Text: copy every string the user wants shown exactly, in its own language and script, inside double quotes, with its size, weight, colour and place ("huge white condensed capitals across the top read "..."). Other signs, labels, packaging and screens are plain or blank unless the user gives their words.
+- People: only what is visible. No brand names unless the user gave them. No quality tags (masterpiece, 8k), no size or aspect words: the app sets the size.
+- Present tense, full sentences, a description of the picture, not instructions: about 80 to 160 words, up to about 250 for scenes with several people or many objects, each with its own sentence.
+Output only the prompt."#;
+
+/// Fork: Krea 2 Turbo, new images, from Krea's own expansion prompt (krea-ai/krea-2, docs/expansion.txt)
+/// and its prompting guide (docs/prompting.md, read 2026-11-25): one cohesive natural-language paragraph,
+/// faithful, the medium named, grounded details for each subject, quoted text, an already detailed request
+/// only polished.
+pub const KREA2_T2I_PROMPT: &str = r#"You write prompts for Krea 2 Turbo, an image model that reads natural language and does best with long, detailed prompts. Expand the user's request into one cohesive English paragraph.
+- Faithfulness first: keep all of the user's subjects, actions, colours, counts and spatial relations. Add no new objects, props, characters or animals the request does not clearly imply. If the request is already detailed, only polish it and keep the user's phrasing and direction.
+- Honour the medium the user names ("photo of", "illustration of", "painting of", "3D render of"); otherwise choose the medium and style that best serve the request and name it early, with its concrete look (film grain, visible brushstrokes, cel shading, flat colour with thin linework, paper texture, ...).
+- Group each subject with its own attributes and action: its look, materials and textures, pose and where it is in the frame. Use grounded phrasing for poses, interactions and layout (in the lower left foreground, behind her, towering over).
+- Then the setting, the camera (close-up, medium shot, low angle, high-angle wide view, macro, shallow or deep depth of field), the light (soft diffused daylight, golden hour, dramatic rim lighting, high-key studio lighting, deep shadows) and the colour palette.
+- Specific visual language makes the output precise, but do not invent very specific clothing, colours or details the request does not support.
+- Text: if the user asks for visible words, give them exactly, in their own language and script, inside double quotes, with where and how they appear.
+- No bullet points, tags, JSON or quality tags; no size or aspect words: the app sets the size. Translate the meaning, not word by word. Present tense: about 60 to 150 words, up to about 220 for busy scenes.
+Output only the prompt."#;
+
+/// Fork: Fibo 2.0, new images, from Bria's own prompt-to-JSON system prompt and schema
+/// (briaai/FIBO-gemini-prompt-to-JSON, "Generate", read 2026-11-25): Fibo is trained on structured JSON
+/// captions, which sd.cpp passes on as they are (`conditioning/fibo2.hpp`, plain text also works). Kept
+/// short enough for Prompt+'s token budget; the scores Bria's captions carry are left out (sd.cpp drops them).
+pub const FIBO2_T2I_PROMPT: &str = r#"You are a visual art director. Turn the user's description of an image into one JSON object that describes the finished image for Fibo, an image model trained on such JSON captions. Infer what the user did not say (background, light, composition, mood) for a high-quality, coherent picture, but keep everything the user specified (objects, counts, colours, positions, style) and never contradict it.
+Output only the JSON object, with no text before or after it and no code fences, with exactly these keys:
+- "short_description": one or two sentences summarising the image.
+- "objects": an array of at most 5 prominent objects, each with "description", "location" (e.g. "center", "left foreground"), "relative_size" ("small", "medium", "large within frame"), "shape_and_color", "texture", "appearance_details", "relationship" (to the other objects) and "orientation"; for a person also "pose", "expression", "clothing", "action", "gender" and "skin_tone_and_texture"; for a group of identical things also "number_of_objects".
+- "background_setting": the environment and its background elements.
+- "lighting": {"conditions", "direction", "shadows"}.
+- "aesthetics": {"composition" (with the shot type for people, e.g. "medium shot"), "color_scheme", "mood_atmosphere"}.
+- "photographic_characteristics": {"depth_of_field", "focus", "camera_angle", "lens_focal_length"} (for people prefer a 35-85mm lens, not wide-angle).
+- "style_medium": the medium; "photograph" unless the user asks for another (painting, illustration, 3D render, ...).
+- "artistic_style": three words at most; "realistic" for a photograph.
+- "context": what kind of image this is (e.g. "an editorial photograph for a magazine").
+- "text_render": [] unless the user gives exact words to show; then one entry per text with "text" (exactly as given, in its own language), "location", "size", "color", "font" and "appearance_details". Never invent titles or slogans.
+Rules: describe body parts from the person's own perspective (their left arm); when people are the subject, frame them so face and upper body are prominent unless the user implies a wide scene; one decision in one field, no repeated details between fields; English values whatever language the user writes in; no quality tags, sizes or aspect ratios. Keep each description under 40 words and the whole object under about 350 words.
+Output only the JSON object."#;
+
+/// Fork: MOSS-Image SFT, new images, from OpenMOSS's user guide and prompt-enhancer skill (OpenMOSS/MOSS-Image,
+/// USERGUIDE.md and skills/moss-image-prompt-enhancer, read 2026-11-25): English natural-language captions
+/// work best (the most training data), long prompts suit its CFG, visible text quoted verbatim in its own
+/// language with its layout (line breaks, order, size, font, colour), no redundant quality tags.
+pub const MOSS_T2I_PROMPT: &str = r#"You write prompts for MOSS-Image, an image model trained mostly on long English captions that describe the composition, the key subjects and their actions, the setting, the colours, the lighting and the artistic style, and every piece of visible text with its layout. Rewrite the user's request as one such caption: cohesive English prose, one paragraph (a second only for a designed image with clearly separate parts).
+- Keep the user's subjects, counts, relationships, medium, style and intended visible wording, and never contradict them. Resolve ordinary creative gaps yourself. Keep a minimalist request minimalist; develop a rich one fully.
+- Describe visible choices: subject and action, appearance, setting, camera and framing, medium, lighting, materials, palette and mood, with spatial relations in words (on the left, behind the counter, across the top).
+- Text: copy the wording exactly, in its original language and script, punctuation and capitalisation, inside double quotes, and describe its layout: where it is, line breaks (write a new line as \n inside the quotes), order, alignment, size hierarchy, font style and colour. Write the real copy, never placeholders. Add no text the user did not ask for, except what an object obviously carries.
+- For a designed image (a poster, a page, a card), set a reading order and give each text group its place and prominence.
+- No quality tags (best quality, masterpiece), no process notes, no size or aspect words: the app sets the size. Translate the meaning, not word by word. Present tense: about 100 to 200 words, more for a dense designed image.
+Output only the prompt."#;
+
+/// Fork: what a Prompt+ instruction is for. Each model can have its own for each ([`crate::config::ModelPrompts`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptKind {
+    /// A new image from text (and a layout).
+    New,
+    /// An edit of a photo (and coloured marks).
+    Edit,
+    /// A new image from reference images.
+    Compose,
+    /// A painted area.
+    Area,
+    /// Expand.
+    Expand,
+}
+
+impl PromptKind {
+    pub const ALL: [PromptKind; 5] = [Self::New, Self::Edit, Self::Compose, Self::Area, Self::Expand];
+
+    /// The key in the config and the API.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::New => "new",
+            Self::Edit => "edit",
+            Self::Compose => "compose",
+            Self::Area => "area",
+            Self::Expand => "expand",
+        }
+    }
+
+    /// The kind of a job's Prompt+ text.
+    pub fn of(mode: ResolvedMode) -> Self {
+        match mode {
+            ResolvedMode::Generate => Self::New,
+            ResolvedMode::Compose => Self::Compose,
+            ResolvedMode::Inpaint => Self::Area,
+            ResolvedMode::Outpaint => Self::Expand,
+            _ => Self::Edit,
+        }
+    }
+}
+
+/// Fork: the built-in Prompt+ instructions of model `model` (`ModelProfile::model`) for `kind`, when it has
+/// its own; the others use the general ones ([`general_prompt`]).
+pub fn model_prompt(model: &str, kind: PromptKind) -> Option<&'static str> {
+    match (model, kind) {
+        (crate::config::JUGGERNAUT_MOSS_TURBO, PromptKind::New) => Some(JUGGERNAUT_T2I_PROMPT),
+        (crate::config::JUGGERNAUT_MOSS_TURBO, PromptKind::Area) => Some(JUGGERNAUT_AREA_PROMPT),
+        (crate::config::JUGGERNAUT_MOSS_TURBO, PromptKind::Expand) => Some(JUGGERNAUT_EXPAND_PROMPT),
+        (crate::config::FLUX3_KLEIN, PromptKind::New) => Some(FLUX3_T2I_PROMPT),
+        (crate::config::KREA2_TURBO, PromptKind::New) => Some(KREA2_T2I_PROMPT),
+        (crate::config::FIBO2_DEV | crate::config::FIBO2_EDIT, PromptKind::New) => Some(FIBO2_T2I_PROMPT),
+        (crate::config::MOSS_IMAGE_SFT, PromptKind::New) => Some(MOSS_T2I_PROMPT),
         _ => None,
     }
+}
+
+/// Fork: the general instructions for `kind`: the ones saved in Settings, else the built-in ones.
+/// `plain`: a painted area of a model that inpaints from the words alone (a description, not an instruction).
+pub fn general_prompt(cfg: &AppConfig, kind: PromptKind, plain: bool) -> String {
+    let (custom, default) = match kind {
+        PromptKind::New => (cfg.enhancer_t2i_prompt.as_str(), T2I_SYSTEM_PROMPT),
+        PromptKind::Compose => (cfg.enhancer_compose_prompt.as_str(), COMPOSE_SYSTEM_PROMPT),
+        PromptKind::Edit => (cfg.enhancer_edit_prompt.as_str(), EDIT_SYSTEM_PROMPT),
+        PromptKind::Area => ("", if plain { PLAIN_AREA_SYSTEM_PROMPT } else { AREA_SYSTEM_PROMPT }),
+        PromptKind::Expand => ("", EXPAND_SYSTEM_PROMPT),
+    };
+    if custom.trim().is_empty() { default.to_string() } else { custom.trim().to_string() }
+}
+
+/// Fork: the active model's own instructions for `kind`: the user's for it (Settings), else its built-in ones.
+pub fn own_prompt(cfg: &AppConfig, kind: PromptKind) -> Option<String> {
+    let model = &cfg.profile().model;
+    cfg.enhancer_model_prompts
+        .get(model)
+        .map(|p| p.get(kind).trim())
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .or_else(|| model_prompt(model, kind).map(str::to_string))
+}
+
+/// Fork: the instructions Prompt+ writes `kind` with for the active model.
+pub fn prompt_for(cfg: &AppConfig, kind: PromptKind, plain: bool) -> String {
+    own_prompt(cfg, kind).unwrap_or_else(|| general_prompt(cfg, kind, plain))
 }
 
 /// Built-in system prompt for image-grounded edits and combines.
@@ -131,6 +302,15 @@ pub const AREA_SYSTEM_PROMPT: &str = r#"You write the instruction for an image e
 - Never describe anything outside the line except as what continues into it. Never mention the line, its colour, a mask, a blur or an area.
 Output only the instruction."#;
 
+/// Fork: a painted area of a model that inpaints from the words alone (Krea 2, MOSS-Image: plain masked
+/// inpainting, no instruction, no guide image): what the area shows after the change, as a description.
+pub const PLAIN_AREA_SYSTEM_PROMPT: &str = r#"You write the prompt for an image model that repaints one area of a picture from a description alone. You see the picture with that area outlined by a bright line. The user's message gives the line's colour, the action and the user's own words, in any language, or none.
+- Describe only what the area shows after the change, in one English paragraph of 20 to 60 words: for Remove, the background that continues from just outside the line, as if the thing had never been there; for Change, the thing as it looks after the change; for Replace or Add, the new thing, its colours, materials and pose.
+- Add the light it gets from the scene and its shadow, in the picture's style.
+- Keep everything the user asked for and never contradict it; base every detail on what you see. With no words from the user, choose what fits the scene best.
+- Never name anything outside the line, never write what must not be there, and never mention the line, its colour, a mask or an area.
+Output only the prompt."#;
+
 /// Built-in system prompt for Expand (outpaint), added 2026-11-04: the enhancer sees the canvas
 /// with the new borders still empty and writes what they show; the outpaint instruction
 /// (pipeline::effective_prompt) goes in front of it, as for typed words.
@@ -159,14 +339,12 @@ const DETAIL_MAX_TOKENS: u32 = 1024;
 /// A Prompt+ request made "Detailed": its system prompt ends with the length and context of the
 /// kind it is (a new image, an edit, a painted area, an expansion), and longer texts are allowed.
 pub fn detailed(mut req: TextGenRequest, mode: ResolvedMode) -> TextGenRequest {
-    let add = if req.system_prompt == AREA_SYSTEM_PROMPT {
-        DETAIL_AREA
-    } else if req.system_prompt == EXPAND_SYSTEM_PROMPT {
-        DETAIL_EXPAND
-    } else if matches!(mode, ResolvedMode::Generate | ResolvedMode::Compose) {
-        DETAIL_SCENE
-    } else {
-        DETAIL_EDIT
+    // Fork: by the kind (a model's own area and Expand instructions are not the built-in ones).
+    let add = match PromptKind::of(mode) {
+        PromptKind::Area => DETAIL_AREA,
+        PromptKind::Expand => DETAIL_EXPAND,
+        PromptKind::New | PromptKind::Compose => DETAIL_SCENE,
+        PromptKind::Edit => DETAIL_EDIT,
     };
     req.system_prompt.push_str(add);
     req.max_tokens = req.max_tokens.max(DETAIL_MAX_TOKENS);
@@ -207,7 +385,9 @@ fn words(prompt: &str) -> String {
 }
 
 /// A painted area (no marks): `image` is the untouched region with the area outlined in `color`.
-pub fn area_request(action: InpaintAction, color: &str, prompt: &str, image: String, seed: i64) -> TextGenRequest {
+/// Fork: `plain`: the model inpaints from a description alone (`PLAIN_AREA_SYSTEM_PROMPT`); the instructions
+/// are the active model's own when it has them (`prompt_for`).
+pub fn area_request(cfg: &AppConfig, action: InpaintAction, color: &str, prompt: &str, image: String, seed: i64, plain: bool) -> TextGenRequest {
     let (act, start) = match action {
         InpaintAction::Remove => ("remove", "Remove"),
         InpaintAction::Edit => ("change", "Change"),
@@ -217,8 +397,12 @@ pub fn area_request(action: InpaintAction, color: &str, prompt: &str, image: Str
     // The app puts the action's words in front of what the user types: only the rest is theirs.
     let typed = if action == InpaintAction::Edit { prompt.trim().strip_prefix("Change").map(str::trim).unwrap_or(prompt.trim()).to_string() } else { action.subject(prompt) };
     TextGenRequest {
-        prompt: format!("Line colour: {color}\nAction: {act}\nStart with: {start}\nThe user's words: {}", words(&typed)),
-        system_prompt: AREA_SYSTEM_PROMPT.into(),
+        prompt: if plain {
+            format!("Line colour: {color}\nAction: {act}\nThe user's words: {}", words(&typed))
+        } else {
+            format!("Line colour: {color}\nAction: {act}\nStart with: {start}\nThe user's words: {}", words(&typed))
+        },
+        system_prompt: prompt_for(cfg, PromptKind::Area, plain),
         images: vec![image],
         max_tokens: AREA_MAX_TOKENS,
         sampling: TextSampling { seed, ..SAMPLING },
@@ -227,10 +411,10 @@ pub fn area_request(action: InpaintAction, color: &str, prompt: &str, image: Str
 }
 
 /// An expansion: `image` is the canvas with the new areas empty; `sides` names them ("left and top").
-pub fn expand_request(sides: &str, prompt: &str, image: String, seed: i64) -> TextGenRequest {
+pub fn expand_request(cfg: &AppConfig, sides: &str, prompt: &str, image: String, seed: i64) -> TextGenRequest {
     TextGenRequest {
         prompt: format!("Growing sides: {sides}\nThe user's wishes: {}", words(prompt)),
-        system_prompt: EXPAND_SYSTEM_PROMPT.into(),
+        system_prompt: prompt_for(cfg, PromptKind::Expand, false),
         images: vec![image],
         max_tokens: AREA_MAX_TOKENS,
         sampling: TextSampling { seed, ..SAMPLING },
@@ -238,26 +422,10 @@ pub fn expand_request(sides: &str, prompt: &str, image: String, seed: i64) -> Te
     }
 }
 
-/// The system prompt for `mode`: the one saved in Settings, or the built-in one. Fork: for new images,
-/// the active model's own first ([`AppConfig::enhancer_model_prompts`], [`model_t2i_prompt`]).
+/// The system prompt for `mode`: the one saved in Settings, or the built-in one. Fork: the active
+/// model's own first ([`AppConfig::enhancer_model_prompts`], [`model_prompt`]), for every kind.
 pub fn system_prompt(cfg: &AppConfig, mode: ResolvedMode) -> String {
-    // Fork: new images with the model's own instructions (the user's for this model, else its built-in
-    // ones), before the general ones.
-    if mode == ResolvedMode::Generate {
-        let model = &cfg.profile().model;
-        if let Some(own) = cfg.enhancer_model_prompts.get(model).map(|p| p.trim()).filter(|p| !p.is_empty()) {
-            return own.to_string();
-        }
-        if let Some(builtin) = model_t2i_prompt(model) {
-            return builtin.to_string();
-        }
-    }
-    let (custom, default) = match mode {
-        ResolvedMode::Generate => (&cfg.enhancer_t2i_prompt, T2I_SYSTEM_PROMPT),
-        ResolvedMode::Compose => (&cfg.enhancer_compose_prompt, COMPOSE_SYSTEM_PROMPT),
-        _ => (&cfg.enhancer_edit_prompt, EDIT_SYSTEM_PROMPT),
-    };
-    if custom.trim().is_empty() { default.to_string() } else { custom.trim().to_string() }
+    prompt_for(cfg, PromptKind::of(mode), false)
 }
 
 /// The `text_gen` request for a job: its seed (so the same seed writes the same prompt, and
@@ -269,7 +437,12 @@ pub fn request(cfg: &AppConfig, mode: ResolvedMode, prompt: &str, images: Vec<St
     TextGenRequest {
         prompt: prompt.trim().to_string(),
         // The user's own edit instructions (Settings) still win; the built-in ones need the images.
-        system_prompt: if blind_edit && cfg.enhancer_edit_prompt.trim().is_empty() { EDIT_BLIND_SYSTEM_PROMPT.into() } else { system_prompt(cfg, mode) },
+        // Fork: and the model's own edit instructions.
+        system_prompt: if blind_edit && cfg.enhancer_edit_prompt.trim().is_empty() && own_prompt(cfg, PromptKind::Edit).is_none() {
+            EDIT_BLIND_SYSTEM_PROMPT.into()
+        } else {
+            system_prompt(cfg, mode)
+        },
         images: if mode == ResolvedMode::Generate || !vision { Vec::new() } else { images },
         max_tokens: MAX_TOKENS,
         sampling: TextSampling { seed, ..SAMPLING },
@@ -313,6 +486,11 @@ pub fn compose_request(cfg: &AppConfig, labels: &[String], prompt: &str, seed: i
 /// whole text. None when nothing usable is left.
 pub fn clean(text: &str) -> Option<String> {
     let mut t = text.trim();
+    // Fork: a JSON answer in a code fence (Fibo's captions).
+    if let Some(body) = t.strip_prefix("```") {
+        let body = body.split_once('\n').map(|(_, rest)| rest).unwrap_or("");
+        t = body.trim_end().strip_suffix("```").unwrap_or(body).trim();
+    }
     for label in ["Prompt:", "Instruction:", "Editing instruction:", "Description:"] {
         if t.get(..label.len()).is_some_and(|head| head.eq_ignore_ascii_case(label)) {
             t = t[label.len()..].trim_start();
@@ -401,31 +579,63 @@ mod tests {
     }
 
     #[test]
-    fn each_model_can_have_its_own_instructions_for_new_images() {
+    fn each_model_can_have_its_own_instructions_for_each_kind() {
+        use crate::config::{ModelPrompts, JUGGERNAUT_MOSS_TURBO, JUGGERNAUT_PROFILE_ID, QWEN_IMAGE_21};
         let mut cfg = AppConfig::default();
         cfg.normalize();
-        // Qwen-Image 2.1: the general ones.
-        assert_eq!(system_prompt(&cfg, ResolvedMode::Generate), T2I_SYSTEM_PROMPT);
-        // Juggernaut Moss Turbo: its built-in ones for new images, even over the user's general ones.
+        // Qwen-Image 2.1: the general ones (they were written and A/B-tested for it).
+        for (mode, want) in [(ResolvedMode::Generate, T2I_SYSTEM_PROMPT), (ResolvedMode::Edit, EDIT_SYSTEM_PROMPT), (ResolvedMode::Compose, COMPOSE_SYSTEM_PROMPT)] {
+            assert_eq!(system_prompt(&cfg, mode), want);
+        }
+        // Juggernaut Moss Turbo: its built-in ones for new images, painted areas and Expand, even over the
+        // user's general ones; edits keep the general ones.
         cfg.enhancer_t2i_prompt = "General.".into();
-        cfg.active_profile = crate::config::JUGGERNAUT_PROFILE_ID.into();
-        assert_eq!(cfg.profile().model, crate::config::JUGGERNAUT_MOSS_TURBO);
+        cfg.active_profile = JUGGERNAUT_PROFILE_ID.into();
         assert_eq!(system_prompt(&cfg, ResolvedMode::Generate), JUGGERNAUT_T2I_PROMPT);
-        assert!(JUGGERNAUT_T2I_PROMPT.contains("These are the only texts in the image.") && JUGGERNAUT_T2I_PROMPT.chars().count() < MAX_SYSTEM_PROMPT_CHARS);
-        // The user's own for this model win; edits keep the general ones.
-        cfg.enhancer_model_prompts.insert(crate::config::JUGGERNAUT_MOSS_TURBO.into(), " Mine. ".into());
-        assert_eq!(system_prompt(&cfg, ResolvedMode::Generate), "Mine.");
+        assert_eq!(prompt_for(&cfg, PromptKind::Area, true), JUGGERNAUT_AREA_PROMPT);
+        assert_eq!(expand_request(&cfg, "left", "", "P".into(), 1).system_prompt, JUGGERNAUT_EXPAND_PROMPT);
         assert_eq!(system_prompt(&cfg, ResolvedMode::Edit), EDIT_SYSTEM_PROMPT);
-        // Saved: only text that differs from the model's built-in one.
-        cfg.enhancer_model_prompts.insert(crate::config::QWEN_IMAGE_21.into(), T2I_SYSTEM_PROMPT.into());
-        cfg.enhancer_model_prompts.insert(crate::config::MOSS_IMAGE_SFT.into(), " ".into());
+        for p in [JUGGERNAUT_T2I_PROMPT, JUGGERNAUT_AREA_PROMPT, JUGGERNAUT_EXPAND_PROMPT, FLUX3_T2I_PROMPT, KREA2_T2I_PROMPT, FIBO2_T2I_PROMPT, MOSS_T2I_PROMPT, PLAIN_AREA_SYSTEM_PROMPT] {
+            let end = p.trim_end();
+            assert!(p.chars().count() < MAX_SYSTEM_PROMPT_CHARS && (end.ends_with("Output only the prompt.") || end.ends_with("Output only the JSON object.")));
+        }
+        // The other models' own instructions for new images, from their makers' guides.
+        for (model, want) in [
+            (crate::config::FLUX3_KLEIN, FLUX3_T2I_PROMPT),
+            (crate::config::KREA2_TURBO, KREA2_T2I_PROMPT),
+            (crate::config::FIBO2_DEV, FIBO2_T2I_PROMPT),
+            (crate::config::FIBO2_EDIT, FIBO2_T2I_PROMPT),
+            (crate::config::MOSS_IMAGE_SFT, MOSS_T2I_PROMPT),
+        ] {
+            assert_eq!(model_prompt(model, PromptKind::New), Some(want), "{model}");
+        }
+        assert!(model_prompt(QWEN_IMAGE_21, PromptKind::New).is_none());
+        // The user's own for this model win, kind by kind.
+        cfg.enhancer_model_prompts.insert(JUGGERNAUT_MOSS_TURBO.into(), ModelPrompts { new: " Mine. ".into(), expand: "Wider.".into(), ..Default::default() });
+        assert_eq!(system_prompt(&cfg, ResolvedMode::Generate), "Mine.");
+        assert_eq!(system_prompt(&cfg, ResolvedMode::Outpaint), "Wider.");
+        assert_eq!(system_prompt(&cfg, ResolvedMode::Inpaint), JUGGERNAUT_AREA_PROMPT);
+        // A blind edit with the model's own edit instructions uses them.
+        cfg.enhancer_model_prompts.get_mut(JUGGERNAUT_MOSS_TURBO).unwrap().edit = "Edit like this.".into();
+        assert_eq!(request(&cfg, ResolvedMode::Edit, "x", vec!["P".into()], 1, false).system_prompt, "Edit like this.");
+        // Saved: only text that differs from the built-in one.
+        cfg.enhancer_model_prompts.insert(QWEN_IMAGE_21.into(), ModelPrompts { new: T2I_SYSTEM_PROMPT.into(), area: " ".into(), ..Default::default() });
         cfg.normalize();
-        assert_eq!(cfg.enhancer_model_prompts.keys().collect::<Vec<_>>(), [crate::config::JUGGERNAUT_MOSS_TURBO]);
-        cfg.enhancer_model_prompts.insert(crate::config::JUGGERNAUT_MOSS_TURBO.into(), format!("{JUGGERNAUT_T2I_PROMPT}\n"));
+        assert_eq!(cfg.enhancer_model_prompts.keys().collect::<Vec<_>>(), [JUGGERNAUT_MOSS_TURBO]);
+        cfg.enhancer_model_prompts.insert(JUGGERNAUT_MOSS_TURBO.into(), ModelPrompts { new: format!("{JUGGERNAUT_T2I_PROMPT}\n"), ..Default::default() });
         cfg.normalize();
         assert!(cfg.enhancer_model_prompts.is_empty());
-        cfg.enhancer_model_prompts.insert("x".into(), "x".repeat(MAX_SYSTEM_PROMPT_CHARS + 1));
+        cfg.enhancer_model_prompts.insert("x".into(), ModelPrompts { compose: "x".repeat(MAX_SYSTEM_PROMPT_CHARS + 1), ..Default::default() });
         assert!(cfg.validate().is_err());
+        // 0.12.1036 saved one string per model: its instructions for new images.
+        let old: std::collections::BTreeMap<String, ModelPrompts> = serde_json::from_str(r#"{"a": "Old.", "b": {"area": "Here."}}"#).unwrap();
+        assert_eq!((old["a"].new.as_str(), old["b"].area.as_str(), old["b"].new.as_str()), ("Old.", "Here.", ""));
+    }
+
+    #[test]
+    fn json_answers_lose_their_code_fence() {
+        assert_eq!(clean("```json\n{\"short_description\": \"a cat\"}\n```").as_deref(), Some("{\"short_description\": \"a cat\"}"));
+        assert_eq!(clean("{\"a\": 1}").as_deref(), Some("{\"a\": 1}"));
     }
 
     #[test]
@@ -435,9 +645,9 @@ mod tests {
         assert!(t.system_prompt.starts_with(T2I_SYSTEM_PROMPT) && t.system_prompt.ends_with(DETAIL_SCENE));
         let e = detailed(request(&cfg, ResolvedMode::Edit, "x", vec!["P".into()], 1, true), ResolvedMode::Edit);
         assert!(e.system_prompt.ends_with(DETAIL_EDIT));
-        let a = detailed(area_request(InpaintAction::Remove, "cyan", "", "P".into(), 1), ResolvedMode::Inpaint);
+        let a = detailed(area_request(&cfg, InpaintAction::Remove, "cyan", "", "P".into(), 1, false), ResolvedMode::Inpaint);
         assert!(a.system_prompt.ends_with(DETAIL_AREA) && a.max_tokens == DETAIL_MAX_TOKENS);
-        let x = detailed(expand_request("left", "", "P".into(), 1), ResolvedMode::Outpaint);
+        let x = detailed(expand_request(&cfg, "left", "", "P".into(), 1), ResolvedMode::Outpaint);
         assert!(x.system_prompt.ends_with(DETAIL_EXPAND));
         // Only what is there: no "keep" lists, no "no X".
         for d in [DETAIL_SCENE, DETAIL_EDIT, DETAIL_AREA, DETAIL_EXPAND] {
@@ -448,15 +658,19 @@ mod tests {
 
     #[test]
     fn area_and_expand_requests() {
-        let r = area_request(InpaintAction::Remove, "magenta", "  ", "PNG".into(), 7);
+        let cfg = AppConfig::default();
+        let r = area_request(&cfg, InpaintAction::Remove, "magenta", "  ", "PNG".into(), 7, false);
         assert_eq!(r.prompt, "Line colour: magenta\nAction: remove\nStart with: Remove\nThe user's words: (none)");
         // The action's words the app puts in front are not the user's.
-        assert!(area_request(InpaintAction::Remove, "magenta", "Remove ", "PNG".into(), 7).prompt.ends_with("(none)"));
-        assert!(area_request(InpaintAction::Remove, "magenta", "Remove the lamp", "PNG".into(), 7).prompt.ends_with("words: the lamp"));
+        assert!(area_request(&cfg, InpaintAction::Remove, "magenta", "Remove ", "PNG".into(), 7, false).prompt.ends_with("(none)"));
+        assert!(area_request(&cfg, InpaintAction::Remove, "magenta", "Remove the lamp", "PNG".into(), 7, false).prompt.ends_with("words: the lamp"));
         assert_eq!((r.images.len(), r.system_prompt.as_str(), r.sampling.seed, r.max_tokens), (1, AREA_SYSTEM_PROMPT, 7, AREA_MAX_TOKENS));
-        let r = area_request(InpaintAction::Add, "cyan", " un vaso di fiori ", "PNG".into(), 1);
+        let r = area_request(&cfg, InpaintAction::Add, "cyan", " un vaso di fiori ", "PNG".into(), 1, false);
         assert!(r.prompt.ends_with("Action: add\nStart with: Add\nThe user's words: un vaso di fiori"));
-        let r = expand_request("left and right", "", "PNG".into(), 3);
+        // Fork: a model that inpaints from words alone gets a description, with no words to start with.
+        let p = area_request(&cfg, InpaintAction::Remove, "cyan", "Remove the lamp", "PNG".into(), 1, true);
+        assert_eq!((p.prompt.as_str(), p.system_prompt.as_str()), ("Line colour: cyan\nAction: remove\nThe user's words: the lamp", PLAIN_AREA_SYSTEM_PROMPT));
+        let r = expand_request(&cfg, "left and right", "", "PNG".into(), 3);
         assert_eq!(r.prompt, "Growing sides: left and right\nThe user's wishes: (none)");
         assert!(r.system_prompt == EXPAND_SYSTEM_PROMPT && r.images.len() == 1);
         // The instruction around it is Kokon's: the text is only what goes in the area.

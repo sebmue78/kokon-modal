@@ -8,7 +8,7 @@ import type { ProjectData } from "./store";
 import type {
   GpuBackend,
   AppConfig, AppErrorBody, GenerationRecord, GenerationRequest, HardwareReport, InputRecord, InstallStatus, JobView, LoraItem, LoraSuggestions, LutEntry, MacBenchState, ModelFileInfo, ModelScan, ModelSlot, ModelsStatus, Plan,
-  ServiceEvent, SetupReport, StatusResponse, UpscalerItem,
+  ServiceEvent, SetupReport, StatusResponse, UpscalerItem, EnhancerDefaults,
 } from "./types";
 
 export class ApiError extends Error {
@@ -178,7 +178,7 @@ export const api = {
   cancelInstall: () => call<InstallStatus>("/setup/install/cancel", { method: "POST" }),
   config: () => call<AppConfig>("/config"),
   /** The prompt enhancer's built-in instructions. */
-  enhancerDefaults: () => call<{ t2i: string; edit: string; compose: string; models?: Record<string, string>; max_chars: number }>("/enhancer/defaults"),
+  enhancerDefaults: () => call<EnhancerDefaults>("/enhancer/defaults"),
   saveConfig: (c: AppConfig) => call<{ saved: boolean; backend_restart_needed: boolean }>("/config", { method: "PUT", body: json(c) }),
   startBackend: () => call<{ ready: boolean }>("/backend/start", { method: "POST" }),
   stopBackend: () => call<{ stopped: boolean }>("/backend/stop", { method: "POST" }),
