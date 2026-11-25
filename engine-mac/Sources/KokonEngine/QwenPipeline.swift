@@ -293,6 +293,9 @@ public final class QwenPipeline {
                 } else {
                     for j in x.indices { x[j] += dt * velocity[j] }
                 }
+                // A value that is not finite spreads through every later step and decodes black: stop here instead.
+                let bad = x.reduce(0) { $1.isFinite ? $0 : $0 + 1 }
+                if bad > 0 { throw QwenDiT.NonFinite(step: i + 1, values: bad) }
                 timings["step \(i + 1)"] = since(stepStart)
                 log(String(format: "step %d/%d (σ %.4f): %.2f s", i + 1, schedule.count - 1, sigma, timings["step \(i + 1)"]!))
                 events?(.step(i + 1, of: schedule.count - 1, seconds: timings["step \(i + 1)"]!))
