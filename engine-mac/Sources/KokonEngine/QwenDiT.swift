@@ -650,6 +650,10 @@ public final class QwenDiT {
     }
 
     /// The name the Neural Engine's per-weight caches know `name` by: its own, or with the LoRAs' key when they change it.
+    /// The Neural Engine's column scales of `name`'s product, kept under `weightKey`: with LoRAs the raw name finds
+    /// none, and the kernels then read zeros (every value 0, a black image; 0.12.1035).
+    func scales(_ c: Coexecutor, _ name: String) -> MTLBuffer? { c.columns(weightKey(name)) }
+
     func weightKey(_ name: String) -> String {
         guard let loras, loras.has(name) else { return name }
         return name + "#" + loras.key
@@ -829,7 +833,7 @@ public final class QwenDiT {
                 e.setBytes(&params, length: MemoryLayout<NormParams>.stride, index: 3)
                 bind(pack, e, real: rows.count, from: 4)
                 for t in 0..<3 { e.setBuffer(c.slots[tiles.set][min(t, tiles.kParts - 1)].y, offset: 0, index: 12 + t) }
-                e.setBuffer(c.columns(tiles.weight), offset: 0, index: 15)
+                e.setBuffer(scales(c, tiles.weight), offset: 0, index: 15)
                 var parts = UInt32(tiles.kParts)
                 e.setBytes(&parts, length: 4, index: 16)
                 e.setBuffer(arena.buffer, offset: modulation.offset + gate * 4, index: 17)
@@ -899,8 +903,8 @@ public final class QwenDiT {
             try compute("swiglu_ane_tiles", commands: commands) { e in
                 for t in 0..<3 { e.setBuffer(c.slots[tiles.gate][t].y, offset: 0, index: t) }
                 for t in 0..<3 { e.setBuffer(c.slots[tiles.proj][t].y, offset: 0, index: 3 + t) }
-                e.setBuffer(c.columns(tiles.weights[0]), offset: 0, index: 6)
-                e.setBuffer(c.columns(tiles.weights[1]), offset: 0, index: 7)
+                e.setBuffer(scales(c, tiles.weights[0]), offset: 0, index: 6)
+                e.setBuffer(scales(c, tiles.weights[1]), offset: 0, index: 7)
                 bind(pack, e, real: count, from: 8)
                 e.dispatchThreadgroups(MTLSize(width: pack.rows, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 256, height: 1, depth: 1))
             }
