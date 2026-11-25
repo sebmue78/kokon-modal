@@ -1404,6 +1404,12 @@ impl Engine {
             }
         });
 
+        // Fork: Prompt+ on a model whose text encoder cannot write (MOSS-Image, Juggernaut Moss): another
+        // installed model writes the prompt first, then this job's model loads as usual.
+        if request.enhance && plan.mode == ResolvedMode::Generate && !profile.writes_prompts() {
+            self.borrow_prompt_writer(id, &cfg, &request.prompt, seed, request.enhance_detail).await?;
+        }
+
         // 3. Backend.
         // A job that also starts the server is not a fair speed sample (startup, first load).
         // Fork: and the engine this job runs on (the Mac engine or sd-server, see `job_uses_standard_engine`).
@@ -1800,6 +1806,47 @@ impl Engine {
         };
         self.update(id, |j| j.view.notes.push(note));
         Ok(None)
+    }
+
+    /// Fork: Prompt+ for a model whose own text encoder cannot write (`ModelProfile::writes_prompts`):
+    /// the engine starts with another installed model's files (`AppConfig::prompt_writer`, Qwen-Image
+    /// 2.1 first), loads only its text encoder to write the prompt with the job model's instructions, and
+    /// the job then loads its own model (the enhancer's text is kept on the job, `Job::enhanced`).
+    /// Without such a model, or when it cannot start, the job keeps the user's prompt (noted).
+    async fn borrow_prompt_writer(&self, id: &str, cfg: &AppConfig, prompt: &str, seed: i64, detail: bool) -> AppResult<()> {
+        if self.jobs.lock().unwrap().get(id).is_some_and(|j| j.enhanced.is_some()) {
+            return Ok(());
+        }
+        let name = crate::config::model_name(&cfg.profile().model);
+        let Some(writer) = cfg.prompt_writer().cloned() else {
+            self.update(id, |j| {
+                j.view.notes.push(format!("Prompt+ writes {name}'s prompts with Qwen-Image 2.1's text encoder (or another model's with Qwen3-VL), and none is installed; your prompt was used as written."))
+            });
+            return Ok(());
+        };
+        let mut wcfg = cfg.clone();
+        wcfg.active_profile = writer.id.clone();
+        // Only its text encoder is needed: no image model loaded up front.
+        wcfg.eager_load = false;
+        self.update(id, |j| {
+            j.view.status = JobStatus::StartingBackend;
+            j.view.notes.push(format!("Prompt+ wrote this prompt with {}'s text encoder ({name}'s own cannot write), then {name} was loaded.", writer.display_name));
+        });
+        self.emit_server();
+        let r = self.server.ensure_ready(&wcfg).await;
+        self.emit_server();
+        let caps = match r {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("Prompt+ writer {} did not start: {} {:?}", writer.id, e.message, e.detail);
+                self.update(id, |j| j.view.notes.push(format!("Prompt+ could not load {}: {}; your prompt was used as written.", writer.display_name, e.message)));
+                return Ok(());
+            }
+        };
+        self.check_cancel(id)?;
+        let client = SdcppClient::new(self.server.port());
+        self.enhance_prompt(id, &client, &caps, cfg, ResolvedMode::Generate, prompt, &[], seed, None, detail).await?;
+        Ok(())
     }
 
     /// Runs the prompt enhancer for job `id` and streams its text into the job. Returns the

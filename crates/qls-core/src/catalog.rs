@@ -844,6 +844,54 @@ pub fn moss_files(p: &Preset) -> (Download, Download) {
 pub const MOSS_DOWNLOADS: &[Download] = &[MOSS_SFT_Q4_K, MOSS_SFT_Q8_0, MOSS_TEXT_ENCODER_Q4_K_M, MOSS_TEXT_ENCODER_Q8_0, MOSS_VAE, MOSS_TOKENIZER];
 
 // ---------------------------------------------------------------------------------------
+// Fork: Juggernaut Moss Turbo (KandooAI), pinned from the Hugging Face API on 2026-11-24. Apache-2.0.
+// KandooAI's GGUFs keep Diffusers' separate q, k and v, which sd.cpp joins into MOSS-Image's qkv as
+// it loads them (`convert_moss_image_dit_name`); text encoder, tokenizer and VAE are MOSS-Image's.
+// ---------------------------------------------------------------------------------------
+
+pub const JUGGERNAUT_PAGE: &str = "https://huggingface.co/Kandoo/Juggernaut-Moss-Turbo-Beta";
+/// KandooAI's prompting guide (24 pages; the source of its built-in Prompt+ instructions).
+pub const JUGGERNAUT_GUIDE: &str = "https://huggingface.co/Kandoo/Juggernaut-Moss-Turbo-Beta/blob/main/Juggernaut_Moss_Prompting_Guide.pdf";
+
+/// Juggernaut Moss Turbo, 4-bit: for cards under 14 GB (its card: "changes the image more").
+pub const JUGGERNAUT_Q4_0: Download = Download {
+    id: "juggernaut_moss_turbo_q4_0",
+    label: "Juggernaut Moss Turbo Q4_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Kandoo/Juggernaut-Moss-Turbo-Beta/resolve/bc82aa92688fee30389fd5b0d29f9e20dcccd14d/juggernaut_moss_turbo_v1-Q4_0.gguf",
+    fallback_urls: &[],
+    page: JUGGERNAUT_PAGE,
+    size: 3_328_176_320,
+    sha256: "debbbbe1569c1419a6e96488dc057f57b09b27df3f68c0b5bc5b51c952be07ef",
+    dest: "models/juggernaut-moss/juggernaut_moss_turbo_v1-Q4_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Juggernaut Moss Turbo, 8-bit: "practically the same as BF16" (its model card).
+pub const JUGGERNAUT_Q8_0: Download = Download {
+    id: "juggernaut_moss_turbo_q8_0",
+    label: "Juggernaut Moss Turbo Q8_0",
+    kind: FileKind::Model,
+    url: "https://huggingface.co/Kandoo/Juggernaut-Moss-Turbo-Beta/resolve/bc82aa92688fee30389fd5b0d29f9e20dcccd14d/juggernaut_moss_turbo_v1-Q8_0.gguf",
+    fallback_urls: &[],
+    page: JUGGERNAUT_PAGE,
+    size: 5_706_346_688,
+    sha256: "7e01c141762c9c7ce4eca95ce3adc74e28b402da21fe02f2c0508372eb60745b",
+    dest: "models/juggernaut-moss/juggernaut_moss_turbo_v1-Q8_0.gguf",
+    provides: &[],
+    engine_tag: None,
+};
+
+/// Juggernaut Moss Turbo's image model for a hardware preset: 8-bit from 14 GB, as MOSS-Image's.
+pub fn juggernaut_files(p: &Preset) -> Download {
+    if p.min_vram_mib >= 14 * 1024 { JUGGERNAUT_Q8_0 } else { JUGGERNAUT_Q4_0 }
+}
+
+/// The Juggernaut Moss files the catalog knows (found by file name in [`profile_model_downloads`]).
+pub const JUGGERNAUT_DOWNLOADS: &[Download] = &[JUGGERNAUT_Q4_0, JUGGERNAUT_Q8_0];
+
+// ---------------------------------------------------------------------------------------
 // FLUX.3 Image Klein (fork): sd.cpp's docs/flux3.md, pinned from the Hugging Face API on
 // 2026-10-28. FLUX Kommunity License (non-commercial; commercial outputs for qualifying users).
 // Its text encoder is Krea 2's Qwen3-VL 4B file and its VAE MOSS-Image's FLUX.2 file (the same
@@ -1213,7 +1261,7 @@ pub fn downloads_for(p: &Preset, backend: GpuBackend, sdcpp_dir: &Path) -> Vec<D
 pub fn profile_model_downloads(profile: &crate::config::ModelProfile) -> Vec<Download> {
     let qwen = [TURBO_Q4_K_M, TURBO_Q4_K, TURBO_F16, VAE, VAE_ORIGINAL, TEXT_ENCODER_Q4_K_M, TEXT_ENCODER_Q8_0, VISION_PROJECTOR];
     let official: Vec<Download> =
-        qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).chain(FIBO2_DOWNLOADS.iter().copied()).chain(OMNI_DOWNLOADS.iter().copied()).collect();
+        qwen.into_iter().chain(KREA2_DOWNLOADS.iter().copied()).chain(MOSS_DOWNLOADS.iter().copied()).chain(FLUX3_DOWNLOADS.iter().copied()).chain(FIBO2_DOWNLOADS.iter().copied()).chain(OMNI_DOWNLOADS.iter().copied()).chain(JUGGERNAUT_DOWNLOADS.iter().copied()).collect();
     profile
         .files()
         .into_iter()

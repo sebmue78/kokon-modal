@@ -178,7 +178,7 @@ export const api = {
   cancelInstall: () => call<InstallStatus>("/setup/install/cancel", { method: "POST" }),
   config: () => call<AppConfig>("/config"),
   /** The prompt enhancer's built-in instructions. */
-  enhancerDefaults: () => call<{ t2i: string; edit: string; compose: string; max_chars: number }>("/enhancer/defaults"),
+  enhancerDefaults: () => call<{ t2i: string; edit: string; compose: string; models?: Record<string, string>; max_chars: number }>("/enhancer/defaults"),
   saveConfig: (c: AppConfig) => call<{ saved: boolean; backend_restart_needed: boolean }>("/config", { method: "PUT", body: json(c) }),
   startBackend: () => call<{ ready: boolean }>("/backend/start", { method: "POST" }),
   stopBackend: () => call<{ stopped: boolean }>("/backend/stop", { method: "POST" }),

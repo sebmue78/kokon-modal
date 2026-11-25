@@ -375,6 +375,8 @@ export interface AppConfig {
   enhancerT2iPrompt?: string;
   enhancerEditPrompt?: string;
   enhancerComposePrompt?: string;
+  /** Fork: Prompt+ instructions for new images per model id; missing or "" = the model's built-in ones, else the general ones. */
+  enhancerModelPrompts?: Record<string, string>;
   ui: Record<string, unknown>;
 }
 

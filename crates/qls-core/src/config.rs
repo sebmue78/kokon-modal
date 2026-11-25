@@ -65,6 +65,13 @@ pub const KREA2_PROFILE_ID: &str = "krea-2-turbo";
 pub const MOSS_IMAGE_SFT: &str = "moss-image-sft";
 /// Profile id of the MOSS-Image SFT files from the catalog (always listed, downloaded on demand).
 pub const MOSS_PROFILE_ID: &str = "moss-image-sft";
+/// Fork: Juggernaut Moss Turbo (Kandoo/Juggernaut-Moss-Turbo-Beta, Apache-2.0): KandooAI's fine-tune
+/// of MOSS-Image Base (photography and film stills) with his DMD2 Turbo LoRA merged, 6 steps without
+/// CFG, euler_ancestral with the simple schedule at shift 5 (`RecommendedSettings::simple_flow_shift`).
+/// MOSS-Image's text encoder, tokenizer and VAE; text to image only, like MOSS-Image. Its own model id
+/// (its LoRAs and Prompt+ instructions are not MOSS-Image SFT's).
+pub const JUGGERNAUT_MOSS_TURBO: &str = "juggernaut-moss-turbo";
+pub const JUGGERNAUT_PROFILE_ID: &str = "juggernaut-moss-turbo";
 /// FLUX.3 Image Klein (black-forest-labs/flux-3-image-klein, FLUX Kommunity License: non-commercial,
 /// with a commercial-output exception for qualifying users): a 5.6B distilled DiT for text to image,
 /// edits and multi-reference compositions (up to 10 references, passed to the DiT as latents), with
@@ -94,7 +101,7 @@ pub const FIBO2_EDIT: &str = "fibo-2.0-edit-turbo";
 pub const FIBO2_DEV_PROFILE_ID: &str = "fibo-2.0-dev";
 pub const FIBO2_EDIT_PROFILE_ID: &str = "fibo-2.0-edit-turbo";
 /// Models from the catalog besides Qwen-Image 2.1, in the order Settings lists them.
-pub const EXTRA_CATALOG_PROFILES: &[&str] = &[QWEN_F16_PROFILE_ID, OMNI_PROFILE_ID, FLUX3_PROFILE_ID, FIBO2_DEV_PROFILE_ID, FIBO2_EDIT_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID];
+pub const EXTRA_CATALOG_PROFILES: &[&str] = &[QWEN_F16_PROFILE_ID, OMNI_PROFILE_ID, FLUX3_PROFILE_ID, FIBO2_DEV_PROFILE_ID, FIBO2_EDIT_PROFILE_ID, KREA2_PROFILE_ID, MOSS_PROFILE_ID, JUGGERNAUT_PROFILE_ID];
 
 /// Where the text encoder's weights live. Compute always runs on the selected GPU except
 /// for `Cpu`, which also computes on the CPU (slow for image editing, measured ~35×).
@@ -210,6 +217,10 @@ pub struct RecommendedSettings {
     /// `lora::sampling` when such a LoRA brings its own steps; never saved.
     #[serde(skip)]
     pub no_terminal_shift: bool,
+    /// Fork: send ComfyUI's "simple" schedule of a flow model with this time shift
+    /// (`planner::simple_flow_sigmas`) instead of the server's discrete one, whose last step lands
+    /// near 0 and is lost at a few steps. 0: the server's schedule. Juggernaut Moss Turbo: 5.
+    pub simple_flow_shift: f32,
     /// The model edits from reference images (`<image1>` prompts, Qwen-Image Edit style).
     /// Without it, brushed edits and Expand are plain masked inpainting and whole-image edits,
     /// combines and new images from references are not available.
@@ -251,6 +262,7 @@ impl Default for RecommendedSettings {
             steps: 8,
             turbo_sigmas: true,
             no_terminal_shift: false,
+            simple_flow_shift: 0.0,
             reference_edits: true,
             qwen_prompts: true,
             prompt_vision: true,
@@ -279,6 +291,7 @@ impl RecommendedSettings {
             steps: 8,
             turbo_sigmas: false,
             no_terminal_shift: false,
+            simple_flow_shift: 0.0,
             reference_edits: false,
             qwen_prompts: false,
             prompt_vision: false,
@@ -304,6 +317,7 @@ impl RecommendedSettings {
             steps: 20,
             turbo_sigmas: false,
             no_terminal_shift: false,
+            simple_flow_shift: 0.0,
             reference_edits: false,
             qwen_prompts: false,
             prompt_vision: false,
@@ -311,6 +325,22 @@ impl RecommendedSettings {
             underscore_image_tags: false,
             cfg_scale: 3.0,
             layout: crate::layout::LayoutStyle::Words,
+        }
+    }
+
+    /// Fork: Juggernaut Moss Turbo (its model card and prompting guide): 6 steps (7 for busy scenes)
+    /// without CFG, euler_ancestral with the simple schedule at shift 5, about 1.5 to 2.4 MP ("never go
+    /// down to 1K"). Everything else is MOSS-Image's.
+    pub fn juggernaut_moss_turbo() -> Self {
+        Self {
+            sampler: "euler_a".into(),
+            area_fast: 1280 * 1280,
+            area_balanced: 1408 * 1408,
+            area_quality: 1536 * 1536,
+            steps: 6,
+            cfg_scale: 1.0,
+            simple_flow_shift: 5.0,
+            ..Self::moss_image()
         }
     }
 
@@ -329,6 +359,7 @@ impl RecommendedSettings {
             steps: 20,
             turbo_sigmas: false,
             no_terminal_shift: false,
+            simple_flow_shift: 0.0,
             reference_edits: true,
             qwen_prompts: false,
             prompt_vision: true,
@@ -367,6 +398,7 @@ impl RecommendedSettings {
             steps: 16,
             turbo_sigmas: false,
             no_terminal_shift: false,
+            simple_flow_shift: 0.0,
             reference_edits: true,
             qwen_prompts: false,
             prompt_vision: false,
@@ -530,6 +562,30 @@ impl ModelProfile {
         }
     }
 
+    /// Fork: Juggernaut Moss Turbo for a hardware preset (`catalog::juggernaut_files`): KandooAI's GGUF
+    /// with MOSS-Image's text encoder, tokenizer and VAE (shared with MOSS-Image: only the image model
+    /// is new when MOSS-Image is there).
+    pub fn juggernaut_moss_turbo(sdcpp_dir: &Path, preset: &crate::catalog::Preset) -> Self {
+        let (_, text_encoder) = crate::catalog::moss_files(preset);
+        let diffusion = crate::catalog::juggernaut_files(preset);
+        let quant = diffusion.dest.rsplit('-').next().unwrap_or("").trim_end_matches(".gguf");
+        Self {
+            id: JUGGERNAUT_PROFILE_ID.into(),
+            display_name: format!("Juggernaut Moss Turbo {quant} (text to image)"),
+            model: JUGGERNAUT_MOSS_TURBO.into(),
+            source: ProfileSource::Official,
+            scan_dir: None,
+            diffusion_model: diffusion.path(sdcpp_dir),
+            vae: crate::catalog::MOSS_VAE.path(sdcpp_dir),
+            text_encoder: text_encoder.path(sdcpp_dir),
+            vision_projector: None,
+            tokenizer: Some(crate::catalog::MOSS_TOKENIZER.path(sdcpp_dir)),
+            backend_args: vec![],
+            recommended_settings: RecommendedSettings::juggernaut_moss_turbo(),
+            capabilities: ProfileCapabilities::moss_image(),
+        }
+    }
+
     /// Fork: Qwen-Image 2.1 Turbo in full 16-bit precision, whatever the card: the F16 image model
     /// (14.2 GB) and the 8-bit text encoder, with the official VAE and vision projector (shared with
     /// the 4-bit files, so only the image model and the text encoder are downloaded again).
@@ -637,8 +693,21 @@ impl ModelProfile {
             FLUX3_PROFILE_ID => Some(Self::flux3(sdcpp_dir, preset)),
             KREA2_PROFILE_ID => Some(Self::krea2(sdcpp_dir, preset)),
             MOSS_PROFILE_ID => Some(Self::moss(sdcpp_dir, preset)),
+            JUGGERNAUT_PROFILE_ID => Some(Self::juggernaut_moss_turbo(sdcpp_dir, preset)),
             _ => None,
         }
+    }
+
+    /// Fork: the engine can write Prompt+ prompts with this model's text encoder (Qwen3-VL: every model
+    /// but MOSS-Image and Juggernaut Moss, whose Qwen3.5 it cannot run as a writer). Prompt+ for the
+    /// others borrows another installed model's ([`AppConfig::prompt_writer`]).
+    pub fn writes_prompts(&self) -> bool {
+        !matches!(self.model.as_str(), MOSS_IMAGE_SFT | JUGGERNAUT_MOSS_TURBO)
+    }
+
+    /// Fork: every file this profile needs is there.
+    pub fn installed(&self) -> bool {
+        self.files().iter().all(|(_, f, required)| !*required || f.is_file())
     }
 
     /// The files are Qwen-Image 2.1's (the official ones or the user's own): the model Kokon's
@@ -792,6 +861,10 @@ pub struct AppConfig {
     pub enhancer_t2i_prompt: String,
     pub enhancer_edit_prompt: String,
     pub enhancer_compose_prompt: String,
+    /// Fork: Prompt+ instructions for new images per model id (`ModelProfile::model`), used instead of
+    /// the ones above for that model. Missing or "": the model's built-in instructions
+    /// (`enhancer::model_t2i_prompt`, Juggernaut Moss Turbo), else the ones above.
+    pub enhancer_model_prompts: std::collections::BTreeMap<String, String>,
     /// The user's LoRAs (Settings → LoRA), each a copy in `lora_dir`. Changed only through the
     /// LoRA endpoints: a whole-config save keeps the current list (`Engine::set_config`).
     pub loras: Vec<LoraEntry>,
@@ -843,6 +916,7 @@ impl Default for AppConfig {
             enhancer_t2i_prompt: String::new(),
             enhancer_edit_prompt: String::new(),
             enhancer_compose_prompt: String::new(),
+            enhancer_model_prompts: Default::default(),
             loras: vec![],
             ui: serde_json::json!({}),
         }
@@ -923,6 +997,7 @@ pub fn model_name(model: &str) -> String {
         FIBO2_EDIT => "Fibo 2.0 Edit Turbo".into(),
         KREA2_TURBO => "Krea 2 Turbo".into(),
         MOSS_IMAGE_SFT => "MOSS-Image".into(),
+        JUGGERNAUT_MOSS_TURBO => "Juggernaut Moss Turbo".into(),
         QWEN_IMAGE_21 | "" => "Qwen-Image 2.1".into(),
         QWEN_OMNI => "Qwen-Image 2.1 Uncensored Omni".into(),
         other => other.into(),
@@ -1109,6 +1184,17 @@ impl AppConfig {
         self.profiles.iter().find(|p| p.id == self.active_profile).unwrap_or(&self.profiles[0])
     }
 
+    /// Fork: the installed model whose text encoder writes Prompt+ prompts for the active one when its
+    /// own cannot ([`ModelProfile::writes_prompts`]): Qwen-Image 2.1's Qwen3-VL 8B first (the one
+    /// Prompt+ was tuned with), then the models with the 4B. None when the active model writes its own.
+    pub fn prompt_writer(&self) -> Option<&ModelProfile> {
+        if self.profile().writes_prompts() {
+            return None;
+        }
+        let order = [OFFICIAL_PROFILE_ID, USER_PROFILE_ID, OMNI_PROFILE_ID, QWEN_F16_PROFILE_ID, FLUX3_PROFILE_ID, KREA2_PROFILE_ID, FIBO2_DEV_PROFILE_ID, FIBO2_EDIT_PROFILE_ID];
+        order.iter().filter_map(|id| self.profiles.iter().find(|p| p.id == *id)).find(|p| p.writes_prompts() && p.installed())
+    }
+
     pub fn user_profile(&self) -> Option<&ModelProfile> {
         self.profiles.iter().find(|p| p.id == USER_PROFILE_ID)
     }
@@ -1128,6 +1214,11 @@ impl AppConfig {
                 custom.clear();
             }
         }
+        // Per model: only the user's own text is kept (the built-in one follows future defaults).
+        self.enhancer_model_prompts.retain(|model, text| {
+            let builtin = crate::enhancer::model_t2i_prompt(model).unwrap_or(crate::enhancer::T2I_SYSTEM_PROMPT);
+            !text.trim().is_empty() && text.trim() != builtin.trim()
+        });
         for p in &mut self.profiles {
             p.source = if p.id == OFFICIAL_PROFILE_ID || EXTRA_CATALOG_PROFILES.contains(&p.id.as_str()) { ProfileSource::Official } else { ProfileSource::User };
             if p.model.trim().is_empty() {
@@ -1465,7 +1556,7 @@ impl AppConfig {
             return Err(AppError::new(ErrorCode::InvalidConfig, "Simulated VRAM must be between 4096 and 196608 MiB (or 0 to detect it)."));
         }
         let max = crate::enhancer::MAX_SYSTEM_PROMPT_CHARS;
-        if [&self.enhancer_t2i_prompt, &self.enhancer_edit_prompt, &self.enhancer_compose_prompt].iter().any(|p| p.chars().count() > max) {
+        if [&self.enhancer_t2i_prompt, &self.enhancer_edit_prompt, &self.enhancer_compose_prompt].into_iter().chain(self.enhancer_model_prompts.values()).any(|p| p.chars().count() > max) {
             return Err(AppError::new(ErrorCode::InvalidConfig, format!("Prompt enhancer instructions can be at most {max} characters.")));
         }
         Ok(())
