@@ -73,9 +73,22 @@ text. Prompt+ for them is written by another installed model with a Qwen3-VL tex
 (Qwen-Image 2.1 first): the engine loads only that text encoder, writes the prompt with the instructions
 of the model in use, then loads the model in use. That adds a model load before the image.
 
-Prompt+ instructions for new images can be set per model (Settings → General → Prompt+). Juggernaut
-Moss Turbo comes with its own, written from [KandooAI's prompting guide](https://huggingface.co/Kandoo/Juggernaut-Moss-Turbo-Beta/blob/main/Juggernaut_Moss_Prompting_Guide.pdf)
-(image type, subject, surroundings, light and colours, camera, text in quotes, look).
+Prompt+ instructions can be set per model and per kind of text: new images, edits, new images from
+references, painted areas and Expand (Settings → General → Prompt+). Several models come with their own,
+written from their makers' prompting guides:
+
+| Model | Own built-in instructions | Source |
+|---|---|---|
+| Juggernaut Moss Turbo | new images, painted areas, Expand | [KandooAI's prompting guide](https://huggingface.co/Kandoo/Juggernaut-Moss-Turbo-Beta/blob/main/Juggernaut_Moss_Prompting_Guide.pdf) |
+| FLUX.3 Image Klein | new images | Black Forest Labs' guides ([prompting](https://runware.ai/docs/models/bfl-flux-3-image-klein/guides/prompting), [text](https://runware.ai/docs/models/bfl-flux-3-image-klein/guides/text-rendering)) |
+| Krea 2 Turbo | new images | Krea's [prompting guide and expansion prompt](https://github.com/krea-ai/krea-2/blob/main/docs/prompting.md) |
+| Fibo 2.0 Dev and Edit Turbo | new images, as Bria's structured JSON caption | Bria's [prompt-to-JSON instructions](https://huggingface.co/briaai/FIBO-gemini-prompt-to-JSON) |
+| MOSS-Image SFT | new images | OpenMOSS's [user guide](https://github.com/OpenMOSS/MOSS-Image/blob/master/USERGUIDE.md) and prompt-enhancer skill |
+
+Qwen-Image 2.1 keeps Kokon's general instructions: they were written and A/B-tested for it and already
+follow Qwen's own [prompt rewriter](https://github.com/QwenLM/Qwen-Image-2.1/tree/main/prompt_rewrite)
+(the medium first, the light stated, exact text in quotes; edits lead with the operation, describe only
+what changes and keep the rest in one sentence).
 
 ## What's different from Kokon
 

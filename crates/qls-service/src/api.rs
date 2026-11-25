@@ -665,10 +665,20 @@ async fn get_config(State(s): St) -> Json<AppConfig> {
 /// The prompt enhancer's built-in system prompts (Settings shows them for "" and restores them).
 async fn enhancer_defaults() -> Json<Value> {
     use qls_core::enhancer;
-    // Fork: the models with built-in instructions of their own for new images, by model id.
-    let models: serde_json::Map<String, Value> =
-        [qls_core::config::JUGGERNAUT_MOSS_TURBO].iter().filter_map(|m| enhancer::model_t2i_prompt(m).map(|p| (m.to_string(), json!(p)))).collect();
-    Json(json!({ "t2i": enhancer::T2I_SYSTEM_PROMPT, "edit": enhancer::EDIT_SYSTEM_PROMPT, "compose": enhancer::COMPOSE_SYSTEM_PROMPT, "models": models, "max_chars": enhancer::MAX_SYSTEM_PROMPT_CHARS }))
+    // Fork: the models' own built-in instructions, by model id and kind (`enhancer::PromptKind`), and the
+    // general ones of each kind (Settings shows what a model uses without its own).
+    use qls_core::config::*;
+    let mut models = serde_json::Map::new();
+    for m in [QWEN_IMAGE_21, QWEN_OMNI, FLUX3_KLEIN, KREA2_TURBO, FIBO2_DEV, FIBO2_EDIT, MOSS_IMAGE_SFT, JUGGERNAUT_MOSS_TURBO] {
+        let kinds: serde_json::Map<String, Value> =
+            enhancer::PromptKind::ALL.iter().filter_map(|k| enhancer::model_prompt(m, *k).map(|p| (k.key().to_string(), json!(p)))).collect();
+        if !kinds.is_empty() {
+            models.insert(m.to_string(), Value::Object(kinds));
+        }
+    }
+    let general = json!({ "new": enhancer::T2I_SYSTEM_PROMPT, "edit": enhancer::EDIT_SYSTEM_PROMPT, "compose": enhancer::COMPOSE_SYSTEM_PROMPT,
+        "area": enhancer::AREA_SYSTEM_PROMPT, "plain_area": enhancer::PLAIN_AREA_SYSTEM_PROMPT, "expand": enhancer::EXPAND_SYSTEM_PROMPT });
+    Json(json!({ "t2i": enhancer::T2I_SYSTEM_PROMPT, "edit": enhancer::EDIT_SYSTEM_PROMPT, "compose": enhancer::COMPOSE_SYSTEM_PROMPT, "models": models, "general": general, "max_chars": enhancer::MAX_SYSTEM_PROMPT_CHARS }))
 }
 
 async fn put_config(State(s): St, Extension(caller): Extension<Caller>, Json(mut cfg): Json<AppConfig>) -> ApiResult<Json<Value>> {

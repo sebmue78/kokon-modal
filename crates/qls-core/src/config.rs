@@ -861,10 +861,10 @@ pub struct AppConfig {
     pub enhancer_t2i_prompt: String,
     pub enhancer_edit_prompt: String,
     pub enhancer_compose_prompt: String,
-    /// Fork: Prompt+ instructions for new images per model id (`ModelProfile::model`), used instead of
-    /// the ones above for that model. Missing or "": the model's built-in instructions
-    /// (`enhancer::model_t2i_prompt`, Juggernaut Moss Turbo), else the ones above.
-    pub enhancer_model_prompts: std::collections::BTreeMap<String, String>,
+    /// Fork: Prompt+ instructions per model id (`ModelProfile::model`), one for each kind of text
+    /// (`enhancer::PromptKind`), used instead of the ones above for that model. "": the model's built-in
+    /// ones (`enhancer::model_prompt`, Juggernaut Moss Turbo), else the general ones.
+    pub enhancer_model_prompts: std::collections::BTreeMap<String, ModelPrompts>,
     /// The user's LoRAs (Settings → LoRA), each a copy in `lora_dir`. Changed only through the
     /// LoRA endpoints: a whole-config save keeps the current list (`Engine::set_config`).
     pub loras: Vec<LoraEntry>,
@@ -1214,11 +1214,24 @@ impl AppConfig {
                 custom.clear();
             }
         }
-        // Per model: only the user's own text is kept (the built-in one follows future defaults).
-        self.enhancer_model_prompts.retain(|model, text| {
-            let builtin = crate::enhancer::model_t2i_prompt(model).unwrap_or(crate::enhancer::T2I_SYSTEM_PROMPT);
-            !text.trim().is_empty() && text.trim() != builtin.trim()
-        });
+        // Per model: only the user's own texts are kept (the built-in ones follow future defaults).
+        let general = |kind| match kind {
+            crate::enhancer::PromptKind::New => crate::enhancer::T2I_SYSTEM_PROMPT,
+            crate::enhancer::PromptKind::Edit => crate::enhancer::EDIT_SYSTEM_PROMPT,
+            crate::enhancer::PromptKind::Compose => crate::enhancer::COMPOSE_SYSTEM_PROMPT,
+            crate::enhancer::PromptKind::Area => crate::enhancer::AREA_SYSTEM_PROMPT,
+            crate::enhancer::PromptKind::Expand => crate::enhancer::EXPAND_SYSTEM_PROMPT,
+        };
+        for (model, prompts) in self.enhancer_model_prompts.iter_mut() {
+            for kind in crate::enhancer::PromptKind::ALL {
+                let builtin = crate::enhancer::model_prompt(model, kind).unwrap_or_else(|| general(kind));
+                let text = prompts.get_mut(kind);
+                if text.trim().is_empty() || text.trim() == builtin.trim() || text.trim() == crate::enhancer::PLAIN_AREA_SYSTEM_PROMPT {
+                    text.clear();
+                }
+            }
+        }
+        self.enhancer_model_prompts.retain(|_, p| !p.is_empty());
         for p in &mut self.profiles {
             p.source = if p.id == OFFICIAL_PROFILE_ID || EXTRA_CATALOG_PROFILES.contains(&p.id.as_str()) { ProfileSource::Official } else { ProfileSource::User };
             if p.model.trim().is_empty() {
@@ -1556,7 +1569,7 @@ impl AppConfig {
             return Err(AppError::new(ErrorCode::InvalidConfig, "Simulated VRAM must be between 4096 and 196608 MiB (or 0 to detect it)."));
         }
         let max = crate::enhancer::MAX_SYSTEM_PROMPT_CHARS;
-        if [&self.enhancer_t2i_prompt, &self.enhancer_edit_prompt, &self.enhancer_compose_prompt].into_iter().chain(self.enhancer_model_prompts.values()).any(|p| p.chars().count() > max) {
+        if [&self.enhancer_t2i_prompt, &self.enhancer_edit_prompt, &self.enhancer_compose_prompt].into_iter().map(String::as_str).chain(self.enhancer_model_prompts.values().flat_map(|p| crate::enhancer::PromptKind::ALL.map(|k| p.get(k)))).any(|p| p.chars().count() > max) {
             return Err(AppError::new(ErrorCode::InvalidConfig, format!("Prompt enhancer instructions can be at most {max} characters.")));
         }
         Ok(())
@@ -1578,6 +1591,74 @@ fn extra_weights_mib(diffusion: u64, text_encoder: u64, unified: bool) -> u64 {
 /// See [`AppConfig::mac_engine_exe`]: `app_dir` is kokon-service's folder.
 fn mac_engine_in(app_dir: Option<&Path>, sdcpp_dir: &Path) -> PathBuf {
     app_dir.map(|d| d.join(MAC_ENGINE_EXE)).filter(|p| p.is_file()).unwrap_or_else(|| sdcpp_dir.join(MAC_ENGINE_DIR).join(MAC_ENGINE_EXE))
+}
+
+/// Fork: one model's own Prompt+ instructions, one per kind of text (`enhancer::PromptKind`); "" uses the
+/// model's built-in ones, else the general ones. A plain string (0.12.1036 kept only new images) is read
+/// as the instructions for new images.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(from = "ModelPromptsRepr")]
+pub struct ModelPrompts {
+    pub new: String,
+    pub edit: String,
+    pub compose: String,
+    pub area: String,
+    pub expand: String,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ModelPromptsRepr {
+    New(String),
+    All {
+        #[serde(default)]
+        new: String,
+        #[serde(default)]
+        edit: String,
+        #[serde(default)]
+        compose: String,
+        #[serde(default)]
+        area: String,
+        #[serde(default)]
+        expand: String,
+    },
+}
+
+impl From<ModelPromptsRepr> for ModelPrompts {
+    fn from(r: ModelPromptsRepr) -> Self {
+        match r {
+            ModelPromptsRepr::New(new) => Self { new, ..Default::default() },
+            ModelPromptsRepr::All { new, edit, compose, area, expand } => Self { new, edit, compose, area, expand },
+        }
+    }
+}
+
+impl ModelPrompts {
+    pub fn get(&self, kind: crate::enhancer::PromptKind) -> &str {
+        use crate::enhancer::PromptKind::*;
+        match kind {
+            New => &self.new,
+            Edit => &self.edit,
+            Compose => &self.compose,
+            Area => &self.area,
+            Expand => &self.expand,
+        }
+    }
+
+    pub fn get_mut(&mut self, kind: crate::enhancer::PromptKind) -> &mut String {
+        use crate::enhancer::PromptKind::*;
+        match kind {
+            New => &mut self.new,
+            Edit => &mut self.edit,
+            Compose => &mut self.compose,
+            Area => &mut self.area,
+            Expand => &mut self.expand,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        crate::enhancer::PromptKind::ALL.iter().all(|k| self.get(*k).trim().is_empty())
+    }
 }
 
 #[cfg(test)]

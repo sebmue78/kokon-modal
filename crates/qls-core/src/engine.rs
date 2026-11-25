@@ -1405,9 +1405,30 @@ impl Engine {
         });
 
         // Fork: Prompt+ on a model whose text encoder cannot write (MOSS-Image, Juggernaut Moss): another
-        // installed model writes the prompt first, then this job's model loads as usual.
-        if request.enhance && plan.mode == ResolvedMode::Generate && !profile.writes_prompts() {
-            self.borrow_prompt_writer(id, &cfg, &request.prompt, seed, request.enhance_detail).await?;
+        // installed model writes the prompt first, then this job's model loads as usual. For a painted area
+        // or Expand it looks at the same view the model's own would (the job's inputs, prepared once more).
+        if request.enhance && !profile.writes_prompts() && request.layout.is_empty() {
+            match plan.mode {
+                ResolvedMode::Generate => {
+                    self.borrow_prompt_writer(id, &cfg, &request.prompt, seed, request.enhance_detail, None).await?;
+                }
+                ResolvedMode::Inpaint | ResolvedMode::Outpaint if !plan.marks => {
+                    let (plan2, images2, mask2) = (plan.clone(), images.clone(), mask.as_ref().map(|(m, _)| m.clone()));
+                    let prompt = request.prompt.clone();
+                    let opts = pipeline::BackendOptions { server_vae_tile_size: cfg.server_vae_tile_size(), marks: marks.clone(), written: request.enhanced_from.is_some(), regions: Vec::new() };
+                    let prepared = tokio::task::spawn_blocking(move || pipeline::prepare(&plan2, &prompt, seed, &images2, mask2.as_ref(), &opts))
+                        .await
+                        .map_err(AppError::internal)??;
+                    if let Some(v) = &prepared.enhancer {
+                        let req = view_request(&cfg, v, &request.prompt, seed);
+                        self.borrow_prompt_writer(id, &cfg, &request.prompt, seed, request.enhance_detail, Some((req, plan.mode))).await?;
+                    }
+                }
+                _ => {}
+            }
+        } else if request.enhance && !profile.writes_prompts() && plan.mode == ResolvedMode::Generate {
+            // A layout: Prompt+ writes the scene as a new image (4b adds the boxes).
+            self.borrow_prompt_writer(id, &cfg, &request.prompt, seed, request.enhance_detail, None).await?;
         }
 
         // 3. Backend.
@@ -1514,17 +1535,25 @@ impl Engine {
                     // is a plan, not a reference), and the boxes are added to its text.
                     enhanced = self.enhance_prompt(id, &client, &caps, &cfg, ResolvedMode::Generate, &request.prompt, &[], seed, None, request.enhance_detail).await?;
                     if let Some(text) = &enhanced {
-                        sd_req.prompt = as_model(&request.prompt, &crate::layout::prompt(layout_style, text, &request.layout, sketch));
+                        // Fork: a JSON caption (Fibo's built-in instructions) keeps its form: the boxes go into its summary.
+                        let laid = match serde_json::from_str::<serde_json::Value>(text) {
+                            Ok(serde_json::Value::Object(mut m)) if m.get("short_description").is_some_and(|v| v.is_string()) => {
+                                let summary = m["short_description"].as_str().unwrap_or_default().to_string();
+                                m.insert("short_description".into(), crate::layout::prompt(layout_style, &summary, &request.layout, sketch).into());
+                                serde_json::Value::Object(m).to_string()
+                            }
+                            _ => crate::layout::prompt(layout_style, text, &request.layout, sketch),
+                        };
+                        sd_req.prompt = as_model(&request.prompt, &laid);
                     }
                 } else if let Some(v) = &view {
                     // A painted area or an expansion: Prompt+ writes what goes there, from its own view,
                     // and Kokon's instruction is kept round it. Fork: it has to see that view, so the
                     // models whose text encoder sees no images keep the user's words.
-                    if vision {
-                        let req = match &v.kind {
-                            pipeline::EnhancerKind::Area { action, color } => enhancer::area_request(*action, color, &request.prompt, v.image.clone(), seed),
-                            pipeline::EnhancerKind::Expand { sides } => enhancer::expand_request(sides, &request.prompt, v.image.clone(), seed),
-                        };
+                    // Fork: or another model's text encoder saw it and wrote the text already (`borrow_prompt_writer`).
+                    let borrowed = !profile.writes_prompts() && self.jobs.lock().unwrap().get(id).is_some_and(|j| j.enhanced.is_some());
+                    if vision || borrowed {
+                        let req = view_request(&cfg, v, &request.prompt, seed);
                         enhanced = self.enhance_prompt(id, &client, &caps, &cfg, plan.mode, &request.prompt, &[], seed, Some(req), request.enhance_detail).await?;
                         if let Some(text) = &enhanced {
                             // Fork: the images named as the model in use names them.
@@ -1813,7 +1842,8 @@ impl Engine {
     /// 2.1 first), loads only its text encoder to write the prompt with the job model's instructions, and
     /// the job then loads its own model (the enhancer's text is kept on the job, `Job::enhanced`).
     /// Without such a model, or when it cannot start, the job keeps the user's prompt (noted).
-    async fn borrow_prompt_writer(&self, id: &str, cfg: &AppConfig, prompt: &str, seed: i64, detail: bool) -> AppResult<()> {
+    /// `own`: the request of a painted area or Expand (`view_request`), else the job's prompt is written as a new image.
+    async fn borrow_prompt_writer(&self, id: &str, cfg: &AppConfig, prompt: &str, seed: i64, detail: bool, own: Option<(TextGenRequest, ResolvedMode)>) -> AppResult<()> {
         if self.jobs.lock().unwrap().get(id).is_some_and(|j| j.enhanced.is_some()) {
             return Ok(());
         }
@@ -1845,7 +1875,16 @@ impl Engine {
         };
         self.check_cancel(id)?;
         let client = SdcppClient::new(self.server.port());
-        self.enhance_prompt(id, &client, &caps, cfg, ResolvedMode::Generate, prompt, &[], seed, None, detail).await?;
+        // A painted area or Expand needs a writer that sees: the view is the whole point.
+        if own.is_some() && !writer.recommended_settings.prompt_vision {
+            self.update(id, |j| j.view.notes.push(format!("Prompt+ can't see the painted area with {}; your prompt was used as written.", writer.display_name)));
+            return Ok(());
+        }
+        let (own, mode) = match own {
+            Some((r, mode)) => (Some(r), mode),
+            None => (None, ResolvedMode::Generate),
+        };
+        self.enhance_prompt(id, &client, &caps, cfg, mode, prompt, &[], seed, own, detail).await?;
         Ok(())
     }
 
@@ -2368,6 +2407,15 @@ pub fn job_uses_standard_engine(cfg: &AppConfig, cfg_scale: f32) -> bool {
 fn trim_cfg(v: f32) -> String {
     let s = format!("{v:.1}");
     s.strip_suffix(".0").map(str::to_string).unwrap_or(s)
+}
+
+/// Fork: Prompt+'s request for a painted area or Expand, from its view (`pipeline::EnhancerView`), with the
+/// active model's instructions.
+fn view_request(cfg: &AppConfig, v: &pipeline::EnhancerView, prompt: &str, seed: i64) -> TextGenRequest {
+    match &v.kind {
+        pipeline::EnhancerKind::Area { action, color, plain } => enhancer::area_request(cfg, *action, color, prompt, v.image.clone(), seed, *plain),
+        pipeline::EnhancerKind::Expand { sides } => enhancer::expand_request(cfg, sides, prompt, v.image.clone(), seed),
+    }
 }
 
 #[cfg(test)]

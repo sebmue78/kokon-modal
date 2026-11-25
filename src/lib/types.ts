@@ -376,7 +376,7 @@ export interface AppConfig {
   enhancerEditPrompt?: string;
   enhancerComposePrompt?: string;
   /** Fork: Prompt+ instructions for new images per model id; missing or "" = the model's built-in ones, else the general ones. */
-  enhancerModelPrompts?: Record<string, string>;
+  enhancerModelPrompts?: Record<string, ModelPrompts>;
   ui: Record<string, unknown>;
 }
 
@@ -521,3 +521,21 @@ export type ServiceEvent =
   | { type: "gallery"; id: string; change: "added" | "updated" | "deleted" }
   | { type: "projects"; id: string; rev: number; deleted: boolean }
   | { type: "mac_bench"; bench: MacBenchState };
+
+/** Fork: Prompt+ kinds of text, each with its own instructions per model. */
+export type PromptKind = "new" | "edit" | "compose" | "area" | "expand";
+
+/** Fork: one model's own Prompt+ instructions per kind; "" uses its built-in ones, else the general ones. */
+export type ModelPrompts = Partial<Record<PromptKind, string>>;
+
+/** Fork: GET /enhancer/defaults. */
+export interface EnhancerDefaults {
+  t2i: string;
+  edit: string;
+  compose?: string;
+  /** Built-in instructions of the models that have their own, by model id and kind. */
+  models?: Record<string, ModelPrompts>;
+  /** The built-in general instructions per kind ("plain_area": painted areas of models that inpaint from words alone). */
+  general?: Record<PromptKind | "plain_area", string>;
+  max_chars: number;
+}
