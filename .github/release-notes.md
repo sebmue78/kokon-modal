@@ -1,3 +1,11 @@
+- **Fixed: black images from the Mac engine with LoRAs.** In 0.12.1035, every image made on the Mac
+  engine with a LoRA came out black, for example Uncensored Omni with its Turbo LoRA. With a LoRA, two
+  of the engine's combined steps looked up the Neural Engine's scaling values under the wrong name,
+  found none and computed with zeros. They now find them. The same image made on the graphics card
+  alone was always fine.
+- **No more black images when the Mac engine's numbers overflow.** The engine checks its in-between
+  values after every step. If they are no longer valid, it stops with a clear error instead of saving
+  a black image. Kokon then makes the image again on the standard engine and says so in the job notes.
 - **New model: Juggernaut Moss Turbo** (KandooAI, Apache-2.0, commercial use allowed). A fine-tune of
   MOSS-Image for photography and film stills, with KandooAI's own Turbo built in: 6 steps without CFG.
   - Choose it in the model menu at the top. The first time, it downloads KandooAI's GGUF: Q8_0
